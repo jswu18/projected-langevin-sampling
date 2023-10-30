@@ -38,10 +38,6 @@ def _train_exact_gp(
         kernel=kernel,
         x=data.x,
         y=data.y,
-        # likelihood=gpytorch.likelihoods.FixedNoiseGaussianLikelihood(
-        #     noise=0.0*torch.ones(data.x.shape[1]),
-        #     learn_additional_noise=False,
-        # ),
         likelihood=gpytorch.likelihoods.GaussianLikelihood(),
     )
     likelihood = model.likelihood
