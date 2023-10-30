@@ -1,0 +1,31 @@
+# Virtualenvs
+.venv/
+
+# Python
+__pycache__
+
+# IDE
+.idea
+
+# Notebooks
+*ipynb_checkpoints
+/**/*ipynb_checkpoints
+.DS_Store
+*.ipynb
+
+# Pytest Cache
+*pytest_cache
+/**/*pytest_cache
+
+
+# Plots
+/**/**/*png
+
+# Experiment UCI datasets
+/**/uci/datasets
+
+# Experiment results
+/**/**/**/results
+
+# Experiment plots
+/**/**/**/plots

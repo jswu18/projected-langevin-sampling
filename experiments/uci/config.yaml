@@ -1,0 +1,39 @@
+datasets:
+  - boston
+  - concrete
+  - energy_cooling
+  - energy_heating
+  - kin8nm
+  - power
+  - wine
+  - yacht
+data:
+  seed: 0
+  train_data_percentage: 0.8
+  validation_data_percentage: 0.1
+  test_data_percentage: 0.1
+kernel_and_induce_data:
+  seed: 0
+  induce_data_factor: 1
+  induce_data_power: 2
+  learning_rate: 0.01
+  batch_size: 100
+  gp_scheme: exact
+  number_of_iterations: 10
+  number_of_epochs: 10000
+pwgf:
+  number_of_particles: 100
+  number_of_epochs: 10000
+  learning_rate_upper: 1.0e+2
+  learning_rate_lower: 1.0e-30
+  max_particle_magnitude: 1.0e+3
+  number_of_learning_rate_searches: 25
+  jitter: 0
+  seed: 0
+svgp:
+  seed: 0
+  number_of_epochs: 10000
+  batch_size: 100
+  learning_rate_upper: 1.0e-1
+  learning_rate_lower: 1.0e-5
+  number_of_learning_rate_searches: 5
