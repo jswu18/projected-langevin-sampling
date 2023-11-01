@@ -9,12 +9,7 @@ class GradientFlowKernel(gpytorch.kernels.Kernel):
     where K_b is the base kernel and z_i are the approximation samples.
     """
 
-    @property
-    def is_stationary(self) -> bool:
-        """
-        Kernel is stationary if base kernel is stationary.
-        """
-        return self.base_kernel.is_stationary
+    is_stationary = False
 
     def __init__(
         self,
