@@ -24,8 +24,9 @@ __pycache__
 # Experiment UCI datasets
 /**/uci/datasets
 
-# Experiment results
-/**/**/**/results
+# Experiment outputs
+/**/**/**/outputs
 
-# Experiment plots
-/**/**/**/plots
+
+# Test YAMLs
+/**/**/**/*yaml

@@ -20,3 +20,24 @@ class ExperimentData:
     validation: Optional[Data] = None
     y_mean: torch.float = 0.0
     y_std: torch.float = 1.0
+
+    def save(self, path: str):
+        torch.save(self, path)
+
+    @staticmethod
+    def load(path: str):
+        experiment_data = torch.load(path)
+        experiment_data.full.x.to(torch.double)
+        experiment_data.full.y.to(torch.double)
+        if experiment_data.train is not None:
+            experiment_data.train.x.to(torch.double)
+            experiment_data.train.y.to(torch.double)
+        if experiment_data.test is not None:
+            experiment_data.test.x.to(torch.double)
+            experiment_data.test.y.to(torch.double)
+        if experiment_data.validation is not None:
+            experiment_data.validation.x.to(torch.double)
+            experiment_data.validation.y.to(torch.double)
+        experiment_data.y_mean = float(experiment_data.y_mean.detach().item())
+        experiment_data.y_std = float(experiment_data.y_std.detach().item())
+        return experiment_data

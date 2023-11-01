@@ -6,6 +6,7 @@ import pandas as pd
 import torch
 
 from experiments.data import ExperimentData
+from src.conformalise import ConformaliseBase, ConformaliseGP, ConformaliseGradientFlow
 from src.gradient_flows import ProjectedWassersteinGradientFlow
 
 
@@ -21,6 +22,22 @@ def calculate_nll_particles(
             covariance_matrix=torch.diag(
                 torch.clip(predicted_samples.var(axis=1), jitter, None)
             ),
+        ),
+        y,
+    ) + torch.log(y_std)
+
+
+def calculate_nll_conformal(
+    y: torch.Tensor,
+    y_std: torch.Tensor,
+    predicted_mean: torch.Tensor,
+    predicted_variance: torch.Tensor,
+    jitter=1e-10,
+):
+    return gpytorch.metrics.mean_standardized_log_loss(
+        gpytorch.distributions.MultivariateNormal(
+            mean=predicted_mean,
+            covariance_matrix=torch.diag(torch.clip(predicted_variance, jitter, None)),
         ),
         y,
     ) + torch.log(y_std)
@@ -43,90 +60,18 @@ def calculate_particle_metrics(
 ) -> None:
     if not os.path.exists(os.path.join(results_path, model_name)):
         os.makedirs(os.path.join(results_path, model_name))
-    mae_train = calculate_mae(
-        y=experiment_data.train.y,
-        predicted=model.predict(
-            x=experiment_data.train.x,
-            particles=particles,
-        ).mean(axis=1),
+    conformal_model = ConformaliseGradientFlow(
+        x_calibration=experiment_data.validation.x,
+        y_calibration=experiment_data.validation.y,
+        gradient_flow=model,
+        particles=particles,
     )
-    pd.DataFrame(
-        [[float(mae_train.detach().item())]], columns=[model_name], index=[dataset_name]
-    ).to_csv(
-        f"{results_path}/{model_name}/mae_train.csv",
-        index_label="dataset",
-    )
-    mae_validation = calculate_mae(
-        y=experiment_data.validation.y,
-        predicted=model.predict(
-            x=experiment_data.validation.x,
-            particles=particles,
-        ).mean(axis=1),
-    )
-    pd.DataFrame(
-        [[float(mae_validation.detach().item())]],
-        columns=[model_name],
-        index=[dataset_name],
-    ).to_csv(
-        f"{results_path}/{model_name}/mae_validation.csv",
-        index_label="dataset",
-    )
-    mae_test = calculate_mae(
-        y=experiment_data.test.y,
-        predicted=model.predict(
-            x=experiment_data.test.x,
-            particles=particles,
-        ).mean(axis=1),
-    )
-    pd.DataFrame(
-        [[float(mae_test.detach().item())]], columns=[model_name], index=[dataset_name]
-    ).to_csv(
-        f"{results_path}/{model_name}/mae_test.csv",
-        index_label="dataset",
-    )
-    nll_train = calculate_nll_particles(
-        y=experiment_data.train.y,
-        y_std=torch.tensor(experiment_data.y_std),
-        predicted_samples=model.predict(
-            x=experiment_data.train.x,
-            particles=particles,
-        ),
-    )
-    pd.DataFrame(
-        [[float(nll_train.detach().item())]], columns=[model_name], index=[dataset_name]
-    ).to_csv(
-        f"{results_path}/{model_name}/nll_train.csv",
-        index_label="dataset",
-    )
-    nll_validation = calculate_nll_particles(
-        y=experiment_data.validation.y,
-        y_std=torch.tensor(experiment_data.y_std),
-        predicted_samples=model.predict(
-            x=experiment_data.validation.x,
-            particles=particles,
-        ),
-    )
-    pd.DataFrame(
-        [[float(nll_validation.detach().item())]],
-        columns=[model_name],
-        index=[dataset_name],
-    ).to_csv(
-        f"{results_path}/{model_name}/nll_validation.csv",
-        index_label="dataset",
-    )
-    nll_test = calculate_nll_particles(
-        y=experiment_data.test.y,
-        y_std=torch.tensor(experiment_data.y_std),
-        predicted_samples=model.predict(
-            x=experiment_data.test.x,
-            particles=particles,
-        ),
-    )
-    pd.DataFrame(
-        [[float(nll_test.detach().item())]], columns=[model_name], index=[dataset_name]
-    ).to_csv(
-        f"{results_path}/{model_name}/nll_test.csv",
-        index_label="dataset",
+    _calculate_metrics(
+        model=conformal_model,
+        experiment_data=experiment_data,
+        model_name=model_name,
+        dataset_name=dataset_name,
+        results_path=results_path,
     )
 
 
@@ -139,76 +84,60 @@ def calculate_svgp_metrics(
 ) -> None:
     if not os.path.exists(os.path.join(results_path, model_name)):
         os.makedirs(os.path.join(results_path, model_name))
-    mae_train = calculate_mae(
-        y=experiment_data.train.y,
-        predicted=model(
-            experiment_data.train.x,
-        ).mean,
+    conformal_model = ConformaliseGP(
+        x_calibration=experiment_data.validation.x,
+        y_calibration=experiment_data.validation.y,
+        gp=model,
     )
-    pd.DataFrame(
-        [[float(mae_train.detach().item())]], columns=[model_name], index=[dataset_name]
-    ).to_csv(
-        f"{results_path}/{model_name}/mae_train.csv",
-        index_label="dataset",
+    _calculate_metrics(
+        model=conformal_model,
+        experiment_data=experiment_data,
+        model_name=model_name,
+        dataset_name=dataset_name,
+        results_path=results_path,
     )
-    mae_validation = calculate_mae(
-        y=experiment_data.validation.y,
-        predicted=model(
-            experiment_data.validation.x,
-        ).mean,
-    )
-    pd.DataFrame(
-        [[float(mae_validation.detach().item())]],
-        columns=[model_name],
-        index=[dataset_name],
-    ).to_csv(
-        f"{results_path}/{model_name}/mae_validation.csv",
-        index_label="dataset",
-    )
-    mae_test = calculate_mae(
-        y=experiment_data.test.y,
-        predicted=model(
-            experiment_data.test.x,
-        ).mean,
-    )
-    pd.DataFrame(
-        [[float(mae_test.detach().item())]], columns=[model_name], index=[dataset_name]
-    ).to_csv(
-        f"{results_path}/{model_name}/mae_test.csv",
-        index_label="dataset",
-    )
-    nll_train = gpytorch.metrics.mean_standardized_log_loss(
-        model(experiment_data.train.x),
-        experiment_data.train.y,
-    ) + torch.log(torch.tensor(experiment_data.y_std))
-    pd.DataFrame(
-        [[float(nll_train.detach().item())]], columns=[model_name], index=[dataset_name]
-    ).to_csv(
-        f"{results_path}/{model_name}/nll_train.csv",
-        index_label="dataset",
-    )
-    nll_validation = gpytorch.metrics.mean_standardized_log_loss(
-        model(experiment_data.validation.x),
-        experiment_data.validation.y,
-    ) + torch.log(torch.tensor(experiment_data.y_std))
-    pd.DataFrame(
-        [[float(nll_validation.detach().item())]],
-        columns=[model_name],
-        index=[dataset_name],
-    ).to_csv(
-        f"{results_path}/{model_name}/nll_validation.csv",
-        index_label="dataset",
-    )
-    nll_test = gpytorch.metrics.mean_standardized_log_loss(
-        model(experiment_data.test.x),
-        experiment_data.test.y,
-    ) + torch.log(torch.tensor(experiment_data.y_std))
-    pd.DataFrame(
-        [[float(nll_test.detach().item())]], columns=[model_name], index=[dataset_name]
-    ).to_csv(
-        f"{results_path}/{model_name}/nll_test.csv",
-        index_label="dataset",
-    )
+
+
+def _calculate_metrics(
+    model: ConformaliseBase,
+    experiment_data: ExperimentData,
+    model_name: str,
+    dataset_name: str,
+    results_path: str,
+):
+    for data in [
+        experiment_data.train,
+        experiment_data.validation,
+        experiment_data.test,
+    ]:
+        mean = model.predict(
+            x=data.x,
+        )
+        variance = model.predict_variance(
+            x=data.x,
+        )
+        mae = calculate_mae(
+            y=data.y,
+            predicted=mean,
+        )
+        pd.DataFrame(
+            [[float(mae.detach().item())]], columns=[model_name], index=[dataset_name]
+        ).to_csv(
+            f"{results_path}/{model_name}/mae_{data.name}.csv",
+            index_label="dataset",
+        )
+        nll = calculate_nll_conformal(
+            y=data.y,
+            y_std=torch.tensor(experiment_data.y_std),
+            predicted_mean=mean,
+            predicted_variance=variance,
+        )
+        pd.DataFrame(
+            [[float(nll.detach().item())]], columns=[model_name], index=[dataset_name]
+        ).to_csv(
+            f"{results_path}/{model_name}/nll_{data.name}.csv",
+            index_label="dataset",
+        )
 
 
 def concatenate_metrics(
