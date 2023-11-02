@@ -1,18 +1,18 @@
-from typing import Tuple
+from typing import Tuple, Union
 
-import gpytorch
 import scipy
 import torch
 
 from src.conformalise.base import ConformaliseBase
+from src.gps import ExactGP, svGP
 
 
 class ConformaliseGP(ConformaliseBase):
     def __init__(
         self,
+        gp: Union[ExactGP, svGP],
         x_calibration: torch.Tensor,
         y_calibration: torch.Tensor,
-        gp: gpytorch.models.GP,
     ):
         self.gp = gp
         super().__init__(
@@ -35,5 +35,5 @@ class ConformaliseGP(ConformaliseBase):
         )
         return lower_bound, upper_bound
 
-    def predict(self, x: torch.Tensor) -> torch.Tensor:
+    def predict_median(self, x: torch.Tensor) -> torch.Tensor:
         return self.gp(x).mean

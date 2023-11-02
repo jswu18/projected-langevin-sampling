@@ -54,6 +54,8 @@ def test_initialise_particles(
         approximation_samples=x_train,
     )
     pwgf = ProjectedWassersteinGradientFlow(
+        number_of_particles=number_of_particles,
+        seed=seed,
         kernel=kernel,
         x_induce=x_induce,
         y_induce=y_induce,
@@ -61,11 +63,7 @@ def test_initialise_particles(
         y_train=y_train,
         jitter=jitter,
     )
-    initialised_particles = pwgf.initialise_particles(
-        number_of_particles=number_of_particles,
-        seed=seed,
-    ).detach()
-    assert torch.allclose(initialised_particles, particles)
+    assert torch.allclose(pwgf.particles.detach(), particles)
 
 
 @pytest.mark.parametrize(
@@ -120,12 +118,12 @@ def test_calculate_update(
     observation_noise: float,
     update: torch.Tensor,
 ):
-    set_seed(seed)
     kernel = MockGradientFlowKernel(
         base_kernel=MockKernel(),
         approximation_samples=x_train,
     )
     pwgf = ProjectedWassersteinGradientFlow(
+        number_of_particles=particles.shape[1],
         kernel=kernel,
         x_induce=x_induce.double(),
         y_induce=y_induce.double(),
@@ -133,8 +131,9 @@ def test_calculate_update(
         y_train=y_train.double(),
         jitter=jitter,
     )
-    calculated_update = pwgf.calculate_update(
-        particles=particles,
+    pwgf.particles = particles
+    set_seed(seed)
+    calculated_update = pwgf.update(
         learning_rate=torch.tensor(learning_rate),
         observation_noise=torch.tensor(observation_noise),
     ).detach()
@@ -191,12 +190,12 @@ def test_sample_predict_noise(
     number_of_samples: int,
     predict_noise: torch.Tensor,
 ):
-    set_seed(seed)
     kernel = MockGradientFlowKernel(
         base_kernel=MockKernel(),
         approximation_samples=x_train,
     )
     pwgf = ProjectedWassersteinGradientFlow(
+        number_of_particles=1,
         kernel=kernel,
         x_induce=x_induce.double(),
         y_induce=y_induce.double(),
@@ -204,6 +203,7 @@ def test_sample_predict_noise(
         y_train=y_train.double(),
         jitter=jitter,
     )
+    set_seed(seed)
     sampled_predict_noise = pwgf.sample_predict_noise(
         x=x.double(),
         number_of_samples=number_of_samples,
@@ -266,12 +266,12 @@ def test_predict(
     particles: torch.Tensor,
     prediction: torch.Tensor,
 ):
-    set_seed(seed)
     kernel = MockGradientFlowKernel(
         base_kernel=MockKernel(),
         approximation_samples=x_train,
     )
     pwgf = ProjectedWassersteinGradientFlow(
+        number_of_particles=particles.shape[1],
         kernel=kernel,
         x_induce=x_induce.double(),
         y_induce=y_induce.double(),
@@ -279,8 +279,9 @@ def test_predict(
         y_train=y_train.double(),
         jitter=jitter,
     )
-    predicted_values = pwgf.predict(
+    pwgf.particles = particles
+    set_seed(seed)
+    predicted_samples = pwgf.predict_samples(
         x=x.double(),
-        particles=particles.double(),
     ).detach()
-    assert torch.allclose(predicted_values, prediction)
+    assert torch.allclose(predicted_samples, prediction)

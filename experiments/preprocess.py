@@ -170,10 +170,14 @@ def set_up_experiment(
         y_std = 1.0
     experiment_data = ExperimentData(
         name=name,
-        full=Data(x=torch.tensor(x), y=torch.tensor(y)),
-        train=Data(x=torch.tensor(x_train), y=torch.tensor(y_train)),
-        test=Data(x=torch.tensor(x_test), y=torch.tensor(y_test)),
-        validation=Data(x=torch.tensor(x_validation), y=torch.tensor(y_validation)),
+        full=Data(x=torch.tensor(x), y=torch.tensor(y), name="full"),
+        train=Data(x=torch.tensor(x_train), y=torch.tensor(y_train), name="train"),
+        test=Data(x=torch.tensor(x_test), y=torch.tensor(y_test), name="test"),
+        validation=Data(
+            x=torch.tensor(x_validation),
+            y=torch.tensor(y_validation),
+            name="validation",
+        ),
         y_mean=y_mean,
         y_std=y_std,
     )

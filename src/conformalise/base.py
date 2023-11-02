@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Tuple, Union
 
+import gpytorch.distributions
 import numpy as np
 import torch
 
@@ -33,7 +34,7 @@ class ConformaliseBase(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def predict(self, x: torch.Tensor) -> torch.Tensor:
+    def predict_median(self, x: torch.Tensor) -> torch.Tensor:
         """
         Returns median predictions for a given input.
         Args:
@@ -92,7 +93,7 @@ class ConformaliseBase(ABC):
             uncalibrated_lower - calibration,
             uncalibrated_upper + calibration,
         )
-        median = self.predict(x)
+        median = self.predict_median(x)
         # nothing should cross the median
         return (
             torch.min(torch.stack([calibrated_lower, median], dim=1), dim=1).values,
@@ -113,3 +114,12 @@ class ConformaliseBase(ABC):
     ) -> torch.Tensor:
         lower, upper = self.predict_coverage(x=x, coverage=0.666)
         return (upper - lower) / 2
+
+    def predict(self, x: torch.Tensor) -> gpytorch.distributions.MultivariateNormal:
+        return gpytorch.distributions.MultivariateNormal(
+            mean=self.predict_median(x=x),
+            covariance_matrix=torch.diag(self.predict_variance(x=x)),
+        )
+
+    def __call__(self, x: torch.Tensor) -> gpytorch.distributions.MultivariateNormal:
+        return self.predict(x=x)

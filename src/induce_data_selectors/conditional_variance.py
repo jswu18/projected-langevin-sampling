@@ -5,7 +5,7 @@ import gpytorch
 import numpy as np
 import torch
 
-from src.induce_data_selectors.induce_data_selector import InduceDataSelector
+from src.induce_data_selectors.base import InduceDataSelector
 
 
 class ConditionalVarianceInduceDataSelector(InduceDataSelector):

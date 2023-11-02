@@ -1,6 +1,7 @@
 import argparse
 import math
 import os
+from copy import deepcopy
 from typing import Any, Dict
 
 import gpytorch
@@ -14,11 +15,7 @@ from experiments.loaders import (
     load_projected_wasserstein_gradient_flow,
     load_svgp,
 )
-from experiments.metrics import (
-    calculate_particle_metrics,
-    calculate_svgp_metrics,
-    concatenate_metrics,
-)
+from experiments.metrics import calculate_metrics, concatenate_metrics
 from experiments.preprocess import set_up_experiment
 from experiments.runners import (
     optimise_kernel_and_induce_data,
@@ -27,6 +24,7 @@ from experiments.runners import (
 )
 from experiments.uci.constants import DATASET_SCHEMA_MAPPING
 from src.induce_data_selectors import ConditionalVarianceInduceDataSelector
+from src.temper import TemperGP, TemperGradientFlow
 
 parser = argparse.ArgumentParser(
     description="Main script for UCI regression data experiments."
@@ -136,17 +134,17 @@ def main(
         torch.save(induce_data, induce_data_path)
 
     if os.path.exists(pwgf_particles_path):
-        pwgf, particles = load_projected_wasserstein_gradient_flow(
+        pwgf = load_projected_wasserstein_gradient_flow(
             particle_path=pwgf_particles_path,
-            base_kernel=model.kernel,
+            base_kernel=deepcopy(model.kernel),
             experiment_data=experiment_data,
             induce_data=induce_data,
             jitter=pwgf_config["jitter"],
         )
     else:
-        pwgf, particles = projected_wasserstein_gradient_flow(
+        pwgf = projected_wasserstein_gradient_flow(
             particle_name="exact-gp",
-            kernel=model.kernel,
+            kernel=deepcopy(model.kernel),
             experiment_data=experiment_data,
             induce_data=induce_data,
             number_of_particles=pwgf_config["number_of_particles"],
@@ -166,12 +164,15 @@ def main(
             plot_particles_path=None,
             plot_update_magnitude_path=plots_path,
         )
-        torch.save(particles, pwgf_particles_path)
-    calculate_particle_metrics(
-        model=pwgf,
+        torch.save(pwgf.particles, pwgf_particles_path)
+    calculate_metrics(
+        model=TemperGradientFlow(
+            gradient_flow=pwgf,
+            x_calibration=experiment_data.validation.x,
+            y_calibration=experiment_data.validation.y,
+        ),
         model_name="pwgf",
         dataset_name=dataset_name,
-        particles=particles,
         experiment_data=experiment_data,
         results_path=results_path,
     )
@@ -179,11 +180,7 @@ def main(
         fixed_svgp_model = load_svgp(
             model_path=fixed_svgp_model_path,
             x_induce=induce_data.x,
-            kernel=gpytorch.kernels.ScaleKernel(
-                gpytorch.kernels.RBFKernel(
-                    ard_num_dims=experiment_data.train.x.shape[1]
-                )
-            ),
+            kernel=deepcopy(model.kernel),
             learn_inducing_locations=False,
         )
     else:
@@ -191,7 +188,7 @@ def main(
             experiment_data=experiment_data,
             induce_data=induce_data,
             mean=gpytorch.means.ConstantMean(),
-            kernel=model.kernel,
+            kernel=deepcopy(model.kernel),
             seed=svgp_config["seed"],
             number_of_epochs=svgp_config["number_of_epochs"],
             batch_size=svgp_config["batch_size"],
@@ -209,8 +206,12 @@ def main(
             fixed_svgp_model.state_dict(),
             os.path.join(models_path, "fixed_svgp_model.pth"),
         )
-    calculate_svgp_metrics(
-        model=fixed_svgp_model,
+    calculate_metrics(
+        model=TemperGP(
+            gp=fixed_svgp_model,
+            x_calibration=experiment_data.validation.x,
+            y_calibration=experiment_data.validation.y,
+        ),
         model_name="fixed-svgp",
         dataset_name=dataset_name,
         experiment_data=experiment_data,
@@ -251,8 +252,12 @@ def main(
             plot_loss_path=plots_path,
         )
         torch.save(svgp_model.state_dict(), os.path.join(models_path, "svgp_model.pth"))
-    calculate_svgp_metrics(
-        model=svgp_model,
+    calculate_metrics(
+        model=TemperGP(
+            gp=svgp_model,
+            x_calibration=experiment_data.validation.x,
+            y_calibration=experiment_data.validation.y,
+        ),
         model_name="svgp",
         dataset_name=dataset_name,
         experiment_data=experiment_data,
@@ -260,23 +265,24 @@ def main(
     )
 
     if os.path.exists(svgp_pwgf_particles_path):
-        svgp_pwgf, svgp_particles = load_projected_wasserstein_gradient_flow(
+        svgp_pwgf = load_projected_wasserstein_gradient_flow(
             particle_path=svgp_pwgf_particles_path,
-            base_kernel=svgp_model.kernel,
+            base_kernel=deepcopy(svgp_model.kernel),
             experiment_data=experiment_data,
             induce_data=Data(
-                x=svgp_model.variational_strategy.inducing_points,
+                x=deepcopy(svgp_model.variational_strategy.inducing_points),
                 y=None,
             ),
             jitter=pwgf_config["jitter"],
         )
     else:
-        svgp_pwgf, svgp_particles = projected_wasserstein_gradient_flow(
+        svgp_pwgf = projected_wasserstein_gradient_flow(
             particle_name="svgp",
-            kernel=svgp_model.kernel,
+            kernel=deepcopy(svgp_model.kernel),
             experiment_data=experiment_data,
             induce_data=Data(
-                x=svgp_model.variational_strategy.inducing_points.detach(),
+                x=deepcopy(svgp_model.variational_strategy.inducing_points),
+                y=None,
             ),
             number_of_particles=pwgf_config["number_of_particles"],
             number_of_epochs=pwgf_config["number_of_epochs"],
@@ -295,12 +301,17 @@ def main(
             plot_particles_path=None,
             plot_update_magnitude_path=plots_path,
         )
-        torch.save(svgp_particles, os.path.join(models_path, "svgp_pwgf_particles.pth"))
-    calculate_particle_metrics(
-        model=svgp_pwgf,
+        torch.save(
+            svgp_pwgf.particles, os.path.join(models_path, "svgp_pwgf_particles.pth")
+        )
+    calculate_metrics(
+        model=TemperGradientFlow(
+            gradient_flow=svgp_pwgf,
+            x_calibration=experiment_data.validation.x,
+            y_calibration=experiment_data.validation.y,
+        ),
         model_name="pwgf-svgp",
         dataset_name=dataset_name,
-        particles=svgp_particles,
         experiment_data=experiment_data,
         results_path=results_path,
     )

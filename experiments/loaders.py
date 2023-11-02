@@ -58,6 +58,7 @@ def load_projected_wasserstein_gradient_flow(
 ) -> (ProjectedWassersteinGradientFlow, torch.Tensor):
     particles = torch.load(particle_path).to(torch.double)
     pwgf = ProjectedWassersteinGradientFlow(
+        number_of_particles=particles.shape[1],
         kernel=GradientFlowKernel(
             base_kernel=base_kernel,
             approximation_samples=experiment_data.train.x,
@@ -68,8 +69,9 @@ def load_projected_wasserstein_gradient_flow(
         y_train=experiment_data.train.y,
         jitter=jitter,
     )
+    pwgf.particles = particles
     print(f"Loaded particles from {particle_path=}.")
-    return pwgf, particles
+    return pwgf
 
 
 def load_svgp(

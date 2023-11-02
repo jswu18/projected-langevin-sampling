@@ -10,11 +10,7 @@ import yaml
 
 from experiments.curves.curves import CURVE_FUNCTIONS, Curve
 from experiments.data import Data, ExperimentData
-from experiments.metrics import (
-    calculate_particle_metrics,
-    calculate_svgp_metrics,
-    concatenate_metrics,
-)
+from experiments.metrics import calculate_metrics, concatenate_metrics
 from experiments.plotters import plot_1d_experiment_data
 from experiments.preprocess import split_regression_data_intervals
 from experiments.runners import (
@@ -79,9 +75,9 @@ def plot_experiment_data(
     )
     ax.set_title(title)
     fig.tight_layout()
-    if not os.path.isdir(f"experiments/curves/plots/{curve_name}"):
-        os.makedirs(f"experiments/curves/plots/{curve_name}")
-    plt.savefig(f"experiments/curves/plots/{curve_name}/experiment-data.png")
+    if not os.path.isdir(f"experiments/curves/outputs/plots/{curve_name}"):
+        os.makedirs(f"experiments/curves/outputs/plots/{curve_name}")
+    plt.savefig(f"experiments/curves/outputs/plots/{curve_name}/experiment-data.png")
     plt.close()
 
 
@@ -102,10 +98,10 @@ def main(
         curve_name=type(curve_function).__name__.lower(),
     )
     plot_curve_path = (
-        f"experiments/curves/plots/{type(curve_function).__name__.lower()}"
+        f"experiments/curves/outputs/plots/{type(curve_function).__name__.lower()}"
     )
     results_curve_path = (
-        f"experiments/curves/results/{type(curve_function).__name__.lower()}"
+        f"experiments/curves/outputs/results/{type(curve_function).__name__.lower()}"
     )
 
     model, induce_data = optimise_kernel_and_induce_data(
@@ -130,7 +126,7 @@ def main(
         plot_1d_iteration_path=plot_curve_path,
         plot_loss_path=plot_curve_path,
     )
-    pwgf, particles = projected_wasserstein_gradient_flow(
+    pwgf = projected_wasserstein_gradient_flow(
         particle_name="exact-gp",
         kernel=model.kernel,
         experiment_data=experiment_data,
@@ -152,11 +148,10 @@ def main(
         plot_particles_path=plot_curve_path,
         plot_update_magnitude_path=plot_curve_path,
     )
-    calculate_particle_metrics(
+    calculate_metrics(
         model=pwgf,
         model_name="pwgf",
         dataset_name=type(curve_function).__name__,
-        particles=particles,
         experiment_data=experiment_data,
         results_path=results_curve_path,
     )
@@ -178,7 +173,7 @@ def main(
         plot_1d_path=plot_curve_path,
         plot_loss_path=plot_curve_path,
     )
-    calculate_svgp_metrics(
+    calculate_metrics(
         model=fixed_svgp_model,
         model_name="fixed-svgp",
         dataset_name=type(curve_function).__name__,
@@ -205,14 +200,14 @@ def main(
         plot_1d_path=plot_curve_path,
         plot_loss_path=plot_curve_path,
     )
-    calculate_svgp_metrics(
+    calculate_metrics(
         model=svgp_model,
         model_name="svgp",
         dataset_name=type(curve_function).__name__,
         experiment_data=experiment_data,
         results_path=results_curve_path,
     )
-    svgp_pwgf, svgp_particles = projected_wasserstein_gradient_flow(
+    svgp_pwgf = projected_wasserstein_gradient_flow(
         particle_name="svgp",
         kernel=svgp_model.kernel,
         experiment_data=experiment_data,
@@ -236,11 +231,10 @@ def main(
         plot_particles_path=plot_curve_path,
         plot_update_magnitude_path=plot_curve_path,
     )
-    calculate_particle_metrics(
+    calculate_metrics(
         model=svgp_pwgf,
         model_name="pwgf-svgp",
         dataset_name=type(curve_function).__name__,
-        particles=svgp_particles,
         experiment_data=experiment_data,
         results_path=results_curve_path,
     )
@@ -259,7 +253,7 @@ if __name__ == "__main__":
             svgp_config=loaded_config["svgp"],
         )
     concatenate_metrics(
-        results_path="experiments/curves/results",
+        results_path="experiments/curves/outputs/results",
         data_types=["train", "validation", "test"],
         models=["pwgf", "fixed-svgp", "svgp", "pwgf-svgp"],
         datasets=[

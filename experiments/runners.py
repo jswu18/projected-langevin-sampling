@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader, TensorDataset
 from tqdm import tqdm
 
 from experiments.data import Data, ExperimentData
-from experiments.metrics import calculate_mae, calculate_nll_particles
+from experiments.metrics import calculate_mae, calculate_nll
 from experiments.plotters import (
     plot_1d_gp_prediction_and_induce_data,
     plot_1d_pwgf_prediction,
@@ -21,7 +21,36 @@ from src.gps import ExactGP, svGP
 from src.gradient_flows.projected_wasserstein import ProjectedWassersteinGradientFlow
 from src.induce_data_selectors import InduceDataSelector
 from src.kernels import GradientFlowKernel
+from src.temper import TemperBase
 from src.utils import set_seed
+
+
+def temper_model(
+    data: Data,
+    model: TemperBase,
+    seed: int,
+    number_of_epochs: int,
+    learning_rate: float,
+) -> (TemperBase, List[float]):
+    set_seed(seed)
+    likelihood = gpytorch.likelihoods.GaussianLikelihood()
+    model.double()
+    likelihood.double()
+    model.train()
+    likelihood.train()
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+    mll = gpytorch.mlls.ExactMarginalLogLikelihood(likelihood, model)
+    epochs_iter = tqdm(range(number_of_epochs), desc="Temper Model Epoch")
+    losses = []
+    for _ in epochs_iter:
+        optimizer.zero_grad()
+        output = model(data.x)
+        loss = -mll(output, data.y)
+        losses.append(loss.item())
+        loss.backward()
+        optimizer.step()
+    model.eval()
+    return model, losses
 
 
 def _train_exact_gp(
@@ -206,9 +235,10 @@ def optimise_kernel_and_induce_data(
             raise ValueError(f"Unknown GP scheme: {gp_scheme}")
         losses_history.append(losses)
         model_history.append(model)
-        nll = gpytorch.metrics.mean_standardized_log_loss(
-            model(experiment_data.train.x),
-            experiment_data.train.y,
+        nll = calculate_nll(
+            prediction=model.forward(experiment_data.train.x),
+            y=experiment_data.train.y,
+            y_std=experiment_data.y_std,
         )
         train_nll.append(nll)
         kernel = deepcopy(model.kernel)
@@ -281,12 +311,14 @@ def projected_wasserstein_gradient_flow(
     plot_title: str = None,
     plot_particles_path: str = None,
     plot_update_magnitude_path: str = None,
-) -> (ProjectedWassersteinGradientFlow, Data):
+) -> ProjectedWassersteinGradientFlow:
     gradient_flow_kernel = GradientFlowKernel(
         base_kernel=kernel,
         approximation_samples=experiment_data.train.x,
     )
     pwgf = ProjectedWassersteinGradientFlow(
+        number_of_particles=number_of_particles,
+        seed=seed,
         kernel=gradient_flow_kernel,
         x_induce=induce_data.x,
         y_induce=induce_data.y,
@@ -301,11 +333,7 @@ def projected_wasserstein_gradient_flow(
             experiment_data=experiment_data,
             induce_data=induce_data,
             x=experiment_data.full.x,
-            predicted_samples=pwgf.predict(
-                particles=pwgf.initialise_particles(
-                    number_of_particles=number_of_particles,
-                    seed=seed,
-                ),
+            predicted_samples=pwgf.predict_samples(
                 x=experiment_data.full.x,
             ).detach(),
             title=f"{plot_title} (initial particles)"
@@ -327,26 +355,23 @@ def projected_wasserstein_gradient_flow(
         soft_update=True,
     )
     for _ in searches_iter:
-        particles = pwgf.initialise_particles(
-            number_of_particles=number_of_particles,
-            seed=seed,
-        )
+        pwgf.reset_particles(seed=seed)
         update_log_magnitudes = []
         set_seed(seed)
         for i in range(number_of_epochs):
-            update = pwgf.calculate_update(
-                particles=particles,
+            particle_update = pwgf.update(
                 learning_rate=torch.tensor(learning_rate_bisection_search.current),
                 observation_noise=observation_noise,
-            ).detach()
-            particles += update
+            )
             update_log_magnitudes.append(
-                float(torch.log(torch.norm(update, dim=1).mean()).detach().item())
+                float(
+                    torch.log(torch.norm(particle_update, dim=1).mean()).detach().item()
+                )
             )
             if (
-                torch.isnan(particles).any()
-                or torch.max(torch.abs(particles)) > max_particle_magnitude
-            ):
+                torch.isnan(pwgf.particles).any()
+                or torch.max(torch.abs(pwgf.particles)) > max_particle_magnitude
+            ).item():
                 searches_iter.set_postfix(
                     best_mae=best_mae,
                     best_nll=best_nll,
@@ -357,25 +382,22 @@ def projected_wasserstein_gradient_flow(
                 learning_rate_bisection_search.update_upper()
                 break
         else:  # only executed if the inner loop did NOT break
-            nll = calculate_nll_particles(
+            prediction = pwgf.predict(
+                x=experiment_data.train.x,
+            )
+            nll = calculate_nll(
+                prediction=prediction,
                 y=experiment_data.train.y,
-                y_std=torch.tensor(experiment_data.y_std),
-                predicted_samples=pwgf.predict(
-                    particles=particles,
-                    x=experiment_data.train.x,
-                ),
+                y_std=experiment_data.y_std,
             )
             mae = calculate_mae(
+                prediction=prediction,
                 y=experiment_data.train.y,
-                predicted=pwgf.predict(
-                    particles=particles,
-                    x=experiment_data.train.x,
-                ).mean(axis=1),
             )
-            if nll < best_nll:
-                best_nll = float(nll.detach().item())
-                best_mae = float(mae.detach().item())
-                particles_out = deepcopy(particles)
+            if mae < best_mae:
+                best_nll = nll
+                best_mae = mae
+                particles_out = deepcopy(pwgf.particles.detach())
             searches_iter.set_postfix(
                 best_mae=best_mae,
                 best_nll=best_nll,
@@ -388,6 +410,7 @@ def projected_wasserstein_gradient_flow(
             ] = update_log_magnitudes
             # soft bound update
             learning_rate_bisection_search.update_lower()
+    pwgf.particles = particles_out
     if plot_particles_path is not None:
         if not os.path.exists(plot_particles_path):
             os.makedirs(plot_particles_path)
@@ -395,8 +418,7 @@ def projected_wasserstein_gradient_flow(
             experiment_data=experiment_data,
             induce_data=induce_data,
             x=experiment_data.full.x,
-            predicted_samples=pwgf.predict(
-                particles=particles_out,
+            predicted_samples=pwgf.predict_samples(
                 x=experiment_data.full.x,
             ).detach(),
             title=f"{plot_title} (learned particles, {best_mae=:.2f}, {best_nll=:.2f})"
@@ -420,7 +442,7 @@ def projected_wasserstein_gradient_flow(
                 f"update-magnitude-{particle_name}.png",
             ),
         )
-    return pwgf, particles_out
+    return pwgf
 
 
 def train_svgp(
@@ -438,7 +460,7 @@ def train_svgp(
     plot_title: Optional[str] = None,
     plot_1d_path: Optional[str] = None,
     plot_loss_path: Optional[str] = None,
-) -> (ExactGP, List[float]):
+) -> (svGP, List[float]):
     model_name = "fixed-svgp" if is_fixed else "svgp"
     best_nll = float("inf")
     best_mae = float("inf")
@@ -464,18 +486,20 @@ def train_svgp(
             learn_inducing_locations=False if is_fixed else True,
             learn_kernel_parameters=False if is_fixed else True,
         )
-        nll = gpytorch.metrics.mean_standardized_log_loss(
-            model(experiment_data.train.x),
-            experiment_data.train.y,
+        prediction = model.forward(experiment_data.train.x)
+        nll = calculate_nll(
+            prediction=prediction,
+            y=experiment_data.train.y,
+            y_std=experiment_data.y_std,
         )
         mae = calculate_mae(
+            prediction=prediction,
             y=experiment_data.train.y,
-            predicted=model(experiment_data.train.x).mean,
         )
         losses_history.append(losses)
-        if losses[-1] < best_loss:
-            best_nll = float(nll.detach().item())
-            best_mae = float(mae.detach().item())
+        if mae < best_mae:
+            best_nll = nll
+            best_mae = mae
             best_loss = float(losses[-1])
             model_out = model
     if plot_1d_path is not None:
