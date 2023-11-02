@@ -115,11 +115,17 @@ class ConformaliseBase(ABC):
         lower, upper = self.predict_coverage(x=x, coverage=0.666)
         return (upper - lower) / 2
 
-    def predict(self, x: torch.Tensor) -> gpytorch.distributions.MultivariateNormal:
+    def predict(
+        self, x: torch.Tensor, jitter=1e-20
+    ) -> gpytorch.distributions.MultivariateNormal:
         return gpytorch.distributions.MultivariateNormal(
             mean=self.predict_median(x=x),
-            covariance_matrix=torch.diag(self.predict_variance(x=x)),
+            covariance_matrix=torch.diag(
+                torch.clip(self.predict_variance(x=x), jitter, None)
+            ),
         )
 
-    def __call__(self, x: torch.Tensor) -> gpytorch.distributions.MultivariateNormal:
-        return self.predict(x=x)
+    def __call__(
+        self, x: torch.Tensor, jitter=1e-20
+    ) -> gpytorch.distributions.MultivariateNormal:
+        return self.predict(x=x, jitter=jitter)

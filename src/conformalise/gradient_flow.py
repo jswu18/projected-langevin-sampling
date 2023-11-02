@@ -24,7 +24,7 @@ class ConformaliseGradientFlow(ConformaliseBase):
         x: torch.Tensor,
         coverage: float,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        samples = self.gradient_flow.predict(
+        samples = self.gradient_flow.predict_samples(
             x=x,
         )
         lower_quantile, upper_quantile = 0.5 - coverage / 2, 0.5 + coverage / 2
@@ -33,7 +33,7 @@ class ConformaliseGradientFlow(ConformaliseBase):
         return lower_bound, upper_bound
 
     def predict_median(self, x: torch.Tensor) -> torch.Tensor:
-        samples = self.gradient_flow.predict(
+        samples = self.gradient_flow.predict_samples(
             x=x,
         )
         return torch.quantile(samples, q=0.5, dim=1)
