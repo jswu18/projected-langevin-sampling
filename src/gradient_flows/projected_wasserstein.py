@@ -146,7 +146,7 @@ class ProjectedWassersteinGradientFlow:
         :param number_of_samples: number of samples to draw
         :return:
         """
-        # e(x) ~ N(0, r(x, x) - r(x, Z) @ r(Z, Z)^{-1} @ r(Z, x))
+        # e(x) ~ N(0, r(x, x) - r(x, Z) @ r(Z, Z)^{-1} @ r(Z, x) + sigma^2 I)
         return sample_multivariate_normal(
             mean=torch.zeros(gram_x.shape[0]),
             cov=(
