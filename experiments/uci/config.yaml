@@ -30,6 +30,7 @@ pwgf:
   number_of_learning_rate_searches: 25
   jitter: 0
   seed: 0
+  observation_noise: 1.0
 svgp:
   seed: 0
   number_of_epochs: 10000

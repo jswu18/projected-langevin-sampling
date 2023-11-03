@@ -22,10 +22,12 @@ class ProjectedWassersteinGradientFlow:
         y_train: torch.Tensor,
         x_train: torch.Tensor,
         kernel: GradientFlowKernel,
+        observation_noise: float,
         y_induce: Optional[torch.Tensor] = None,
         jitter: float = 0.0,
         seed: Optional[int] = None,
     ):
+        self.observation_noise = observation_noise
         self.number_of_particles = number_of_particles  # P
         self.particles = self.initialise_particles(
             number_of_particles=number_of_particles,
@@ -101,7 +103,6 @@ class ProjectedWassersteinGradientFlow:
     def update(
         self,
         learning_rate: torch.Tensor,
-        observation_noise: torch.Tensor,
     ) -> torch.Tensor:
         inverse_base_gram_particle_vector = gpytorch.solve(
             self.base_gram_induce, self.particles
@@ -117,7 +118,7 @@ class ProjectedWassersteinGradientFlow:
         # + sqrt(2 * eta) * e
         # size (M, P)
         particle_update = (
-            -(learning_rate / observation_noise)
+            -(learning_rate / self.observation_noise)
             * (
                 self.base_gram_induce_train
                 @ self.base_gram_induce_train.T
@@ -155,6 +156,7 @@ class ProjectedWassersteinGradientFlow:
                     input=self.gram_induce,
                     rhs=gram_x_induce.T,
                 )
+                + self.observation_noise * torch.eye(gram_x.shape[0])
             ),
             size=(number_of_samples,),
         ).T  # size (N*, number_of_samples)

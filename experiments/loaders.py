@@ -55,6 +55,7 @@ def load_projected_wasserstein_gradient_flow(
     experiment_data: ExperimentData,
     induce_data: Data,
     jitter: float,
+    observation_noise: float,
 ) -> (ProjectedWassersteinGradientFlow, torch.Tensor):
     particles = torch.load(particle_path).to(torch.double)
     pwgf = ProjectedWassersteinGradientFlow(
@@ -68,6 +69,7 @@ def load_projected_wasserstein_gradient_flow(
         x_train=experiment_data.train.x,
         y_train=experiment_data.train.y,
         jitter=jitter,
+        observation_noise=observation_noise,
     )
     pwgf.particles = particles
     print(f"Loaded particles from {particle_path=}.")

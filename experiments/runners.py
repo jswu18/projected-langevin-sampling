@@ -305,7 +305,7 @@ def projected_wasserstein_gradient_flow(
     learning_rate_lower: float,
     number_of_learning_rate_searches: int,
     max_particle_magnitude: float,
-    observation_noise: torch.Tensor,
+    observation_noise: float,
     jitter: float,
     seed: int,
     plot_title: str = None,
@@ -325,6 +325,7 @@ def projected_wasserstein_gradient_flow(
         x_train=experiment_data.train.x,
         y_train=experiment_data.train.y,
         jitter=jitter,
+        observation_noise=observation_noise,
     )
     if plot_particles_path is not None:
         if not os.path.exists(plot_particles_path):
@@ -361,7 +362,6 @@ def projected_wasserstein_gradient_flow(
         for i in range(number_of_epochs):
             particle_update = pwgf.update(
                 learning_rate=torch.tensor(learning_rate_bisection_search.current),
-                observation_noise=observation_noise,
             )
             update_log_magnitudes.append(
                 float(

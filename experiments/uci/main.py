@@ -24,7 +24,6 @@ from experiments.runners import (
 )
 from experiments.uci.constants import DATASET_SCHEMA_MAPPING
 from src.induce_data_selectors import ConditionalVarianceInduceDataSelector
-from src.temper import TemperGP, TemperGradientFlow
 
 parser = argparse.ArgumentParser(
     description="Main script for UCI regression data experiments."
@@ -140,6 +139,7 @@ def main(
             experiment_data=experiment_data,
             induce_data=induce_data,
             jitter=pwgf_config["jitter"],
+            observation_noise=pwgf_config["observation_noise"],
         )
     else:
         pwgf = projected_wasserstein_gradient_flow(
@@ -155,9 +155,7 @@ def main(
                 "number_of_learning_rate_searches"
             ],
             max_particle_magnitude=pwgf_config["max_particle_magnitude"],
-            observation_noise=model.likelihood.noise
-            if kernel_and_induce_data_config["gp_scheme"] == "exact"
-            else 1.0,
+            observation_noise=pwgf_config["observation_noise"],
             jitter=pwgf_config["jitter"],
             seed=pwgf_config["seed"],
             plot_title=f"{dataset_name}",
@@ -166,11 +164,7 @@ def main(
         )
         torch.save(pwgf.particles, pwgf_particles_path)
     calculate_metrics(
-        model=TemperGradientFlow(
-            gradient_flow=pwgf,
-            x_calibration=experiment_data.validation.x,
-            y_calibration=experiment_data.validation.y,
-        ),
+        model=pwgf,
         model_name="pwgf",
         dataset_name=dataset_name,
         experiment_data=experiment_data,
@@ -207,11 +201,7 @@ def main(
             os.path.join(models_path, "fixed_svgp_model.pth"),
         )
     calculate_metrics(
-        model=TemperGP(
-            gp=fixed_svgp_model,
-            x_calibration=experiment_data.validation.x,
-            y_calibration=experiment_data.validation.y,
-        ),
+        model=fixed_svgp_model,
         model_name="fixed-svgp",
         dataset_name=dataset_name,
         experiment_data=experiment_data,
@@ -253,11 +243,7 @@ def main(
         )
         torch.save(svgp_model.state_dict(), os.path.join(models_path, "svgp_model.pth"))
     calculate_metrics(
-        model=TemperGP(
-            gp=svgp_model,
-            x_calibration=experiment_data.validation.x,
-            y_calibration=experiment_data.validation.y,
-        ),
+        model=svgp_model,
         model_name="svgp",
         dataset_name=dataset_name,
         experiment_data=experiment_data,
@@ -274,6 +260,7 @@ def main(
                 y=None,
             ),
             jitter=pwgf_config["jitter"],
+            observation_noise=pwgf_config["observation_noise"],
         )
     else:
         svgp_pwgf = projected_wasserstein_gradient_flow(
@@ -292,9 +279,7 @@ def main(
                 "number_of_learning_rate_searches"
             ],
             max_particle_magnitude=pwgf_config["max_particle_magnitude"],
-            observation_noise=model.likelihood.noise
-            if kernel_and_induce_data_config["gp_scheme"] == "exact"
-            else 1.0,
+            observation_noise=pwgf_config["observation_noise"],
             jitter=pwgf_config["jitter"],
             seed=pwgf_config["seed"],
             plot_title=f"{dataset_name} svGP kernel/induce data",
@@ -305,11 +290,7 @@ def main(
             svgp_pwgf.particles, os.path.join(models_path, "svgp_pwgf_particles.pth")
         )
     calculate_metrics(
-        model=TemperGradientFlow(
-            gradient_flow=svgp_pwgf,
-            x_calibration=experiment_data.validation.x,
-            y_calibration=experiment_data.validation.y,
-        ),
+        model=svgp_pwgf,
         model_name="pwgf-svgp",
         dataset_name=dataset_name,
         experiment_data=experiment_data,
