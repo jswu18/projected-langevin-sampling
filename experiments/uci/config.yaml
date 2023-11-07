@@ -20,8 +20,8 @@ kernel_and_induce_data:
   batch_size: 100
   gp_scheme: exact
   number_of_iterations: 10
-  number_of_epochs: 50000
-  subsample_size: 1000
+  number_of_epochs: 10000
+  subsample_size: 10000
 pwgf:
   number_of_particles: 100
   number_of_epochs: 10000

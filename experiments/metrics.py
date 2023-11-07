@@ -15,7 +15,6 @@ from experiments.plotters import plot_true_versus_predicted
 from src.conformalise import ConformaliseBase
 from src.gps import ExactGP, svGP
 from src.gradient_flows import ProjectedWassersteinGradientFlow
-from src.temper import TemperBase
 from src.utils import set_seed
 
 
@@ -38,6 +37,21 @@ def calculate_nll(
         pred_dist=prediction,
         test_y=y,
     ).item() + math.log(y_std)
+
+
+def calculate_average_interval_width(
+    model: ConformaliseBase,
+    x: torch.Tensor,
+    coverage: float,
+    y_std: float,
+) -> float:
+    return (
+        y_std
+        * model.calculate_average_interval_width(
+            x=x,
+            coverage=coverage,
+        ).item()
+    )
 
 
 def calculate_metrics(
@@ -91,6 +105,25 @@ def calculate_metrics(
                 os.path.join(results_path, _model_name, f"nll_{data.name}.csv"),
                 index_label="dataset",
             )
+            if isinstance(_model, ConformaliseBase):
+                average_interval_width = calculate_average_interval_width(
+                    model=_model,
+                    x=data.x,
+                    coverage=0.95,
+                    y_std=experiment_data.y_std,
+                )
+                pd.DataFrame(
+                    [[average_interval_width]],
+                    columns=[_model_name],
+                    index=[dataset_name],
+                ).to_csv(
+                    os.path.join(
+                        results_path,
+                        _model_name,
+                        f"average_interval_width_{data.name}.csv",
+                    ),
+                    index_label="dataset",
+                )
             if not os.path.exists(os.path.join(plots_path, _model_name)):
                 os.makedirs(os.path.join(plots_path, _model_name))
             plot_true_versus_predicted(
@@ -119,23 +152,42 @@ def concatenate_metrics(
             df_list = []
             for dataset in datasets:
                 try:
-                    df_list.append(
-                        pd.concat(
-                            [
-                                pd.read_csv(
-                                    os.path.join(
-                                        results_path,
-                                        dataset,
-                                        model,
-                                        f"{metric}_{data_type}.csv",
-                                    ),
-                                    index_col="dataset",
-                                )
-                                for model in model_names_
-                            ],
-                            axis=1,
+                    if metric == "average_interval_width":
+                        df_list.append(
+                            pd.concat(
+                                [
+                                    pd.read_csv(
+                                        os.path.join(
+                                            results_path,
+                                            dataset,
+                                            f"{model_name}-conformal",
+                                            f"{metric}_{data_type}.csv",
+                                        ),
+                                        index_col="dataset",
+                                    )
+                                    for model_name in model_names
+                                ],
+                                axis=1,
+                            )
                         )
-                    )
+                    else:
+                        df_list.append(
+                            pd.concat(
+                                [
+                                    pd.read_csv(
+                                        os.path.join(
+                                            results_path,
+                                            dataset,
+                                            model,
+                                            f"{metric}_{data_type}.csv",
+                                        ),
+                                        index_col="dataset",
+                                    )
+                                    for model in model_names_
+                                ],
+                                axis=1,
+                            )
+                        )
                 except Exception as e:
                     print(e)
                     print(f"Dataset {dataset} failed to load results.")

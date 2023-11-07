@@ -399,6 +399,7 @@ def projected_wasserstein_gradient_flow(
             x=experiment_data.full.x,
             predicted_samples=pwgf.predict_samples(
                 x=experiment_data.full.x,
+                include_observation_noise=False,
             ).detach(),
             title=f"{plot_title} (initial particles)"
             if plot_title is not None
@@ -483,6 +484,7 @@ def projected_wasserstein_gradient_flow(
             x=experiment_data.full.x,
             predicted_samples=pwgf.predict_samples(
                 x=experiment_data.full.x,
+                include_observation_noise=False,
             ).detach(),
             title=f"{plot_title} (learned particles, {best_mae=:.2f}, {best_nll=:.2f})"
             if plot_title is not None

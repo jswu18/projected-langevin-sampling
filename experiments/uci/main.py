@@ -371,5 +371,5 @@ if __name__ == "__main__":
         data_types=["train", "validation", "test"],
         model_names=["pwgf", "fixed-svgp", "svgp", "pwgf-svgp"],
         datasets=loaded_config["datasets"],
-        metrics=["mae", "nll"],
+        metrics=["mae", "nll", "average_interval_width"],
     )
