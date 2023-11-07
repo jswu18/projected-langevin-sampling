@@ -260,7 +260,7 @@ def test_sample_predict_noise(
         ],
     ],
 )
-def test_predict(
+def test_predict_pwgf(
     x: torch.Tensor,
     x_induce: torch.Tensor,
     y_induce: torch.Tensor,
