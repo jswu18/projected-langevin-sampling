@@ -138,6 +138,7 @@ class ProjectedWassersteinGradientFlow:
         gram_x: torch.Tensor,
         gram_x_induce: torch.Tensor,
         number_of_samples: int,
+        include_observation_noise: bool = True,
     ) -> torch.Tensor:
         """
         Samples from the predictive noise distribution.
@@ -146,18 +147,25 @@ class ProjectedWassersteinGradientFlow:
         :param number_of_samples: number of samples to draw
         :return:
         """
-        # e(x) ~ N(0, r(x, x) - r(x, Z) @ r(Z, Z)^{-1} @ r(Z, x) + sigma^2 I)
-        return sample_multivariate_normal(
-            mean=torch.zeros(gram_x.shape[0]),
-            cov=(
+        if include_observation_noise:
+            cov = (
                 gram_x
                 - gpytorch.solve(
                     lhs=gram_x_induce,
                     input=self.gram_induce,
                     rhs=gram_x_induce.T,
                 )
-                + torch.tensor(self.observation_noise) * torch.eye(gram_x.shape[0])
-            ),
+            ) + torch.tensor(self.observation_noise) * torch.eye(gram_x.shape[0])
+        else:
+            cov = gram_x - gpytorch.solve(
+                lhs=gram_x_induce,
+                input=self.gram_induce,
+                rhs=gram_x_induce.T,
+            )
+        # e(x) ~ N(0, r(x, x) - r(x, Z) @ r(Z, Z)^{-1} @ r(Z, x) + sigma^2 I)
+        return sample_multivariate_normal(
+            mean=torch.zeros(gram_x.shape[0]),
+            cov=cov,
             size=(number_of_samples,),
         ).T  # size (N*, number_of_samples)
 
@@ -165,12 +173,14 @@ class ProjectedWassersteinGradientFlow:
         self,
         x: torch.Tensor,
         number_of_samples: int = 1,
+        include_observation_noise: bool = True,
     ) -> torch.Tensor:
         """
         Samples from the predictive noise distribution for a given input.
 
         :param x: input of size (N*, D)
         :param number_of_samples: number of samples to draw
+        :param include_observation_noise: whether to include observation noise
         :return: noise samples of size (N*, number_of_samples)
         """
         gram_x_induce = self.kernel(
@@ -185,16 +195,19 @@ class ProjectedWassersteinGradientFlow:
             gram_x=gram_x.to_dense(),
             gram_x_induce=gram_x_induce.to_dense(),
             number_of_samples=number_of_samples,
+            include_observation_noise=include_observation_noise,
         )  # size (N*, number_of_samples)
 
     def predict_samples(
         self,
         x: torch.Tensor,
+        include_observation_noise: bool = True,
     ) -> torch.Tensor:
         """
         Predicts samples for a given input.
 
         :param x: input of size (N*, D)
+        :param include_observation_noise: whether to include observation noise in the sample
         :return: samples of size (N*, P)
         """
         gram_x_induce = self.kernel(
@@ -209,6 +222,7 @@ class ProjectedWassersteinGradientFlow:
             gram_x=gram_x,
             gram_x_induce=gram_x_induce,
             number_of_samples=self.number_of_particles,
+            include_observation_noise=include_observation_noise,
         )  # e(x) of size (N*, P)
 
         # r(x, Z) @ r(Z, Z)^{-1} @ U(t) + e(x)
