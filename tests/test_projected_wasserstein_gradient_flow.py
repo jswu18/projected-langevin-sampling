@@ -62,6 +62,7 @@ def test_initialise_particles(
         x_train=x_train,
         y_train=y_train,
         jitter=jitter,
+        observation_noise=1.0,
     )
     assert torch.allclose(pwgf.particles.detach(), particles)
 
@@ -130,18 +131,18 @@ def test_calculate_update(
         x_train=x_train.double(),
         y_train=y_train.double(),
         jitter=jitter,
+        observation_noise=observation_noise,
     )
     pwgf.particles = particles
     set_seed(seed)
     calculated_update = pwgf.update(
         learning_rate=torch.tensor(learning_rate),
-        observation_noise=torch.tensor(observation_noise),
     ).detach()
     assert torch.allclose(calculated_update, update)
 
 
 @pytest.mark.parametrize(
-    "x,x_induce,y_induce,x_train,y_train,jitter,seed,number_of_samples,predict_noise",
+    "x,x_induce,y_induce,x_train,y_train,jitter,seed,number_of_samples,observation_noise,predict_noise",
     [
         [
             torch.tensor(
@@ -170,10 +171,11 @@ def test_calculate_update(
             0.0,
             0,
             3,
+            1.0,
             torch.tensor(
                 [
-                    [-4.177099609326439, 7.969579237856498, 10.277535644199697],
-                    [0.1856488604600999, -0.35420350057036537, -0.45677933473829735],
+                    [-4.2839446519023285, 8.055917408067154, 10.468815164219743],
+                    [-1.3521197663415734, -0.06432219118205296, 1.7156595598527962],
                 ]
             ).double(),
         ],
@@ -188,6 +190,7 @@ def test_sample_predict_noise(
     jitter: float,
     seed: int,
     number_of_samples: int,
+    observation_noise: float,
     predict_noise: torch.Tensor,
 ):
     kernel = MockGradientFlowKernel(
@@ -202,6 +205,7 @@ def test_sample_predict_noise(
         x_train=x_train.double(),
         y_train=y_train.double(),
         jitter=jitter,
+        observation_noise=observation_noise,
     )
     set_seed(seed)
     sampled_predict_noise = pwgf.sample_predict_noise(
@@ -212,7 +216,7 @@ def test_sample_predict_noise(
 
 
 @pytest.mark.parametrize(
-    "x,x_induce,y_induce,x_train,y_train,jitter,seed,particles,prediction",
+    "x,x_induce,y_induce,x_train,y_train,jitter,seed,particles,observation_noise,prediction",
     [
         [
             torch.tensor(
@@ -246,10 +250,11 @@ def test_sample_predict_noise(
                     [0.1856488604600999, -0.35420350057036537, -0.45677933473829735],
                 ]
             ).double(),
+            1.0,
             torch.tensor(
                 [
-                    [48.17588315015214, -91.91581330880244, -118.53424158988344],
-                    [15.674953704469171, -29.90658453326932, -38.56740418022185],
+                    [48.06903810757625, -91.82947513859177, -118.34296206986339],
+                    [14.137185077667498, -29.61670322388101, -36.394965285630754],
                 ]
             ).double(),
         ],
@@ -264,6 +269,7 @@ def test_predict(
     jitter: float,
     seed: int,
     particles: torch.Tensor,
+    observation_noise: float,
     prediction: torch.Tensor,
 ):
     kernel = MockGradientFlowKernel(
@@ -278,6 +284,7 @@ def test_predict(
         x_train=x_train.double(),
         y_train=y_train.double(),
         jitter=jitter,
+        observation_noise=observation_noise,
     )
     pwgf.particles = particles
     set_seed(seed)

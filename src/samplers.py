@@ -30,3 +30,10 @@ def sample_multivariate_normal(
         @ torch.diag(torch.sqrt(eigenvalues)).double()
         @ normal_sample
     ).T
+
+
+def sample_point(
+    x: torch.Tensor,
+) -> torch.Tensor:
+    random_idx = torch.randperm(x.shape[0])[0]
+    return x[random_idx : random_idx + 1, ...]

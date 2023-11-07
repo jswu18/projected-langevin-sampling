@@ -14,6 +14,7 @@ kernel_and_induce_data:
   gp_scheme: exact
   number_of_iterations: 10
   number_of_epochs: 2000
+  subsample_size: 100
 pwgf:
   number_of_particles: 100
   number_of_epochs: 10000
@@ -23,6 +24,10 @@ pwgf:
   number_of_learning_rate_searches: 25
   jitter: 0
   seed: 0
+  observation_noise: 1.0
+  observation_noise_lower: 1.0e-4
+  observation_noise_upper: 1.0e+4
+  number_of_observation_noise_searches: 25
 svgp:
   seed: 0
   number_of_epochs: 1000

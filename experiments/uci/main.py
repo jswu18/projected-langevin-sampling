@@ -11,18 +11,22 @@ import yaml
 
 from experiments.data import Data, ExperimentData
 from experiments.loaders import (
-    load_kernel_and_induce_data,
+    load_gp_models_and_induce_data,
     load_projected_wasserstein_gradient_flow,
     load_svgp,
 )
 from experiments.metrics import calculate_metrics, concatenate_metrics
 from experiments.preprocess import set_up_experiment
 from experiments.runners import (
-    optimise_kernel_and_induce_data,
+    construct_average_ard_kernel,
+    learn_subsample_gps,
     projected_wasserstein_gradient_flow,
+    pwgf_observation_noise_search,
+    select_induce_data,
     train_svgp,
 )
 from experiments.uci.constants import DATASET_SCHEMA_MAPPING
+from src.gps import ExactGP
 from src.induce_data_selectors import ConditionalVarianceInduceDataSelector
 
 parser = argparse.ArgumentParser(
@@ -81,11 +85,13 @@ def main(
     experiment_data_path = os.path.join(data_path, "experiment_data.pth")
     induce_data_path = os.path.join(data_path, "inducing_points.pth")
 
-    induce_gp_model_path = os.path.join(models_path, "induce_gp_model.pth")
+    subsample_gp_models_path = os.path.join(models_path, "subsample_gp_models.pth")
     pwgf_particles_path = os.path.join(models_path, "pwgf_particles.pth")
+    pwgf_path = os.path.join(models_path, "pwgf_model.pth")
     fixed_svgp_model_path = os.path.join(models_path, "fixed_svgp_model.pth")
     svgp_model_path = os.path.join(models_path, "svgp_model.pth")
     svgp_pwgf_particles_path = os.path.join(models_path, "svgp_pwgf_particles.pth")
+    svgp_pwgf_path = os.path.join(models_path, "svgp_pwgf_model.pth")
 
     if os.path.exists(experiment_data_path):
         experiment_data = ExperimentData.load(experiment_data_path)
@@ -97,26 +103,37 @@ def main(
         )
         experiment_data.save(experiment_data_path)
 
-    if os.path.exists(induce_data_path) and os.path.exists(induce_gp_model_path):
-        model, induce_data = load_kernel_and_induce_data(
+    if os.path.exists(induce_data_path) and os.path.exists(subsample_gp_models_path):
+        subsample_gp_models, induce_data = load_gp_models_and_induce_data(
             induce_data_path=induce_data_path,
-            induce_gp_model_path=induce_gp_model_path,
-            experiment_data=experiment_data,
-            gp_scheme=kernel_and_induce_data_config["gp_scheme"],
+            subsample_gp_models_path=subsample_gp_models_path,
+        )
+        kernel = construct_average_ard_kernel(
+            kernels=[model.kernel for model in subsample_gp_models]
         )
     else:
-        model, induce_data = optimise_kernel_and_induce_data(
+        subsample_gp_models = learn_subsample_gps(
             experiment_data=experiment_data,
             kernel=gpytorch.kernels.ScaleKernel(
                 gpytorch.kernels.RBFKernel(
                     ard_num_dims=experiment_data.train.x.shape[1]
                 )
             ),
-            induce_data_selector=ConditionalVarianceInduceDataSelector(),
+            subsample_size=kernel_and_induce_data_config["subsample_size"],
             seed=kernel_and_induce_data_config["seed"],
             number_of_epochs=kernel_and_induce_data_config["number_of_epochs"],
             learning_rate=kernel_and_induce_data_config["learning_rate"],
             number_of_iterations=kernel_and_induce_data_config["number_of_iterations"],
+            plot_1d_subsample_path=None,
+            plot_loss_path=plots_path,
+        )
+        kernel = construct_average_ard_kernel(
+            kernels=[model.kernel for model in subsample_gp_models]
+        )
+        induce_data = select_induce_data(
+            seed=kernel_and_induce_data_config["seed"],
+            induce_data_selector=ConditionalVarianceInduceDataSelector(),
+            data=experiment_data.train,
             number_induce_points=int(
                 kernel_and_induce_data_config["induce_data_factor"]
                 * math.pow(
@@ -124,22 +141,28 @@ def main(
                     1 / kernel_and_induce_data_config["induce_data_power"],
                 )
             ),
-            batch_size=kernel_and_induce_data_config["batch_size"],
-            gp_scheme=kernel_and_induce_data_config["gp_scheme"],
-            plot_1d_iteration_path=None,
-            plot_loss_path=plots_path,
+            kernel=kernel,
         )
-        torch.save(model.state_dict(), induce_gp_model_path),
+        torch.save(
+            [model.state_dict() for model in subsample_gp_models],
+            subsample_gp_models_path,
+        ),
         torch.save(induce_data, induce_data_path)
+    model = ExactGP(
+        x=induce_data.x,
+        y=induce_data.y,
+        likelihood=gpytorch.likelihoods.GaussianLikelihood(),
+        mean=gpytorch.means.ConstantMean(),
+        kernel=kernel,
+    )
 
-    if os.path.exists(pwgf_particles_path):
+    if os.path.exists(pwgf_path):
         pwgf = load_projected_wasserstein_gradient_flow(
-            particle_path=pwgf_particles_path,
+            model_path=pwgf_path,
             base_kernel=deepcopy(model.kernel),
             experiment_data=experiment_data,
             induce_data=induce_data,
             jitter=pwgf_config["jitter"],
-            observation_noise=pwgf_config["observation_noise"],
         )
     else:
         pwgf = projected_wasserstein_gradient_flow(
@@ -162,13 +185,28 @@ def main(
             plot_particles_path=None,
             plot_update_magnitude_path=plots_path,
         )
-        torch.save(pwgf.particles, pwgf_particles_path)
+        pwgf.observation_noise = pwgf_observation_noise_search(
+            data=experiment_data.train,
+            model=pwgf,
+            observation_noise_lower=pwgf_config["observation_noise_lower"],
+            observation_noise_upper=pwgf_config["observation_noise_upper"],
+            number_of_searches=pwgf_config["number_of_observation_noise_searches"],
+            y_std=experiment_data.y_std,
+        )
+        torch.save(
+            {
+                "particles": pwgf.particles,
+                "observation_noise": pwgf.observation_noise,
+            },
+            pwgf_path,
+        )
     calculate_metrics(
         model=pwgf,
         model_name="pwgf",
         dataset_name=dataset_name,
         experiment_data=experiment_data,
         results_path=results_path,
+        plots_path=plots_path,
     )
     if os.path.exists(fixed_svgp_model_path):
         fixed_svgp_model = load_svgp(
@@ -192,12 +230,15 @@ def main(
                 "number_of_learning_rate_searches"
             ],
             is_fixed=True,
+            observation_noise=pwgf.observation_noise,
             plot_title=f"{dataset_name}",
             plot_1d_path=None,
             plot_loss_path=plots_path,
         )
         torch.save(
-            fixed_svgp_model.state_dict(),
+            {
+                "model": fixed_svgp_model.state_dict(),
+            },
             os.path.join(models_path, "fixed_svgp_model.pth"),
         )
     calculate_metrics(
@@ -206,6 +247,7 @@ def main(
         dataset_name=dataset_name,
         experiment_data=experiment_data,
         results_path=results_path,
+        plots_path=plots_path,
     )
     if os.path.exists(svgp_model_path):
         svgp_model = load_svgp(
@@ -241,18 +283,24 @@ def main(
             plot_1d_path=None,
             plot_loss_path=plots_path,
         )
-        torch.save(svgp_model.state_dict(), os.path.join(models_path, "svgp_model.pth"))
+        torch.save(
+            {
+                "model": svgp_model.state_dict(),
+            },
+            os.path.join(models_path, "svgp_model.pth"),
+        )
     calculate_metrics(
         model=svgp_model,
         model_name="svgp",
         dataset_name=dataset_name,
         experiment_data=experiment_data,
         results_path=results_path,
+        plots_path=plots_path,
     )
 
-    if os.path.exists(svgp_pwgf_particles_path):
+    if os.path.exists(svgp_pwgf_path):
         svgp_pwgf = load_projected_wasserstein_gradient_flow(
-            particle_path=svgp_pwgf_particles_path,
+            model_path=svgp_pwgf_path,
             base_kernel=deepcopy(svgp_model.kernel),
             experiment_data=experiment_data,
             induce_data=Data(
@@ -260,7 +308,6 @@ def main(
                 y=None,
             ),
             jitter=pwgf_config["jitter"],
-            observation_noise=pwgf_config["observation_noise"],
         )
     else:
         svgp_pwgf = projected_wasserstein_gradient_flow(
@@ -279,7 +326,7 @@ def main(
                 "number_of_learning_rate_searches"
             ],
             max_particle_magnitude=pwgf_config["max_particle_magnitude"],
-            observation_noise=pwgf_config["observation_noise"],
+            observation_noise=svgp_model.likelihood.noise,
             jitter=pwgf_config["jitter"],
             seed=pwgf_config["seed"],
             plot_title=f"{dataset_name} svGP kernel/induce data",
@@ -287,7 +334,11 @@ def main(
             plot_update_magnitude_path=plots_path,
         )
         torch.save(
-            svgp_pwgf.particles, os.path.join(models_path, "svgp_pwgf_particles.pth")
+            {
+                "particles": svgp_pwgf.particles,
+                "observation_noise": svgp_pwgf.observation_noise,
+            },
+            svgp_pwgf_path,
         )
     calculate_metrics(
         model=svgp_pwgf,
@@ -295,6 +346,7 @@ def main(
         dataset_name=dataset_name,
         experiment_data=experiment_data,
         results_path=results_path,
+        plots_path=plots_path,
     )
 
 
@@ -317,7 +369,7 @@ if __name__ == "__main__":
     concatenate_metrics(
         results_path="experiments/uci/outputs/results",
         data_types=["train", "validation", "test"],
-        models=["pwgf", "fixed-svgp", "svgp", "pwgf-svgp"],
+        model_names=["pwgf", "fixed-svgp", "svgp", "pwgf-svgp"],
         datasets=loaded_config["datasets"],
         metrics=["mae", "nll"],
     )

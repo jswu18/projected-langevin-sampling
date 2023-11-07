@@ -14,10 +14,14 @@ from experiments.metrics import calculate_metrics, concatenate_metrics
 from experiments.plotters import plot_1d_experiment_data
 from experiments.preprocess import split_regression_data_intervals
 from experiments.runners import (
-    optimise_kernel_and_induce_data,
+    construct_average_ard_kernel,
+    learn_subsample_gps,
     projected_wasserstein_gradient_flow,
+    pwgf_observation_noise_search,
+    select_induce_data,
     train_svgp,
 )
+from src.gps import ExactGP
 from src.induce_data_selectors import ConditionalVarianceInduceDataSelector
 
 parser = argparse.ArgumentParser(description="Main script for toy curves experiments.")
@@ -103,17 +107,26 @@ def main(
     results_curve_path = (
         f"experiments/curves/outputs/results/{type(curve_function).__name__.lower()}"
     )
-
-    model, induce_data = optimise_kernel_and_induce_data(
+    subsample_gp_models = learn_subsample_gps(
         experiment_data=experiment_data,
         kernel=gpytorch.kernels.ScaleKernel(
             gpytorch.kernels.RBFKernel(ard_num_dims=experiment_data.train.x.shape[1])
         ),
-        induce_data_selector=ConditionalVarianceInduceDataSelector(),
+        subsample_size=kernel_and_induce_data_config["subsample_size"],
         seed=kernel_and_induce_data_config["seed"],
         number_of_epochs=kernel_and_induce_data_config["number_of_epochs"],
         learning_rate=kernel_and_induce_data_config["learning_rate"],
         number_of_iterations=kernel_and_induce_data_config["number_of_iterations"],
+        plot_1d_subsample_path=None,
+        plot_loss_path=plot_curve_path,
+    )
+    kernel = construct_average_ard_kernel(
+        kernels=[model.kernel for model in subsample_gp_models]
+    )
+    induce_data = select_induce_data(
+        seed=kernel_and_induce_data_config["seed"],
+        induce_data_selector=ConditionalVarianceInduceDataSelector(),
+        data=experiment_data.train,
         number_induce_points=int(
             kernel_and_induce_data_config["induce_data_factor"]
             * math.pow(
@@ -121,10 +134,14 @@ def main(
                 1 / kernel_and_induce_data_config["induce_data_power"],
             )
         ),
-        batch_size=kernel_and_induce_data_config["batch_size"],
-        gp_scheme=kernel_and_induce_data_config["gp_scheme"],
-        plot_1d_iteration_path=plot_curve_path,
-        plot_loss_path=plot_curve_path,
+        kernel=kernel,
+    )
+    model = ExactGP(
+        x=induce_data.x,
+        y=induce_data.y,
+        likelihood=gpytorch.likelihoods.GaussianLikelihood(),
+        mean=gpytorch.means.ConstantMean(),
+        kernel=kernel,
     )
     pwgf = projected_wasserstein_gradient_flow(
         particle_name="exact-gp",
@@ -139,14 +156,20 @@ def main(
             "number_of_learning_rate_searches"
         ],
         max_particle_magnitude=pwgf_config["max_particle_magnitude"],
-        observation_noise=model.likelihood.noise
-        if kernel_and_induce_data_config["gp_scheme"] == "exact"
-        else 1.0,
+        observation_noise=pwgf_config["observation_noise"],
         jitter=pwgf_config["jitter"],
         seed=pwgf_config["seed"],
         plot_title=f"{type(curve_function).__name__}",
         plot_particles_path=plot_curve_path,
         plot_update_magnitude_path=plot_curve_path,
+    )
+    pwgf.observation_noise = pwgf_observation_noise_search(
+        data=experiment_data.train,
+        model=pwgf,
+        observation_noise_lower=pwgf_config["observation_noise_lower"],
+        observation_noise_upper=pwgf_config["observation_noise_upper"],
+        number_of_searches=pwgf_config["number_of_observation_noise_searches"],
+        y_std=experiment_data.y_std,
     )
     calculate_metrics(
         model=pwgf,
@@ -154,6 +177,7 @@ def main(
         dataset_name=type(curve_function).__name__,
         experiment_data=experiment_data,
         results_path=results_curve_path,
+        plots_path=plot_curve_path,
     )
     fixed_svgp_model = train_svgp(
         experiment_data=experiment_data,
@@ -169,6 +193,7 @@ def main(
             "number_of_learning_rate_searches"
         ],
         is_fixed=True,
+        observation_noise=pwgf.observation_noise,
         plot_title=f"{type(curve_function).__name__}",
         plot_1d_path=plot_curve_path,
         plot_loss_path=plot_curve_path,
@@ -179,6 +204,7 @@ def main(
         dataset_name=type(curve_function).__name__,
         experiment_data=experiment_data,
         results_path=results_curve_path,
+        plots_path=plot_curve_path,
     )
     svgp_model = train_svgp(
         experiment_data=experiment_data,
@@ -206,6 +232,7 @@ def main(
         dataset_name=type(curve_function).__name__,
         experiment_data=experiment_data,
         results_path=results_curve_path,
+        plots_path=plot_curve_path,
     )
     svgp_pwgf = projected_wasserstein_gradient_flow(
         particle_name="svgp",
@@ -222,9 +249,7 @@ def main(
             "number_of_learning_rate_searches"
         ],
         max_particle_magnitude=pwgf_config["max_particle_magnitude"],
-        observation_noise=model.likelihood.noise
-        if kernel_and_induce_data_config["gp_scheme"] == "exact"
-        else 1.0,
+        observation_noise=svgp_model.likelihood.noise,
         jitter=pwgf_config["jitter"],
         seed=pwgf_config["seed"],
         plot_title=f"{type(curve_function).__name__} svGP kernel/induce data",
@@ -237,6 +262,7 @@ def main(
         dataset_name=type(curve_function).__name__,
         experiment_data=experiment_data,
         results_path=results_curve_path,
+        plots_path=plot_curve_path,
     )
 
 
@@ -255,7 +281,7 @@ if __name__ == "__main__":
     concatenate_metrics(
         results_path="experiments/curves/outputs/results",
         data_types=["train", "validation", "test"],
-        models=["pwgf", "fixed-svgp", "svgp", "pwgf-svgp"],
+        model_names=["pwgf", "fixed-svgp", "svgp", "pwgf-svgp"],
         datasets=[
             type(curve_function_).__name__.lower()
             for curve_function_ in CURVE_FUNCTIONS

@@ -1,10 +1,11 @@
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Union
 
 import gpytorch
 import torch
 from matplotlib import pyplot as plt
 
 from experiments.data import Data, ExperimentData
+from src.gps import ExactGP, svGP
 
 _DATA_COLORS = {
     "train": "tab:blue",
@@ -198,7 +199,7 @@ def plot_losses(
 
 
 def plot_1d_gp_prediction_and_induce_data(
-    model: gpytorch.models.GP,
+    model: Union[ExactGP, svGP],
     experiment_data: ExperimentData,
     title: str,
     save_path: str,
@@ -216,7 +217,7 @@ def plot_1d_gp_prediction_and_induce_data(
             ax=ax,
             data=induce_data,
         )
-    prediction = model(experiment_data.full.x)
+    prediction = model.likelihood(model(experiment_data.full.x))
     fig, ax = plot_1d_gp_prediction(
         fig=fig,
         ax=ax,
@@ -242,6 +243,50 @@ def plot_update_magnitude(
     ax.set_xlabel("epoch")
     ax.set_ylabel("update log magnitude")
     ax.legend()
+    fig.tight_layout()
+    fig.savefig(
+        save_path,
+    )
+    plt.close(fig)
+
+
+def plot_true_versus_predicted(
+    y_true: torch.Tensor,
+    y_pred: gpytorch.distributions.MultivariateNormal,
+    title: str,
+    save_path: str,
+    error_bar: bool = True,
+):
+    fig, ax = plt.subplots(figsize=(13, 13))
+    if error_bar:
+        _, _, bars = plt.errorbar(
+            y_true.detach().numpy(),
+            y_pred.mean.detach().numpy(),
+            yerr=1.96 * y_pred.stddev.detach().numpy(),
+            fmt="o",
+            elinewidth=0.5,
+        )
+        [bar.set_alpha(0.5) for bar in bars]
+    else:
+        plt.scatter(
+            y_true.detach().numpy(),
+            y_pred.mean.detach().numpy(),
+            marker="o",
+        )
+    ax.set_xlabel("true")
+    ax.set_ylabel("predicted")
+    if error_bar:
+        ax.set_title(f"{title} (95% confidence interval)")
+    else:
+        ax.set_title(title)
+    axis_lims = [
+        min(y_true.min().item(), y_pred.mean.min().item()),
+        max(y_true.max().item(), y_pred.mean.max().item()),
+    ]
+    plt.plot(axis_lims, axis_lims, color="gray", label="target", linestyle="dashed")
+    plt.xlim(axis_lims)
+    plt.ylim(axis_lims)
+    plt.legend()
     fig.tight_layout()
     fig.savefig(
         save_path,

@@ -5,6 +5,7 @@ from typing import List, Optional
 
 import gpytorch
 import torch
+from sklearn.neighbors import NearestNeighbors
 from torch.utils.data import DataLoader, TensorDataset
 from tqdm import tqdm
 
@@ -21,36 +22,8 @@ from src.gps import ExactGP, svGP
 from src.gradient_flows.projected_wasserstein import ProjectedWassersteinGradientFlow
 from src.induce_data_selectors import InduceDataSelector
 from src.kernels import GradientFlowKernel
-from src.temper import TemperBase
+from src.samplers import sample_point
 from src.utils import set_seed
-
-
-def temper_model(
-    data: Data,
-    model: TemperBase,
-    seed: int,
-    number_of_epochs: int,
-    learning_rate: float,
-) -> (TemperBase, List[float]):
-    set_seed(seed)
-    likelihood = gpytorch.likelihoods.GaussianLikelihood()
-    model.double()
-    likelihood.double()
-    model.train()
-    likelihood.train()
-    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-    mll = gpytorch.mlls.ExactMarginalLogLikelihood(likelihood, model)
-    epochs_iter = tqdm(range(number_of_epochs), desc="Temper Model Epoch")
-    losses = []
-    for _ in epochs_iter:
-        optimizer.zero_grad()
-        output = model(data.x)
-        loss = -mll(output, data.y)
-        losses.append(loss.item())
-        loss.backward()
-        optimizer.step()
-    model.eval()
-    return model, losses
 
 
 def _train_exact_gp(
@@ -100,44 +73,44 @@ def _train_svgp(
     learning_rate: float,
     learn_inducing_locations: bool,
     learn_kernel_parameters: bool,
+    learn_observation_noise: bool,
+    observation_noise: float = None,
 ) -> (ExactGP, List[float]):
     set_seed(seed)
     model = svGP(
         mean=mean,
         kernel=kernel,
         x_induce=induce_data.x,
+        likelihood=gpytorch.likelihoods.GaussianLikelihood(),
         learn_inducing_locations=learn_inducing_locations,
     )
-    likelihood = gpytorch.likelihoods.GaussianLikelihood()
     model.double()
-    likelihood.double()
     model.train()
-    likelihood.train()
-
     if torch.cuda.is_available():
         model = model.cuda()
-        likelihood = likelihood.cuda()
     model.train()
-    likelihood.train()
     all_params = set(model.parameters())
-    if not learn_inducing_locations:
-        final_params = list(
-            all_params
-            - {model.kernel.base_kernel.raw_lengthscale}
-            - {model.kernel.raw_outputscale}
-        )
-    else:
-        final_params = list(all_params)
+
+    if not learn_kernel_parameters:
+        all_params -= {model.kernel.base_kernel.raw_lengthscale}
+        all_params -= {model.kernel.raw_outputscale}
+    if not learn_observation_noise:
+        all_params -= {model.likelihood.raw_noise}
+        model.likelihood.noise = observation_noise
+    model.likelihood.double()
+    model.likelihood.train()
+    if torch.cuda.is_available():
+        model.likelihood = model.likelihood.cuda()
+    model.likelihood.train()
 
     optimizer = torch.optim.Adam(
         [
-            {"params": final_params},
-            {"params": likelihood.parameters()},
+            {"params": list(all_params)},
         ],
         lr=learning_rate,
     )
     mll = gpytorch.mlls.VariationalELBO(
-        likelihood, model, num_data=train_data.x.shape[0]
+        model.likelihood, model, num_data=train_data.x.shape[0]
     )
 
     train_dataset = TensorDataset(train_data.x, train_data.y)
@@ -145,7 +118,7 @@ def _train_svgp(
 
     epochs_iter = tqdm(
         range(number_of_epochs),
-        desc=f"svGP Epoch ({learn_kernel_parameters=}, {learn_inducing_locations=})",
+        desc=f"svGP Epoch ({learn_kernel_parameters=}, {learn_inducing_locations=}, {learn_observation_noise=})",
     )
     losses = []
     for _ in epochs_iter:
@@ -230,6 +203,7 @@ def optimise_kernel_and_induce_data(
                 learning_rate=learning_rate,
                 learn_inducing_locations=True,
                 learn_kernel_parameters=True,
+                learn_observation_noise=True,
             )
         else:
             raise ValueError(f"Unknown GP scheme: {gp_scheme}")
@@ -292,6 +266,95 @@ def optimise_kernel_and_induce_data(
             ),
         )
     return model_out, induce_data_out
+
+
+def learn_subsample_gps(
+    experiment_data: ExperimentData,
+    kernel: gpytorch.kernels.Kernel,
+    subsample_size: int,
+    seed: int,
+    number_of_epochs: int,
+    learning_rate: float,
+    number_of_iterations: int,
+    plot_1d_subsample_path: str = None,
+    plot_loss_path: str = None,
+) -> List[gpytorch.models.GP]:
+    set_seed(seed)
+    if subsample_size > len(experiment_data.train.x):
+        model, losses = _train_exact_gp(
+            data=experiment_data.train,
+            mean=gpytorch.means.ConstantMean(),
+            kernel=deepcopy(kernel),
+            seed=seed,
+            number_of_epochs=number_of_epochs,
+            learning_rate=learning_rate,
+        )
+        losses_history = [losses]
+        models = [model]
+        if plot_1d_subsample_path is not None:
+            if not os.path.exists(plot_1d_subsample_path):
+                os.makedirs(plot_1d_subsample_path)
+            plot_1d_gp_prediction_and_induce_data(
+                model=model,
+                experiment_data=experiment_data,
+                title=f"Subsample GP (iteration {i + 1}, {subsample_size=})",
+                save_path=os.path.join(
+                    plot_1d_subsample_path,
+                    f"gp-subsample-iteration-{i + 1}.png",
+                ),
+            )
+    else:
+        models = []
+        knn = NearestNeighbors(
+            n_neighbors=subsample_size,
+            p=2,
+        )
+        knn.fit(X=experiment_data.train.x, y=experiment_data.train.y)
+        losses_history = []
+        for i in range(number_of_iterations):
+            x_sample = sample_point(x=experiment_data.train.x)
+            subsample_indices = knn.kneighbors(
+                X=x_sample,
+                return_distance=False,
+            )
+            data_subsample = Data(
+                x=experiment_data.train.x[subsample_indices],
+                y=experiment_data.train.y[subsample_indices],
+            )
+            model, losses = _train_exact_gp(
+                data=data_subsample,
+                mean=gpytorch.means.ConstantMean(),
+                kernel=deepcopy(kernel),
+                seed=seed,
+                number_of_epochs=number_of_epochs,
+                learning_rate=learning_rate,
+            )
+            models.append(model)
+            losses_history.append(losses)
+            if plot_1d_subsample_path is not None:
+                if not os.path.exists(plot_1d_subsample_path):
+                    os.makedirs(plot_1d_subsample_path)
+                plot_1d_gp_prediction_and_induce_data(
+                    model=model,
+                    experiment_data=experiment_data,
+                    title=f"Subsample GP (iteration {i + 1}, {subsample_size=})",
+                    save_path=os.path.join(
+                        plot_1d_subsample_path,
+                        f"gp-subsample-iteration-{i + 1}.png",
+                    ),
+                )
+    if plot_loss_path is not None:
+        if not os.path.exists(plot_loss_path):
+            os.makedirs(plot_loss_path)
+        plot_losses(
+            losses_history=losses_history,
+            title=f"Subsample GP Learning ({subsample_size=})",
+            save_path=os.path.join(
+                plot_loss_path,
+                "subsample-gp-losses.png",
+            ),
+        )
+    return models
 
 
 def projected_wasserstein_gradient_flow(
@@ -445,6 +508,53 @@ def projected_wasserstein_gradient_flow(
     return pwgf
 
 
+def pwgf_observation_noise_search(
+    data: Data,
+    model: ProjectedWassersteinGradientFlow,
+    observation_noise_upper: float,
+    observation_noise_lower: float,
+    number_of_searches: int,
+    y_std: float,
+) -> float:
+    bisection_search = LogBisectionSearch(
+        lower=observation_noise_lower,
+        upper=observation_noise_upper,
+        soft_update=True,
+    )
+    searches_iter = tqdm(range(number_of_searches), desc="PWGF Noise Search")
+    for _ in searches_iter:
+        model.observation_noise = torch.tensor(bisection_search.lower)
+        set_seed(0)
+        lower_nll = calculate_nll(
+            prediction=model.predict(
+                x=data.x,
+            ),
+            y=data.y,
+            y_std=y_std,
+        )
+        model.observation_noise = torch.tensor(bisection_search.upper)
+        set_seed(0)
+        upper_nll = calculate_nll(
+            prediction=model.predict(
+                x=data.x,
+            ),
+            y=data.y,
+            y_std=y_std,
+        )
+        searches_iter.set_postfix(
+            lower_nll=lower_nll,
+            upper_nll=upper_nll,
+            current=bisection_search.current,
+            upper=bisection_search.upper,
+            lower=bisection_search.lower,
+        )
+        if lower_nll < upper_nll:
+            bisection_search.update_upper()
+        else:
+            bisection_search.update_lower()
+    return bisection_search.current
+
+
 def train_svgp(
     experiment_data: ExperimentData,
     induce_data: Data,
@@ -457,6 +567,7 @@ def train_svgp(
     learning_rate_lower: float,
     number_of_learning_rate_searches: int,
     is_fixed: bool,
+    observation_noise: float = None,
     plot_title: Optional[str] = None,
     plot_1d_path: Optional[str] = None,
     plot_loss_path: Optional[str] = None,
@@ -485,6 +596,8 @@ def train_svgp(
             learning_rate=learning_rate,
             learn_inducing_locations=False if is_fixed else True,
             learn_kernel_parameters=False if is_fixed else True,
+            learn_observation_noise=False if is_fixed else True,
+            observation_noise=observation_noise,
         )
         prediction = model.forward(experiment_data.train.x)
         nll = calculate_nll(
@@ -533,3 +646,20 @@ def train_svgp(
             ),
         )
     return model_out
+
+
+def construct_average_ard_kernel(
+    kernels: List[gpytorch.kernels.Kernel],
+) -> gpytorch.kernels.Kernel:
+    kernel = gpytorch.kernels.ScaleKernel(
+        gpytorch.kernels.RBFKernel(
+            ard_num_dims=kernels[0].base_kernel.ard_num_dims,
+        )
+    )
+    kernel.base_kernel.lengthscale = torch.concat(
+        tensors=[k.base_kernel.lengthscale for k in kernels],
+    ).mean(dim=0)
+    kernel.outputscale = torch.tensor(
+        data=[k.outputscale for k in kernels],
+    ).mean(dim=0)
+    return kernel

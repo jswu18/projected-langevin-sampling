@@ -25,7 +25,7 @@ class ConformaliseGP(ConformaliseBase):
         x: torch.Tensor,
         coverage: float,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        prediction = self.gp(x)
+        prediction = self.gp.likelihood(self.gp(x))
         confidence_interval_scale = scipy.special.ndtri((coverage + 1) / 2)
         lower_bound = prediction.mean - confidence_interval_scale * torch.sqrt(
             prediction.variance

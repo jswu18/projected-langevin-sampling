@@ -20,7 +20,8 @@ kernel_and_induce_data:
   batch_size: 100
   gp_scheme: exact
   number_of_iterations: 10
-  number_of_epochs: 10000
+  number_of_epochs: 50000
+  subsample_size: 1000
 pwgf:
   number_of_particles: 100
   number_of_epochs: 10000
@@ -31,10 +32,13 @@ pwgf:
   jitter: 0
   seed: 0
   observation_noise: 1.0
+  observation_noise_lower: 1.0e-4
+  observation_noise_upper: 1.0e+4
+  number_of_observation_noise_searches: 25
 svgp:
   seed: 0
   number_of_epochs: 10000
   batch_size: 100
-  learning_rate_upper: 1.0e-1
-  learning_rate_lower: 1.0e-5
-  number_of_learning_rate_searches: 5
+  learning_rate_upper: 1.0e-2
+  learning_rate_lower: 1.0e-4
+  number_of_learning_rate_searches: 3

@@ -156,7 +156,7 @@ class ProjectedWassersteinGradientFlow:
                     input=self.gram_induce,
                     rhs=gram_x_induce.T,
                 )
-                + self.observation_noise * torch.eye(gram_x.shape[0])
+                + torch.tensor(self.observation_noise) * torch.eye(gram_x.shape[0])
             ),
             size=(number_of_samples,),
         ).T  # size (N*, number_of_samples)

@@ -23,4 +23,4 @@ class TemperGP(TemperBase):
     def _untempered_predict(
         self, x: torch.Tensor
     ) -> gpytorch.distributions.MultivariateNormal:
-        return self.gp(x)
+        return self.gp.likelihood(self.gp(x))
