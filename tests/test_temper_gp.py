@@ -3,8 +3,9 @@ import pytest
 import torch
 
 from mockers.kernel import MockKernel
-from src.gps import ExactGP
+from src.gps import ExactGP, svGP
 from src.temper import TemperGP
+from src.utils import set_seed
 
 
 @pytest.mark.parametrize(
@@ -63,7 +64,7 @@ def test_temper_gp_mean(
 
 
 @pytest.mark.parametrize(
-    "x_train,y_train,x_calibration,y_calibration,x,expected_covariance_matrix",
+    "x_induce,x_calibration,y_calibration,x,expected_covariance_matrix",
     [
         [
             torch.tensor(
@@ -75,7 +76,6 @@ def test_temper_gp_mean(
                     [1.5, 2.5, 3.5],
                 ]
             ),
-            torch.tensor([0.1, 2.3, 3.1, 2.1, 3.3]),
             torch.tensor(
                 [
                     [1.0, 2.0, 3.0],
@@ -91,26 +91,25 @@ def test_temper_gp_mean(
             ),
             torch.tensor(
                 [
-                    [2.1850500106811523, 2.2330899238586426],
-                    [2.2330899238586426, 7.536156177520752],
+                    [35.86377716064453, 50.80253219604492],
+                    [50.80253219604492, 97.64912414550781],
                 ]
             ),
         ],
     ],
 )
 def test_temper_gp_expected_covariance_matrix(
-    x_train: torch.Tensor,
-    y_train: torch.Tensor,
+    x_induce: torch.Tensor,
     x_calibration: torch.Tensor,
     y_calibration: torch.Tensor,
     x: torch.Tensor,
     expected_covariance_matrix: torch.Tensor,
 ):
-    gp = ExactGP(
+    set_seed(0)
+    gp = svGP(
         mean=gpytorch.means.ConstantMean(),
         kernel=MockKernel(),
-        x=x_train,
-        y=y_train,
+        x_induce=x_induce,
         likelihood=gpytorch.likelihoods.GaussianLikelihood(),
     )
     gp.eval()

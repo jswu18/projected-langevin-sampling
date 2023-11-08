@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Optional, Tuple
 
 import torch
 
@@ -6,9 +6,19 @@ import torch
 def sample_multivariate_normal(
     mean: torch.Tensor,
     cov: torch.Tensor,
-    size: Tuple[int] = None,
-    seed: int = None,
+    size: Optional[Tuple[int]] = None,
+    seed: Optional[int] = None,
 ) -> torch.Tensor:
+    """
+    Wrapper for pytorch multivariate normal sampler which removes negative eigenvalues as a work around for
+    non-positive definite covariance matrices.
+
+    :param mean: mean vector
+    :param cov: covariance matrix
+    :param size: output size
+    :param seed: optional seed for sampler
+    :return: multivariate normal samples
+    """
     if seed is not None:
         generator = torch.Generator().manual_seed(seed)
     else:
@@ -34,6 +44,17 @@ def sample_multivariate_normal(
 
 def sample_point(
     x: torch.Tensor,
+    seed: Optional[int] = None,
 ) -> torch.Tensor:
-    random_idx = torch.randperm(x.shape[0])[0]
+    """
+    Sample an item in a vector
+    :param x: a vector
+    :param seed: optional seed for sampler
+    :return: an item sampled from the vector
+    """
+    if seed is not None:
+        generator = torch.Generator().manual_seed(seed)
+    else:
+        generator = None
+    random_idx = torch.randperm(x.shape[0], generator=generator)[0]
     return x[random_idx : random_idx + 1, ...]

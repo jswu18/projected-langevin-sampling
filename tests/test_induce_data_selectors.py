@@ -63,9 +63,10 @@ def test_random_induce_data_selector(
 
 
 @pytest.mark.parametrize(
-    "x,m,seed,z",
+    "threshold,x,m,seed,z",
     [
         [
+            0.0,
             torch.tensor(
                 [
                     [1.1, 3.5, 3.5],
@@ -84,6 +85,7 @@ def test_random_induce_data_selector(
             ),
         ],
         [
+            10.0,
             torch.tensor(
                 [
                     [1.0, 3.0],
@@ -105,6 +107,7 @@ def test_random_induce_data_selector(
     ],
 )
 def test_conditional_variance_induce_data_selector(
+    threshold: float,
     x: torch.Tensor,
     m: int,
     seed: int,
@@ -112,6 +115,6 @@ def test_conditional_variance_induce_data_selector(
 ):
     kernel = MockKernel()
     set_seed(seed=seed)
-    selector = ConditionalVarianceInduceDataSelector()
+    selector = ConditionalVarianceInduceDataSelector(threshold=threshold)
     z_computed, _ = selector.compute_induce_data(x=x, m=m, kernel=kernel)
     assert torch.allclose(z_computed, z)

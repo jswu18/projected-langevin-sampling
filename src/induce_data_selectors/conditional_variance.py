@@ -110,7 +110,7 @@ class ConditionalVarianceInduceDataSelector(InduceDataSelector):
             # sum of di is tr(Kff-Qff), if this is small things are ok
             if np.sum(np.clip(di, 0, None)) < self.threshold:
                 indices = indices[:m]
-                warnings.warn(
+                print(
                     "ConditionalVariance: Terminating selection of inducing points early."
                 )
                 break
