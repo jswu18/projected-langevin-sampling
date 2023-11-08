@@ -17,6 +17,7 @@ from experiments.plotters import (
     plot_losses,
     plot_update_magnitude,
 )
+from experiments.utils import create_directory
 from src.bisection_search import LogBisectionSearch
 from src.gps import ExactGP, svGP
 from src.gradient_flows.projected_wasserstein import ProjectedWassersteinGradientFlow
@@ -217,8 +218,7 @@ def optimise_kernel_and_induce_data(
         train_nll.append(nll)
         kernel = deepcopy(model.kernel)
         if plot_1d_iteration_path is not None:
-            if not os.path.exists(plot_1d_iteration_path):
-                os.makedirs(plot_1d_iteration_path)
+            create_directory(plot_1d_iteration_path)
             plot_1d_gp_prediction_and_induce_data(
                 model=model,
                 experiment_data=experiment_data,
@@ -242,8 +242,7 @@ def optimise_kernel_and_induce_data(
         induce_data_history[train_nll.index(min(train_nll))],
     )
     if plot_1d_iteration_path is not None:
-        if not os.path.exists(plot_1d_iteration_path):
-            os.makedirs(plot_1d_iteration_path)
+        create_directory(plot_1d_iteration_path)
         plot_1d_gp_prediction_and_induce_data(
             model=model_out,
             experiment_data=experiment_data,
@@ -255,8 +254,7 @@ def optimise_kernel_and_induce_data(
             ),
         )
     if plot_loss_path is not None:
-        if not os.path.exists(plot_loss_path):
-            os.makedirs(plot_loss_path)
+        create_directory(plot_loss_path)
         plot_losses(
             losses_history=losses_history,
             title=f"Inducing Points Selection ({gp_scheme=})",
@@ -292,8 +290,7 @@ def learn_subsample_gps(
         losses_history = [losses]
         models = [model]
         if plot_1d_subsample_path is not None:
-            if not os.path.exists(plot_1d_subsample_path):
-                os.makedirs(plot_1d_subsample_path)
+            create_directory(plot_1d_subsample_path)
             plot_1d_gp_prediction_and_induce_data(
                 model=model,
                 experiment_data=experiment_data,
@@ -332,8 +329,7 @@ def learn_subsample_gps(
             models.append(model)
             losses_history.append(losses)
             if plot_1d_subsample_path is not None:
-                if not os.path.exists(plot_1d_subsample_path):
-                    os.makedirs(plot_1d_subsample_path)
+                create_directory(plot_1d_subsample_path)
                 plot_1d_gp_prediction_and_induce_data(
                     model=model,
                     experiment_data=experiment_data,
@@ -344,8 +340,7 @@ def learn_subsample_gps(
                     ),
                 )
     if plot_loss_path is not None:
-        if not os.path.exists(plot_loss_path):
-            os.makedirs(plot_loss_path)
+        create_directory(plot_loss_path)
         plot_losses(
             losses_history=losses_history,
             title=f"Subsample GP Learning ({subsample_size=})",
@@ -391,8 +386,7 @@ def train_projected_wasserstein_gradient_flow(
         observation_noise=observation_noise,
     )
     if plot_particles_path is not None:
-        if not os.path.exists(plot_particles_path):
-            os.makedirs(plot_particles_path)
+        create_directory(plot_particles_path)
         plot_1d_pwgf_prediction(
             experiment_data=experiment_data,
             induce_data=induce_data,
@@ -484,8 +478,7 @@ def train_projected_wasserstein_gradient_flow(
             learning_rate_bisection_search.update_lower()
     pwgf.particles = particles_out
     if plot_particles_path is not None:
-        if not os.path.exists(plot_particles_path):
-            os.makedirs(plot_particles_path)
+        create_directory(plot_particles_path)
         plot_1d_pwgf_prediction(
             experiment_data=experiment_data,
             induce_data=induce_data,
@@ -503,8 +496,7 @@ def train_projected_wasserstein_gradient_flow(
             ),
         )
     if plot_update_magnitude_path is not None:
-        if not os.path.exists(plot_update_magnitude_path):
-            os.makedirs(plot_update_magnitude_path)
+        create_directory(plot_update_magnitude_path)
         plot_update_magnitude(
             update_log_magnitude_history=update_log_magnitude_history,
             title=f"{plot_title} (update magnitude)"
@@ -632,8 +624,7 @@ def train_svgp(
             best_loss = float(losses[-1])
             model_out = model
     if plot_1d_path is not None:
-        if not os.path.exists(plot_1d_path):
-            os.makedirs(plot_1d_path)
+        create_directory(plot_1d_path)
         plot_1d_gp_prediction_and_induce_data(
             model=model_out,
             experiment_data=experiment_data,
@@ -649,8 +640,7 @@ def train_svgp(
             ),
         )
     if plot_loss_path is not None:
-        if not os.path.exists(plot_loss_path):
-            os.makedirs(plot_loss_path)
+        create_directory(plot_loss_path)
         plot_losses(
             losses_history=losses_history,
             title=f"{plot_title} loss ({model_name})"

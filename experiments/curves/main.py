@@ -1,6 +1,5 @@
 import argparse
 import math
-import os
 from typing import Any, Dict
 
 import gpytorch
@@ -21,6 +20,7 @@ from experiments.runners import (
     train_projected_wasserstein_gradient_flow,
     train_svgp,
 )
+from experiments.utils import create_directory
 from src.gps import ExactGP
 from src.induce_data_selectors import ConditionalVarianceInduceDataSelector
 
@@ -79,8 +79,7 @@ def plot_experiment_data(
     )
     ax.set_title(title)
     fig.tight_layout()
-    if not os.path.isdir(f"experiments/curves/outputs/plots/{curve_name}"):
-        os.makedirs(f"experiments/curves/outputs/plots/{curve_name}")
+    create_directory(f"experiments/curves/outputs/plots/{curve_name}")
     plt.savefig(f"experiments/curves/outputs/plots/{curve_name}/experiment-data.png")
     plt.close()
 

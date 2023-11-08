@@ -12,6 +12,7 @@ from experiments.constructors import (
 )
 from experiments.data import ExperimentData
 from experiments.plotters import plot_true_versus_predicted
+from experiments.utils import create_directory
 from src.conformalise import ConformaliseBase
 from src.gps import ExactGP, svGP
 from src.gradient_flows import ProjectedWassersteinGradientFlow
@@ -100,8 +101,7 @@ def calculate_metrics(
                 y=data.y,
                 prediction=prediction,
             )
-            if not os.path.exists(os.path.join(results_path, _model_name)):
-                os.makedirs(os.path.join(results_path, _model_name))
+            create_directory(os.path.join(results_path, _model_name))
             pd.DataFrame([[mae]], columns=[_model_name], index=[dataset_name]).to_csv(
                 os.path.join(results_path, _model_name, f"mae_{data.name}.csv"),
                 index_label="dataset",
@@ -110,8 +110,7 @@ def calculate_metrics(
                 y=data.y,
                 prediction=prediction,
             )
-            if not os.path.exists(os.path.join(results_path, _model_name)):
-                os.makedirs(os.path.join(results_path, _model_name))
+            create_directory(os.path.join(results_path, _model_name))
             pd.DataFrame([[mse]], columns=[_model_name], index=[dataset_name]).to_csv(
                 os.path.join(results_path, _model_name, f"mse_{data.name}.csv"),
                 index_label="dataset",
@@ -144,8 +143,7 @@ def calculate_metrics(
                     ),
                     index_label="dataset",
                 )
-            if not os.path.exists(os.path.join(plots_path, _model_name)):
-                os.makedirs(os.path.join(plots_path, _model_name))
+            create_directory(os.path.join(plots_path, _model_name))
             plot_true_versus_predicted(
                 y_true=data.y,
                 y_pred=prediction,
