@@ -15,9 +15,9 @@ from experiments.plotters import plot_1d_experiment_data
 from experiments.preprocess import split_regression_data_intervals
 from experiments.runners import (
     construct_average_ard_kernel,
+    construct_average_gaussian_likelihood,
     learn_subsample_gps,
     projected_wasserstein_gradient_flow,
-    pwgf_observation_noise_search,
     select_induce_data,
     train_svgp,
 )
@@ -123,6 +123,9 @@ def main(
     kernel = construct_average_ard_kernel(
         kernels=[model.kernel for model in subsample_gp_models]
     )
+    likelihood = construct_average_gaussian_likelihood(
+        likelihoods=[model.likelihood for model in subsample_gp_models]
+    )
     induce_data = select_induce_data(
         seed=kernel_and_induce_data_config["seed"],
         induce_data_selector=ConditionalVarianceInduceDataSelector(),
@@ -156,20 +159,12 @@ def main(
             "number_of_learning_rate_searches"
         ],
         max_particle_magnitude=pwgf_config["max_particle_magnitude"],
-        observation_noise=pwgf_config["observation_noise"],
+        observation_noise=float(likelihood.noise),
         jitter=pwgf_config["jitter"],
         seed=pwgf_config["seed"],
         plot_title=f"{type(curve_function).__name__}",
         plot_particles_path=plot_curve_path,
         plot_update_magnitude_path=plot_curve_path,
-    )
-    pwgf.observation_noise = pwgf_observation_noise_search(
-        data=experiment_data.train,
-        model=pwgf,
-        observation_noise_lower=pwgf_config["observation_noise_lower"],
-        observation_noise_upper=pwgf_config["observation_noise_upper"],
-        number_of_searches=pwgf_config["number_of_observation_noise_searches"],
-        y_std=experiment_data.y_std,
     )
     calculate_metrics(
         model=pwgf,

@@ -4,6 +4,7 @@ from copy import deepcopy
 from typing import List, Optional
 
 import gpytorch
+import numpy as np
 import torch
 from sklearn.neighbors import NearestNeighbors
 from torch.utils.data import DataLoader, TensorDataset
@@ -458,7 +459,7 @@ def projected_wasserstein_gradient_flow(
                 prediction=prediction,
                 y=experiment_data.train.y,
             )
-            if mae < best_mae:
+            if nll < best_nll:
                 best_nll = nll
                 best_mae = mae
                 particles_out = deepcopy(pwgf.particles.detach())
@@ -612,7 +613,7 @@ def train_svgp(
             y=experiment_data.train.y,
         )
         losses_history.append(losses)
-        if mae < best_mae:
+        if nll < best_nll:
             best_nll = nll
             best_mae = mae
             best_loss = float(losses[-1])
@@ -665,3 +666,13 @@ def construct_average_ard_kernel(
         data=[k.outputscale for k in kernels],
     ).mean(dim=0)
     return kernel
+
+
+def construct_average_gaussian_likelihood(
+    likelihoods: List[gpytorch.likelihoods.GaussianLikelihood],
+) -> gpytorch.likelihoods.GaussianLikelihood:
+    average_likelihood = gpytorch.likelihoods.GaussianLikelihood()
+    average_likelihood.noise = torch.tensor(
+        [likelihood.noise for likelihood in likelihoods]
+    ).mean()
+    return average_likelihood

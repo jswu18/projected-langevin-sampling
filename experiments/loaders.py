@@ -52,13 +52,13 @@ def load_kernel_and_induce_data(
 def load_projected_wasserstein_gradient_flow(
     model_path: str,
     base_kernel: gpytorch.kernels.Kernel,
+    observation_noise: float,
     experiment_data: ExperimentData,
     induce_data: Data,
     jitter: float,
 ) -> (ProjectedWassersteinGradientFlow, torch.Tensor):
     model_config = torch.load(model_path)
     particles = model_config["particles"].to(torch.double)
-    observation_noise = model_config["observation_noise"]
     pwgf = ProjectedWassersteinGradientFlow(
         number_of_particles=particles.shape[1],
         kernel=GradientFlowKernel(

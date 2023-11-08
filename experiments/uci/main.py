@@ -19,9 +19,9 @@ from experiments.metrics import calculate_metrics, concatenate_metrics
 from experiments.preprocess import set_up_experiment
 from experiments.runners import (
     construct_average_ard_kernel,
+    construct_average_gaussian_likelihood,
     learn_subsample_gps,
     projected_wasserstein_gradient_flow,
-    pwgf_observation_noise_search,
     select_induce_data,
     train_svgp,
 )
@@ -86,11 +86,9 @@ def main(
     induce_data_path = os.path.join(data_path, "inducing_points.pth")
 
     subsample_gp_models_path = os.path.join(models_path, "subsample_gp_models.pth")
-    pwgf_particles_path = os.path.join(models_path, "pwgf_particles.pth")
     pwgf_path = os.path.join(models_path, "pwgf_model.pth")
     fixed_svgp_model_path = os.path.join(models_path, "fixed_svgp_model.pth")
     svgp_model_path = os.path.join(models_path, "svgp_model.pth")
-    svgp_pwgf_particles_path = os.path.join(models_path, "svgp_pwgf_particles.pth")
     svgp_pwgf_path = os.path.join(models_path, "svgp_pwgf_model.pth")
 
     if os.path.exists(experiment_data_path):
@@ -155,11 +153,14 @@ def main(
         mean=gpytorch.means.ConstantMean(),
         kernel=kernel,
     )
-
+    likelihood = construct_average_gaussian_likelihood(
+        likelihoods=[model.likelihood for model in subsample_gp_models]
+    )
     if os.path.exists(pwgf_path):
         pwgf = load_projected_wasserstein_gradient_flow(
             model_path=pwgf_path,
             base_kernel=deepcopy(model.kernel),
+            observation_noise=float(likelihood.noise),
             experiment_data=experiment_data,
             induce_data=induce_data,
             jitter=pwgf_config["jitter"],
@@ -178,25 +179,17 @@ def main(
                 "number_of_learning_rate_searches"
             ],
             max_particle_magnitude=pwgf_config["max_particle_magnitude"],
-            observation_noise=pwgf_config["observation_noise"],
+            observation_noise=float(likelihood.noise),
             jitter=pwgf_config["jitter"],
             seed=pwgf_config["seed"],
             plot_title=f"{dataset_name}",
             plot_particles_path=None,
             plot_update_magnitude_path=plots_path,
         )
-        pwgf.observation_noise = pwgf_observation_noise_search(
-            data=experiment_data.train,
-            model=pwgf,
-            observation_noise_lower=pwgf_config["observation_noise_lower"],
-            observation_noise_upper=pwgf_config["observation_noise_upper"],
-            number_of_searches=pwgf_config["number_of_observation_noise_searches"],
-            y_std=experiment_data.y_std,
-        )
         torch.save(
             {
                 "particles": pwgf.particles,
-                "observation_noise": pwgf.observation_noise,
+                "observation_noise": float(likelihood.noise),
             },
             pwgf_path,
         )
@@ -302,6 +295,7 @@ def main(
         svgp_pwgf = load_projected_wasserstein_gradient_flow(
             model_path=svgp_pwgf_path,
             base_kernel=deepcopy(svgp_model.kernel),
+            observation_noise=svgp_model.likelihood.noise,
             experiment_data=experiment_data,
             induce_data=Data(
                 x=deepcopy(svgp_model.variational_strategy.inducing_points),
