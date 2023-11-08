@@ -21,8 +21,8 @@ from experiments.runners import (
     construct_average_ard_kernel,
     construct_average_gaussian_likelihood,
     learn_subsample_gps,
-    projected_wasserstein_gradient_flow,
     select_induce_data,
+    train_projected_wasserstein_gradient_flow,
     train_svgp,
 )
 from experiments.uci.constants import DATASET_SCHEMA_MAPPING
@@ -166,7 +166,7 @@ def main(
             jitter=pwgf_config["jitter"],
         )
     else:
-        pwgf = projected_wasserstein_gradient_flow(
+        pwgf = train_projected_wasserstein_gradient_flow(
             particle_name="exact-gp",
             kernel=deepcopy(model.kernel),
             experiment_data=experiment_data,
@@ -304,7 +304,7 @@ def main(
             jitter=pwgf_config["jitter"],
         )
     else:
-        svgp_pwgf = projected_wasserstein_gradient_flow(
+        svgp_pwgf = train_projected_wasserstein_gradient_flow(
             particle_name="svgp",
             kernel=deepcopy(svgp_model.kernel),
             experiment_data=experiment_data,

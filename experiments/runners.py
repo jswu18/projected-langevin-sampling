@@ -358,7 +358,7 @@ def learn_subsample_gps(
     return models
 
 
-def projected_wasserstein_gradient_flow(
+def train_projected_wasserstein_gradient_flow(
     particle_name: str,
     kernel: gpytorch.kernels.Kernel,
     experiment_data: ExperimentData,
