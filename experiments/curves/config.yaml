@@ -5,16 +5,17 @@ data:
   number_of_test_intervals: 5
   total_number_of_intervals: 15
   train_data_percentage: 0.8
-kernel_and_induce_data:
+kernel:
   seed: 0
-  induce_data_factor: 1
-  induce_data_power: 2
   learning_rate: 0.01
   batch_size: 100
-  gp_scheme: exact
   number_of_iterations: 10
   number_of_epochs: 2000
   subsample_size: 100
+induce_data:
+  seed: 0
+  induce_data_factor: 1
+  induce_data_power: 2
 pwgf:
   number_of_particles: 100
   number_of_epochs: 10000
@@ -24,9 +25,6 @@ pwgf:
   number_of_learning_rate_searches: 25
   jitter: 0
   seed: 0
-  observation_noise: 1.0
-  observation_noise_lower: 1.0e-4
-  observation_noise_upper: 1.0e+4
 svgp:
   seed: 0
   number_of_epochs: 1000

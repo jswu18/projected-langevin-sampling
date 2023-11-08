@@ -31,14 +31,19 @@ parser.add_argument("--config_path", type=str)
 
 
 def get_experiment_data(
-    data_config: Dict[str, Any],
     curve_function: Curve,
+    number_of_data_points: int,
+    seed: int,
+    sigma_true: float,
+    number_of_test_intervals: int,
+    total_number_of_intervals: int,
+    train_data_percentage: float,
 ) -> ExperimentData:
-    x = torch.linspace(-2, 2, data_config["number_of_data_points"]).reshape(-1, 1)
+    x = torch.linspace(-2, 2, number_of_data_points).reshape(-1, 1)
     y = curve_function(
-        seed=data_config["seed"],
+        seed=seed,
         x=x,
-        sigma_true=data_config["sigma_true"],
+        sigma_true=sigma_true,
     )
     (
         x_train,
@@ -48,13 +53,13 @@ def get_experiment_data(
         x_validation,
         y_validation,
     ) = split_regression_data_intervals(
-        seed=data_config["seed"],
+        seed=seed,
         split_seed=curve_function.seed,
         x=x,
         y=y,
-        number_of_test_intervals=data_config["number_of_test_intervals"],
-        total_number_of_intervals=data_config["total_number_of_intervals"],
-        train_data_percentage=data_config["train_data_percentage"],
+        number_of_test_intervals=number_of_test_intervals,
+        total_number_of_intervals=total_number_of_intervals,
+        train_data_percentage=train_data_percentage,
     )
     experiment_data = ExperimentData(
         name=type(curve_function).__name__.lower(),
@@ -89,13 +94,19 @@ def plot_experiment_data(
 def main(
     curve_function: Curve,
     data_config: Dict[str, Any],
-    kernel_and_induce_data_config: Dict[str, Any],
+    kernel_config: Dict[str, Any],
+    induce_data_config: Dict[str, Any],
     pwgf_config: Dict[str, Any],
     svgp_config: Dict[str, Any],
 ) -> None:
     experiment_data = get_experiment_data(
-        data_config=data_config,
         curve_function=curve_function,
+        number_of_data_points=data_config["number_of_data_points"],
+        seed=data_config["seed"],
+        sigma_true=data_config["sigma_true"],
+        number_of_test_intervals=data_config["number_of_test_intervals"],
+        total_number_of_intervals=data_config["total_number_of_intervals"],
+        train_data_percentage=data_config["train_data_percentage"],
     )
     plot_experiment_data(
         experiment_data=experiment_data,
@@ -113,43 +124,36 @@ def main(
         kernel=gpytorch.kernels.ScaleKernel(
             gpytorch.kernels.RBFKernel(ard_num_dims=experiment_data.train.x.shape[1])
         ),
-        subsample_size=kernel_and_induce_data_config["subsample_size"],
-        seed=kernel_and_induce_data_config["seed"],
-        number_of_epochs=kernel_and_induce_data_config["number_of_epochs"],
-        learning_rate=kernel_and_induce_data_config["learning_rate"],
-        number_of_iterations=kernel_and_induce_data_config["number_of_iterations"],
+        subsample_size=kernel_config["subsample_size"],
+        seed=kernel_config["seed"],
+        number_of_epochs=kernel_config["number_of_epochs"],
+        learning_rate=kernel_config["learning_rate"],
+        number_of_iterations=kernel_config["number_of_iterations"],
         plot_1d_subsample_path=None,
         plot_loss_path=plot_curve_path,
     )
-    kernel = construct_average_ard_kernel(
+    average_ard_kernel = construct_average_ard_kernel(
         kernels=[model.kernel for model in subsample_gp_models]
     )
     likelihood = construct_average_gaussian_likelihood(
         likelihoods=[model.likelihood for model in subsample_gp_models]
     )
     induce_data = select_induce_data(
-        seed=kernel_and_induce_data_config["seed"],
+        seed=induce_data_config["seed"],
         induce_data_selector=ConditionalVarianceInduceDataSelector(),
         data=experiment_data.train,
         number_induce_points=int(
-            kernel_and_induce_data_config["induce_data_factor"]
+            induce_data_config["induce_data_factor"]
             * math.pow(
                 experiment_data.train.x.shape[0],
-                1 / kernel_and_induce_data_config["induce_data_power"],
+                1 / induce_data_config["induce_data_power"],
             )
         ),
-        kernel=kernel,
-    )
-    model = ExactGP(
-        x=induce_data.x,
-        y=induce_data.y,
-        likelihood=gpytorch.likelihoods.GaussianLikelihood(),
-        mean=gpytorch.means.ConstantMean(),
-        kernel=kernel,
+        kernel=average_ard_kernel,
     )
     pwgf = train_projected_wasserstein_gradient_flow(
-        particle_name="exact-gp",
-        kernel=model.kernel,
+        particle_name="average-kernel",
+        kernel=average_ard_kernel,
         experiment_data=experiment_data,
         induce_data=induce_data,
         number_of_particles=pwgf_config["number_of_particles"],
@@ -179,7 +183,7 @@ def main(
         experiment_data=experiment_data,
         induce_data=induce_data,
         mean=gpytorch.means.ConstantMean(),
-        kernel=model.kernel,
+        kernel=average_ard_kernel,
         seed=svgp_config["seed"],
         number_of_epochs=svgp_config["number_of_epochs"],
         batch_size=svgp_config["batch_size"],
@@ -270,7 +274,8 @@ if __name__ == "__main__":
         main(
             curve_function=curve_function_,
             data_config=loaded_config["data"],
-            kernel_and_induce_data_config=loaded_config["kernel_and_induce_data"],
+            kernel_config=loaded_config["kernel"],
+            induce_data_config=loaded_config["induce_data"],
             pwgf_config=loaded_config["pwgf"],
             svgp_config=loaded_config["svgp"],
         )

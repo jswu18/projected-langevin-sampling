@@ -12,16 +12,17 @@ data:
   train_data_percentage: 0.8
   validation_data_percentage: 0.1
   test_data_percentage: 0.1
-kernel_and_induce_data:
+kernel:
   seed: 0
-  induce_data_factor: 1
-  induce_data_power: 2
   learning_rate: 0.01
   batch_size: 100
-  gp_scheme: exact
   number_of_iterations: 10
   number_of_epochs: 10000
   subsample_size: 10000
+induce_data:
+  seed: 0
+  induce_data_factor: 1
+  induce_data_power: 2
 pwgf:
   number_of_particles: 100
   number_of_epochs: 10000

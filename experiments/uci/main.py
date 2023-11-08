@@ -38,7 +38,10 @@ parser.add_argument("--config_path", type=str)
 
 
 def get_experiment_data(
-    data_config: Dict[str, Any],
+    seed: int,
+    train_data_percentage: float,
+    validation_data_percentage: float,
+    test_data_percentage: float,
     dataset_name: str,
 ) -> ExperimentData:
     df = pd.read_csv(
@@ -56,12 +59,12 @@ def get_experiment_data(
 
     experiment_data = set_up_experiment(
         name=dataset_name,
-        seed=data_config["seed"],
+        seed=seed,
         x=x,
         y=y,
-        train_data_percentage=data_config["train_data_percentage"],
-        validation_data_percentage=data_config["validation_data_percentage"],
-        test_data_percentage=data_config["test_data_percentage"],
+        train_data_percentage=train_data_percentage,
+        validation_data_percentage=validation_data_percentage,
+        test_data_percentage=test_data_percentage,
         normalise=True,
     )
     return experiment_data
@@ -70,7 +73,8 @@ def get_experiment_data(
 def main(
     dataset_name: str,
     data_config: Dict[str, Any],
-    kernel_and_induce_data_config: Dict[str, Any],
+    kernel_config: Dict[str, Any],
+    induce_data_config: Dict[str, Any],
     pwgf_config: Dict[str, Any],
     svgp_config: Dict[str, Any],
 ) -> None:
@@ -98,7 +102,10 @@ def main(
         print(f"Loaded experiment data from {experiment_data_path=}")
     else:
         experiment_data = get_experiment_data(
-            data_config=data_config,
+            seed=data_config["seed"],
+            train_data_percentage=data_config["train_data_percentage"],
+            validation_data_percentage=data_config["validation_data_percentage"],
+            test_data_percentage=data_config["test_data_percentage"],
             dataset_name=dataset_name,
         )
         experiment_data.save(experiment_data_path)
@@ -108,7 +115,7 @@ def main(
             induce_data_path=induce_data_path,
             subsample_gp_models_path=subsample_gp_models_path,
         )
-        kernel = construct_average_ard_kernel(
+        average_ard_kernel = construct_average_ard_kernel(
             kernels=[model.kernel for model in subsample_gp_models]
         )
     else:
@@ -119,29 +126,29 @@ def main(
                     ard_num_dims=experiment_data.train.x.shape[1]
                 )
             ),
-            subsample_size=kernel_and_induce_data_config["subsample_size"],
-            seed=kernel_and_induce_data_config["seed"],
-            number_of_epochs=kernel_and_induce_data_config["number_of_epochs"],
-            learning_rate=kernel_and_induce_data_config["learning_rate"],
-            number_of_iterations=kernel_and_induce_data_config["number_of_iterations"],
+            subsample_size=kernel_config["subsample_size"],
+            seed=kernel_config["seed"],
+            number_of_epochs=kernel_config["number_of_epochs"],
+            learning_rate=kernel_config["learning_rate"],
+            number_of_iterations=kernel_config["number_of_iterations"],
             plot_1d_subsample_path=None,
             plot_loss_path=plots_path,
         )
-        kernel = construct_average_ard_kernel(
+        average_ard_kernel = construct_average_ard_kernel(
             kernels=[model.kernel for model in subsample_gp_models]
         )
         induce_data = select_induce_data(
-            seed=kernel_and_induce_data_config["seed"],
+            seed=induce_data_config["seed"],
             induce_data_selector=ConditionalVarianceInduceDataSelector(),
             data=experiment_data.train,
             number_induce_points=int(
-                kernel_and_induce_data_config["induce_data_factor"]
+                induce_data_config["induce_data_factor"]
                 * math.pow(
                     experiment_data.train.x.shape[0],
-                    1 / kernel_and_induce_data_config["induce_data_power"],
+                    1 / induce_data_config["induce_data_power"],
                 )
             ),
-            kernel=kernel,
+            kernel=average_ard_kernel,
         )
         torch.save(
             [model.state_dict() for model in subsample_gp_models],
@@ -153,7 +160,7 @@ def main(
         y=induce_data.y,
         likelihood=gpytorch.likelihoods.GaussianLikelihood(),
         mean=gpytorch.means.ConstantMean(),
-        kernel=kernel,
+        kernel=average_ard_kernel,
     )
     likelihood = construct_average_gaussian_likelihood(
         likelihoods=[model.likelihood for model in subsample_gp_models]
@@ -169,7 +176,7 @@ def main(
         )
     else:
         pwgf = train_projected_wasserstein_gradient_flow(
-            particle_name="exact-gp",
+            particle_name="average-kernel",
             kernel=deepcopy(model.kernel),
             experiment_data=experiment_data,
             induce_data=induce_data,
@@ -355,7 +362,8 @@ if __name__ == "__main__":
             main(
                 dataset_name=dataset_name_,
                 data_config=loaded_config["data"],
-                kernel_and_induce_data_config=loaded_config["kernel_and_induce_data"],
+                kernel_config=loaded_config["kernel,"],
+                induce_data_config=loaded_config["induce_data"],
                 pwgf_config=loaded_config["pwgf"],
                 svgp_config=loaded_config["svgp"],
             )

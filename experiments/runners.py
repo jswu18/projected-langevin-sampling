@@ -373,7 +373,7 @@ def train_projected_wasserstein_gradient_flow(
                 x=experiment_data.full.x,
                 include_observation_noise=False,
             ).detach(),
-            title=f"{plot_title} (learned particles, {best_mae=:.2f}, {best_mse=:.2f}, {best_nll=:.2f})"
+            title=f"{plot_title} (learned particles)"
             if plot_title is not None
             else None,
             save_path=os.path.join(
@@ -468,9 +468,7 @@ def train_svgp(
             induce_data=induce_data
             if is_fixed
             else None,  # induce data can't be visualised if it's learned by the model
-            title=f"{plot_title}, ({model_name}, {best_mae=:.2f}, {best_mse=:.2f}, {best_nll=:.2f})"
-            if plot_title is not None
-            else None,
+            title=f"{plot_title} ({model_name})" if plot_title is not None else None,
             save_path=os.path.join(
                 plot_1d_path,
                 f"{model_name}.png",
