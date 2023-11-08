@@ -7,14 +7,16 @@ import matplotlib.pyplot as plt
 import torch
 import yaml
 
+from experiments.constructors import (
+    construct_average_ard_kernel,
+    construct_average_gaussian_likelihood,
+)
 from experiments.curves.curves import CURVE_FUNCTIONS, Curve
 from experiments.data import Data, ExperimentData
 from experiments.metrics import calculate_metrics, concatenate_metrics
 from experiments.plotters import plot_1d_experiment_data
 from experiments.preprocess import split_regression_data_intervals
 from experiments.runners import (
-    construct_average_ard_kernel,
-    construct_average_gaussian_likelihood,
     learn_subsample_gps,
     select_induce_data,
     train_projected_wasserstein_gradient_flow,

@@ -1,4 +1,7 @@
-from typing import Union
+from typing import List, Union
+
+import gpytorch
+import torch
 
 from experiments.data import Data
 from src.conformalise import ConformaliseBase, ConformaliseGP, ConformaliseGradientFlow
@@ -45,3 +48,30 @@ def construct_conformalised_model(
         )
     else:
         raise ValueError(f"Model type {type(model)} not supported")
+
+
+def construct_average_gaussian_likelihood(
+    likelihoods: List[gpytorch.likelihoods.GaussianLikelihood],
+) -> gpytorch.likelihoods.GaussianLikelihood:
+    average_likelihood = gpytorch.likelihoods.GaussianLikelihood()
+    average_likelihood.noise = torch.tensor(
+        [likelihood.noise for likelihood in likelihoods]
+    ).mean()
+    return average_likelihood
+
+
+def construct_average_ard_kernel(
+    kernels: List[gpytorch.kernels.Kernel],
+) -> gpytorch.kernels.Kernel:
+    kernel = gpytorch.kernels.ScaleKernel(
+        gpytorch.kernels.RBFKernel(
+            ard_num_dims=kernels[0].base_kernel.ard_num_dims,
+        )
+    )
+    kernel.base_kernel.lengthscale = torch.concat(
+        tensors=[k.base_kernel.lengthscale for k in kernels],
+    ).mean(dim=0)
+    kernel.outputscale = torch.tensor(
+        data=[k.outputscale for k in kernels],
+    ).mean(dim=0)
+    return kernel

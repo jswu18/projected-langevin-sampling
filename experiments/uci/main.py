@@ -9,6 +9,10 @@ import pandas as pd
 import torch
 import yaml
 
+from experiments.constructors import (
+    construct_average_ard_kernel,
+    construct_average_gaussian_likelihood,
+)
 from experiments.data import Data, ExperimentData
 from experiments.loaders import (
     load_gp_models_and_induce_data,
@@ -18,8 +22,6 @@ from experiments.loaders import (
 from experiments.metrics import calculate_metrics, concatenate_metrics
 from experiments.preprocess import set_up_experiment
 from experiments.runners import (
-    construct_average_ard_kernel,
-    construct_average_gaussian_likelihood,
     learn_subsample_gps,
     select_induce_data,
     train_projected_wasserstein_gradient_flow,
