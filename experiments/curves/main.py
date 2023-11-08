@@ -281,5 +281,5 @@ if __name__ == "__main__":
             type(curve_function_).__name__.lower()
             for curve_function_ in CURVE_FUNCTIONS
         ],
-        metrics=["mae", "nll"],
+        metrics=["mae", "mse", "nll"],
     )

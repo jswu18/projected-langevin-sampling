@@ -4,14 +4,13 @@ from copy import deepcopy
 from typing import List, Optional
 
 import gpytorch
-import numpy as np
 import torch
 from sklearn.neighbors import NearestNeighbors
 from torch.utils.data import DataLoader, TensorDataset
 from tqdm import tqdm
 
 from experiments.data import Data, ExperimentData
-from experiments.metrics import calculate_mae, calculate_nll
+from experiments.metrics import calculate_mae, calculate_mse, calculate_nll
 from experiments.plotters import (
     plot_1d_gp_prediction_and_induce_data,
     plot_1d_pwgf_prediction,
@@ -412,6 +411,7 @@ def train_projected_wasserstein_gradient_flow(
         )
     particles_out = None
     best_mae = float("inf")
+    best_mse = float("inf")
     best_nll = float("inf")
     searches_iter = tqdm(range(number_of_learning_rate_searches), desc="WGF LR Search")
     update_log_magnitude_history = {}
@@ -439,6 +439,7 @@ def train_projected_wasserstein_gradient_flow(
             ).item():
                 searches_iter.set_postfix(
                     best_mae=best_mae,
+                    best_mse=best_mse,
                     best_nll=best_nll,
                     lr=learning_rate_bisection_search.current,
                     upper=learning_rate_bisection_search.upper,
@@ -455,6 +456,10 @@ def train_projected_wasserstein_gradient_flow(
                 y=experiment_data.train.y,
                 y_std=experiment_data.y_std,
             )
+            mse = calculate_mse(
+                prediction=prediction,
+                y=experiment_data.train.y,
+            )
             mae = calculate_mae(
                 prediction=prediction,
                 y=experiment_data.train.y,
@@ -462,9 +467,11 @@ def train_projected_wasserstein_gradient_flow(
             if nll < best_nll:
                 best_nll = nll
                 best_mae = mae
+                best_mse = mse
                 particles_out = deepcopy(pwgf.particles.detach())
             searches_iter.set_postfix(
                 best_mae=best_mae,
+                best_mse=best_mse,
                 best_nll=best_nll,
                 lr=learning_rate_bisection_search.current,
                 upper=learning_rate_bisection_search.upper,
@@ -487,7 +494,7 @@ def train_projected_wasserstein_gradient_flow(
                 x=experiment_data.full.x,
                 include_observation_noise=False,
             ).detach(),
-            title=f"{plot_title} (learned particles, {best_mae=:.2f}, {best_nll=:.2f})"
+            title=f"{plot_title} (learned particles, {best_mae=:.2f}, {best_mse=:.2f}, {best_nll=:.2f})"
             if plot_title is not None
             else None,
             save_path=os.path.join(
@@ -577,6 +584,7 @@ def train_svgp(
 ) -> (svGP, List[float]):
     model_name = "fixed-svgp" if is_fixed else "svgp"
     best_nll = float("inf")
+    best_mse = float("inf")
     best_mae = float("inf")
     best_loss = float("inf")
     losses_history = []
@@ -612,10 +620,15 @@ def train_svgp(
             prediction=prediction,
             y=experiment_data.train.y,
         )
+        mse = calculate_mse(
+            prediction=prediction,
+            y=experiment_data.train.y,
+        )
         losses_history.append(losses)
         if nll < best_nll:
             best_nll = nll
             best_mae = mae
+            best_mse = mse
             best_loss = float(losses[-1])
             model_out = model
     if plot_1d_path is not None:
@@ -627,7 +640,7 @@ def train_svgp(
             induce_data=induce_data
             if is_fixed
             else None,  # induce data can't be visualised if it's learned by the model
-            title=f"{plot_title}, ({model_name}, {best_mae=:.2f}, {best_nll=:.2f})"
+            title=f"{plot_title}, ({model_name}, {best_mae=:.2f}, {best_mse=:.2f}, {best_nll=:.2f})"
             if plot_title is not None
             else None,
             save_path=os.path.join(

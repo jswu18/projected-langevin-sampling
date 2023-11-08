@@ -31,6 +31,6 @@ svgp:
   seed: 0
   number_of_epochs: 1000
   batch_size: 100
-  learning_rate_upper: 1.0e-1
-  learning_rate_lower: 1.0e-5
-  number_of_learning_rate_searches: 5
+  learning_rate_upper: 1.0e-2
+  learning_rate_lower: 1.0e-4
+  number_of_learning_rate_searches: 3

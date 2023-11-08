@@ -106,6 +106,16 @@ def calculate_metrics(
                 os.path.join(results_path, _model_name, f"mae_{data.name}.csv"),
                 index_label="dataset",
             )
+            mse = calculate_mse(
+                y=data.y,
+                prediction=prediction,
+            )
+            if not os.path.exists(os.path.join(results_path, _model_name)):
+                os.makedirs(os.path.join(results_path, _model_name))
+            pd.DataFrame([[mse]], columns=[_model_name], index=[dataset_name]).to_csv(
+                os.path.join(results_path, _model_name, f"mse_{data.name}.csv"),
+                index_label="dataset",
+            )
             nll = calculate_nll(
                 prediction=prediction,
                 y=data.y,
@@ -139,7 +149,7 @@ def calculate_metrics(
             plot_true_versus_predicted(
                 y_true=data.y,
                 y_pred=prediction,
-                title=f"True versus Predicted ({mae=:.2f},{nll=:.2f}) ({dataset_name},{_model_name},{data.name} data)",
+                title=f"True versus Predicted ({mae=:.2f},{mse=:.2f},{nll=:.2f}) ({dataset_name},{_model_name},{data.name} data)",
                 save_path=os.path.join(
                     plots_path, _model_name, f"true_versus_predicted_{data.name}.png"
                 ),
