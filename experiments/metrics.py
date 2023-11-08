@@ -28,6 +28,16 @@ def calculate_mae(
     ).item()
 
 
+def calculate_mse(
+    prediction: gpytorch.distributions.MultivariateNormal,
+    y: torch.Tensor,
+) -> float:
+    return gpytorch.metrics.mean_squared_error(
+        pred_dist=prediction,
+        test_y=y,
+    ).item()
+
+
 def calculate_nll(
     prediction: gpytorch.distributions.MultivariateNormal,
     y: torch.Tensor,
