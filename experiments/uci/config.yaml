@@ -4,7 +4,10 @@ datasets:
   - energy_cooling
   - energy_heating
   - kin8nm
+  - naval_compressor
+  - naval_turbine
   - power
+  - protein
   - wine
   - yacht
 data:
@@ -17,8 +20,8 @@ kernel:
   learning_rate: 0.01
   batch_size: 100
   number_of_iterations: 10
-  number_of_epochs: 10000
-  subsample_size: 10000
+  number_of_epochs: 50000
+  subsample_size: 1000
 induce_data:
   seed: 0
   induce_data_factor: 1
@@ -32,6 +35,9 @@ pwgf:
   number_of_learning_rate_searches: 25
   jitter: 0
   seed: 0
+  observation_noise_upper: 1.0e+4
+  observation_noise_lower: 1.0e-4
+  number_of_observation_noise_searches: 25
 svgp:
   seed: 0
   number_of_epochs: 10000

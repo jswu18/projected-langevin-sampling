@@ -183,6 +183,7 @@ def learn_subsample_gps(
         losses_history.append(losses)
         models.append(model)
     else:
+        set_seed(seed)
         knn = NearestNeighbors(
             n_neighbors=subsample_size,
             p=2,
@@ -394,6 +395,53 @@ def train_projected_wasserstein_gradient_flow(
             ),
         )
     return pwgf
+
+
+def pwgf_observation_noise_search(
+    data: Data,
+    model: ProjectedWassersteinGradientFlow,
+    observation_noise_upper: float,
+    observation_noise_lower: float,
+    number_of_searches: int,
+    y_std: float,
+) -> float:
+    bisection_search = LogBisectionSearch(
+        lower=observation_noise_lower,
+        upper=observation_noise_upper,
+        soft_update=True,
+    )
+    searches_iter = tqdm(range(number_of_searches), desc="PWGF Noise Search")
+    for _ in searches_iter:
+        model.observation_noise = torch.tensor(bisection_search.lower)
+        set_seed(0)
+        lower_nll = calculate_nll(
+            prediction=model.predict(
+                x=data.x,
+            ),
+            y=data.y,
+            y_std=y_std,
+        )
+        model.observation_noise = torch.tensor(bisection_search.upper)
+        set_seed(0)
+        upper_nll = calculate_nll(
+            prediction=model.predict(
+                x=data.x,
+            ),
+            y=data.y,
+            y_std=y_std,
+        )
+        searches_iter.set_postfix(
+            lower_nll=lower_nll,
+            upper_nll=upper_nll,
+            current=bisection_search.current,
+            upper=bisection_search.upper,
+            lower=bisection_search.lower,
+        )
+        if lower_nll < upper_nll:
+            bisection_search.update_upper()
+        else:
+            bisection_search.update_lower()
+    return bisection_search.current
 
 
 def train_svgp(

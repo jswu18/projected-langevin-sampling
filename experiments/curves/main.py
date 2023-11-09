@@ -18,12 +18,12 @@ from experiments.plotters import plot_1d_experiment_data
 from experiments.preprocess import split_regression_data_intervals
 from experiments.runners import (
     learn_subsample_gps,
+    pwgf_observation_noise_search,
     select_induce_data,
     train_projected_wasserstein_gradient_flow,
     train_svgp,
 )
 from experiments.utils import create_directory
-from src.gps import ExactGP
 from src.induce_data_selectors import ConditionalVarianceInduceDataSelector
 
 parser = argparse.ArgumentParser(description="Main script for toy curves experiments.")
@@ -170,6 +170,14 @@ def main(
         plot_title=f"{type(curve_function).__name__}",
         plot_particles_path=plot_curve_path,
         plot_update_magnitude_path=plot_curve_path,
+    )
+    pwgf.observation_noise = pwgf_observation_noise_search(
+        data=experiment_data.train,
+        model=pwgf,
+        observation_noise_upper=pwgf_config["observation_noise_upper"],
+        observation_noise_lower=pwgf_config["observation_noise_lower"],
+        number_of_searches=pwgf_config["number_of_observation_noise_searches"],
+        y_std=experiment_data.y_std,
     )
     calculate_metrics(
         model=pwgf,

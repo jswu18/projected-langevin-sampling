@@ -23,12 +23,12 @@ from experiments.metrics import calculate_metrics, concatenate_metrics
 from experiments.preprocess import set_up_experiment
 from experiments.runners import (
     learn_subsample_gps,
+    pwgf_observation_noise_search,
     select_induce_data,
     train_projected_wasserstein_gradient_flow,
     train_svgp,
 )
 from experiments.uci.constants import DATASET_SCHEMA_MAPPING
-from src.gps import ExactGP
 from src.induce_data_selectors import ConditionalVarianceInduceDataSelector
 
 parser = argparse.ArgumentParser(
@@ -155,20 +155,13 @@ def main(
             subsample_gp_models_path,
         ),
         torch.save(induce_data, induce_data_path)
-    model = ExactGP(
-        x=induce_data.x,
-        y=induce_data.y,
-        likelihood=gpytorch.likelihoods.GaussianLikelihood(),
-        mean=gpytorch.means.ConstantMean(),
-        kernel=average_ard_kernel,
-    )
     likelihood = construct_average_gaussian_likelihood(
         likelihoods=[model.likelihood for model in subsample_gp_models]
     )
     if os.path.exists(pwgf_path):
         pwgf = load_projected_wasserstein_gradient_flow(
             model_path=pwgf_path,
-            base_kernel=deepcopy(model.kernel),
+            base_kernel=deepcopy(average_ard_kernel),
             observation_noise=float(likelihood.noise),
             experiment_data=experiment_data,
             induce_data=induce_data,
@@ -177,7 +170,7 @@ def main(
     else:
         pwgf = train_projected_wasserstein_gradient_flow(
             particle_name="average-kernel",
-            kernel=deepcopy(model.kernel),
+            kernel=deepcopy(average_ard_kernel),
             experiment_data=experiment_data,
             induce_data=induce_data,
             number_of_particles=pwgf_config["number_of_particles"],
@@ -195,10 +188,18 @@ def main(
             plot_particles_path=None,
             plot_update_magnitude_path=plots_path,
         )
+        pwgf.observation_noise = pwgf_observation_noise_search(
+            data=experiment_data.train,
+            model=pwgf,
+            observation_noise_upper=pwgf_config["observation_noise_upper"],
+            observation_noise_lower=pwgf_config["observation_noise_lower"],
+            number_of_searches=pwgf_config["number_of_observation_noise_searches"],
+            y_std=experiment_data.y_std,
+        )
         torch.save(
             {
                 "particles": pwgf.particles,
-                "observation_noise": float(likelihood.noise),
+                "observation_noise": pwgf.observation_noise,
             },
             pwgf_path,
         )
@@ -214,7 +215,7 @@ def main(
         fixed_svgp_model = load_svgp(
             model_path=fixed_svgp_model_path,
             x_induce=induce_data.x,
-            kernel=deepcopy(model.kernel),
+            kernel=deepcopy(average_ard_kernel),
             learn_inducing_locations=False,
         )
     else:
@@ -222,7 +223,7 @@ def main(
             experiment_data=experiment_data,
             induce_data=induce_data,
             mean=gpytorch.means.ConstantMean(),
-            kernel=deepcopy(model.kernel),
+            kernel=deepcopy(average_ard_kernel),
             seed=svgp_config["seed"],
             number_of_epochs=svgp_config["number_of_epochs"],
             batch_size=svgp_config["batch_size"],
@@ -362,7 +363,7 @@ if __name__ == "__main__":
             main(
                 dataset_name=dataset_name_,
                 data_config=loaded_config["data"],
-                kernel_config=loaded_config["kernel,"],
+                kernel_config=loaded_config["kernel"],
                 induce_data_config=loaded_config["induce_data"],
                 pwgf_config=loaded_config["pwgf"],
                 svgp_config=loaded_config["svgp"],
