@@ -58,7 +58,7 @@ def construct_shell_command(repository_path: str, dataset_name: str, seed: int) 
             f"cd {repository_path}",
             "export PYTHONPATH=$PWD",
             f"python experiments/uci/main.py --dataset_name {dataset_name} --data_seed {seed} --config_path "
-            f"experiments/uci/configs/{dataset_name}.yaml",
+            f"experiments/uci/config.yaml",
         ]
     )
 
@@ -105,6 +105,7 @@ if __name__ == "__main__":
     shell_command_dir = "experiments/uci/shell_commands"
     create_directory(shell_command_dir)
     repository_path_ = os.getcwd()
+    shell_commands = []
     myriad_command_paths = []
     for dataset_name_ in DatasetSchema.__members__:
         for seed_ in range(args.number_of_seeds):
@@ -118,6 +119,7 @@ if __name__ == "__main__":
             )
             with open(shell_command_path, "w") as file:
                 file.write(shell_command_)
+            shell_commands.append(shell_command_)
 
             base_myriad_commands_ = _build_base_myriad_commands(
                 job_name=f"{dataset_name_}-{seed_}",
@@ -135,6 +137,9 @@ if __name__ == "__main__":
             with open(myriad_command_path, "w") as file:
                 file.write("\n".join(base_myriad_commands_ + [shell_command_]))
             myriad_command_paths.append(myriad_command_path)
+
+    with open("uci.sh", "w") as file:
+        file.write("\n".join([shell_command for shell_command in shell_commands]))
 
     with open("myriad_qsubs_uci.sh", "w") as file:
         file.write(
