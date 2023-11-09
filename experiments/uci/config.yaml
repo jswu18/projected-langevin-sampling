@@ -1,17 +1,4 @@
-datasets:
-  - boston
-  - concrete
-  - energy_cooling
-  - energy_heating
-  - kin8nm
-  - naval_compressor
-  - naval_turbine
-  - power
-  - protein
-  - wine
-  - yacht
 data:
-  seed: 0
   train_data_percentage: 0.8
   validation_data_percentage: 0.1
   test_data_percentage: 0.1

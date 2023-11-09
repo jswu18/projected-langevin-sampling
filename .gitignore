@@ -30,3 +30,7 @@ __pycache__
 
 # Test YAMLs
 /**/**/**/*yaml
+
+# Shell scripts
+/**/**/shell_commands
+*.sh

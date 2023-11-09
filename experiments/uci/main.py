@@ -29,12 +29,28 @@ from experiments.runners import (
     train_svgp,
 )
 from experiments.uci.constants import DATASET_SCHEMA_MAPPING
+from experiments.uci.schemas import DatasetSchema
 from src.induce_data_selectors import ConditionalVarianceInduceDataSelector
+from src.utils import set_seed
 
 parser = argparse.ArgumentParser(
     description="Main script for UCI regression data experiments."
 )
-parser.add_argument("--config_path", type=str)
+parser.add_argument(
+    "--config_path", type=str, required=True, help="Path to config for experiment."
+)
+parser.add_argument(
+    "--dataset_name",
+    type=str,
+    required=True,
+    help="Name of dataset to use for the experiment.",
+)
+parser.add_argument(
+    "--data_seed",
+    type=int,
+    required=True,
+    help="Seed to use for the data split of the experiment.",
+)
 
 
 def get_experiment_data(
@@ -72,17 +88,19 @@ def get_experiment_data(
 
 def main(
     dataset_name: str,
+    data_seed: int,
     data_config: Dict[str, Any],
     kernel_config: Dict[str, Any],
     induce_data_config: Dict[str, Any],
     pwgf_config: Dict[str, Any],
     svgp_config: Dict[str, Any],
 ) -> None:
-    print(f"Running experiment for {dataset_name=}.")
-    data_path = f"experiments/uci/outputs/data/{dataset_name}"
-    plots_path = f"experiments/uci/outputs/plots/{dataset_name}"
-    results_path = f"experiments/uci/outputs/results/{dataset_name}"
-    models_path = f"experiments/uci/outputs/models/{dataset_name}"
+    print(f"Running experiment for {dataset_name=} and {data_seed=}.")
+
+    data_path = f"experiments/uci/outputs/{data_seed}/data/{dataset_name}"
+    plots_path = f"experiments/uci/outputs/{data_seed}/plots/{dataset_name}"
+    results_path = f"experiments/uci/outputs/{data_seed}/results/{dataset_name}"
+    models_path = f"experiments/uci/outputs/{data_seed}/models/{dataset_name}"
     os.makedirs(data_path, exist_ok=True)
     os.makedirs(plots_path, exist_ok=True)
     os.makedirs(results_path, exist_ok=True)
@@ -90,7 +108,6 @@ def main(
 
     experiment_data_path = os.path.join(data_path, "experiment_data.pth")
     induce_data_path = os.path.join(data_path, "inducing_points.pth")
-
     subsample_gp_models_path = os.path.join(models_path, "subsample_gp_models.pth")
     pwgf_path = os.path.join(models_path, "pwgf_model.pth")
     fixed_svgp_model_path = os.path.join(models_path, "fixed_svgp_model.pth")
@@ -102,7 +119,7 @@ def main(
         print(f"Loaded experiment data from {experiment_data_path=}")
     else:
         experiment_data = get_experiment_data(
-            seed=data_config["seed"],
+            seed=data_seed,
             train_data_percentage=data_config["train_data_percentage"],
             validation_data_percentage=data_config["validation_data_percentage"],
             test_data_percentage=data_config["test_data_percentage"],
@@ -203,6 +220,7 @@ def main(
             },
             pwgf_path,
         )
+    set_seed(pwgf_config["seed"])
     calculate_metrics(
         model=pwgf,
         model_name="pwgf",
@@ -244,6 +262,7 @@ def main(
             },
             os.path.join(models_path, "fixed_svgp_model.pth"),
         )
+    set_seed(svgp_config["seed"])
     calculate_metrics(
         model=fixed_svgp_model,
         model_name="fixed-svgp",
@@ -292,6 +311,7 @@ def main(
             },
             os.path.join(models_path, "svgp_model.pth"),
         )
+    set_seed(svgp_config["seed"])
     calculate_metrics(
         model=svgp_model,
         model_name="svgp",
@@ -344,6 +364,7 @@ def main(
             },
             svgp_pwgf_path,
         )
+    set_seed(pwgf_config["seed"])
     calculate_metrics(
         model=svgp_pwgf,
         model_name="pwgf-svgp",
@@ -358,23 +379,19 @@ if __name__ == "__main__":
     args = parser.parse_args()
     with open(args.config_path, "r") as file:
         loaded_config = yaml.safe_load(file)
-    for dataset_name_ in loaded_config["datasets"]:
-        try:
-            main(
-                dataset_name=dataset_name_,
-                data_config=loaded_config["data"],
-                kernel_config=loaded_config["kernel"],
-                induce_data_config=loaded_config["induce_data"],
-                pwgf_config=loaded_config["pwgf"],
-                svgp_config=loaded_config["svgp"],
-            )
-        except Exception as e:
-            print(e)
-            print(f"{dataset_name_=} failed to run.")
+    main(
+        dataset_name=args.dataset_name,
+        data_seed=args.data_seed,
+        data_config=loaded_config["data"],
+        kernel_config=loaded_config["kernel"],
+        induce_data_config=loaded_config["induce_data"],
+        pwgf_config=loaded_config["pwgf"],
+        svgp_config=loaded_config["svgp"],
+    )
     concatenate_metrics(
-        results_path="experiments/uci/outputs/results",
+        results_path=f"experiments/uci/outputs/{args.data_seed}/results",
         data_types=["train", "validation", "test"],
         model_names=["pwgf", "fixed-svgp", "svgp", "pwgf-svgp"],
-        datasets=loaded_config["datasets"],
+        datasets=list(DatasetSchema.__members__.keys()),
         metrics=["mae", "mse", "nll", "average_interval_width"],
     )
