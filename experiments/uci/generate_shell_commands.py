@@ -1,5 +1,6 @@
 import argparse
 import os
+import shutil
 
 from experiments.uci.schemas import DatasetSchema
 from experiments.utils import create_directory
@@ -103,6 +104,7 @@ def _build_base_myriad_commands(
 if __name__ == "__main__":
     args = parser.parse_args()
     shell_command_dir = "experiments/uci/shell_commands"
+    shutil.rmtree(shell_command_dir)
     create_directory(shell_command_dir)
     repository_path_ = os.getcwd()
     shell_commands = []
