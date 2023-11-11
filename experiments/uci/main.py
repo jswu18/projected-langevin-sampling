@@ -14,11 +14,7 @@ from experiments.constructors import (
     construct_average_gaussian_likelihood,
 )
 from experiments.data import Data, ExperimentData
-from experiments.loaders import (
-    load_gp_models_and_induce_data,
-    load_projected_wasserstein_gradient_flow,
-    load_svgp,
-)
+from experiments.loaders import load_projected_wasserstein_gradient_flow, load_svgp
 from experiments.metrics import calculate_metrics, concatenate_metrics
 from experiments.preprocess import set_up_experiment
 from experiments.runners import (
@@ -101,6 +97,12 @@ def main(
     plots_path = f"experiments/uci/outputs/{data_seed}/plots/{dataset_name}"
     results_path = f"experiments/uci/outputs/{data_seed}/results/{dataset_name}"
     models_path = f"experiments/uci/outputs/{data_seed}/models/{dataset_name}"
+    subsample_gp_model_path = os.path.join(models_path, "subsample_gp")
+    subsample_gp_data_path = os.path.join(data_path, "subsample_gp")
+    fixed_svgp_iteration_model_path = os.path.join(
+        models_path, "fixed_svgp_model_iterations"
+    )
+    svgp_iteration_model_path = os.path.join(models_path, "svgp_model_iterations")
     os.makedirs(data_path, exist_ok=True)
     os.makedirs(plots_path, exist_ok=True)
     os.makedirs(results_path, exist_ok=True)
@@ -108,7 +110,6 @@ def main(
 
     experiment_data_path = os.path.join(data_path, "experiment_data.pth")
     induce_data_path = os.path.join(data_path, "inducing_points.pth")
-    subsample_gp_models_path = os.path.join(models_path, "subsample_gp_models.pth")
     pwgf_path = os.path.join(models_path, "pwgf_model.pth")
     fixed_svgp_model_path = os.path.join(models_path, "fixed_svgp_model.pth")
     svgp_model_path = os.path.join(models_path, "svgp_model.pth")
@@ -127,33 +128,27 @@ def main(
         )
         experiment_data.save(experiment_data_path)
 
-    if os.path.exists(induce_data_path) and os.path.exists(subsample_gp_models_path):
-        subsample_gp_models, induce_data = load_gp_models_and_induce_data(
-            induce_data_path=induce_data_path,
-            subsample_gp_models_path=subsample_gp_models_path,
-        )
-        average_ard_kernel = construct_average_ard_kernel(
-            kernels=[model.kernel for model in subsample_gp_models]
-        )
+    subsample_gp_models = learn_subsample_gps(
+        experiment_data=experiment_data,
+        kernel=gpytorch.kernels.ScaleKernel(
+            gpytorch.kernels.RBFKernel(ard_num_dims=experiment_data.train.x.shape[1])
+        ),
+        subsample_size=kernel_config["subsample_size"],
+        seed=kernel_config["seed"],
+        number_of_epochs=kernel_config["number_of_epochs"],
+        learning_rate=kernel_config["learning_rate"],
+        number_of_iterations=kernel_config["number_of_iterations"],
+        plot_1d_subsample_path=None,
+        plot_loss_path=plots_path,
+        model_path=subsample_gp_model_path,
+        data_path=subsample_gp_data_path,
+    )
+    average_ard_kernel = construct_average_ard_kernel(
+        kernels=[model.kernel for model in subsample_gp_models]
+    )
+    if os.path.exists(induce_data_path):
+        induce_data = torch.load(induce_data_path)
     else:
-        subsample_gp_models = learn_subsample_gps(
-            experiment_data=experiment_data,
-            kernel=gpytorch.kernels.ScaleKernel(
-                gpytorch.kernels.RBFKernel(
-                    ard_num_dims=experiment_data.train.x.shape[1]
-                )
-            ),
-            subsample_size=kernel_config["subsample_size"],
-            seed=kernel_config["seed"],
-            number_of_epochs=kernel_config["number_of_epochs"],
-            learning_rate=kernel_config["learning_rate"],
-            number_of_iterations=kernel_config["number_of_iterations"],
-            plot_1d_subsample_path=None,
-            plot_loss_path=plots_path,
-        )
-        average_ard_kernel = construct_average_ard_kernel(
-            kernels=[model.kernel for model in subsample_gp_models]
-        )
         induce_data = select_induce_data(
             seed=induce_data_config["seed"],
             induce_data_selector=ConditionalVarianceInduceDataSelector(),
@@ -167,10 +162,6 @@ def main(
             ),
             kernel=average_ard_kernel,
         )
-        torch.save(
-            [model.state_dict() for model in subsample_gp_models],
-            subsample_gp_models_path,
-        ),
         torch.save(induce_data, induce_data_path)
     likelihood = construct_average_gaussian_likelihood(
         likelihoods=[model.likelihood for model in subsample_gp_models]
@@ -230,14 +221,15 @@ def main(
         plots_path=plots_path,
     )
     if os.path.exists(fixed_svgp_model_path):
-        fixed_svgp_model = load_svgp(
+        fixed_svgp_model, _ = load_svgp(
             model_path=fixed_svgp_model_path,
             x_induce=induce_data.x,
+            mean=gpytorch.means.ConstantMean(),
             kernel=deepcopy(average_ard_kernel),
             learn_inducing_locations=False,
         )
     else:
-        fixed_svgp_model = train_svgp(
+        fixed_svgp_model, losses = train_svgp(
             experiment_data=experiment_data,
             induce_data=induce_data,
             mean=gpytorch.means.ConstantMean(),
@@ -252,6 +244,7 @@ def main(
             ],
             is_fixed=True,
             observation_noise=pwgf.observation_noise,
+            models_path=fixed_svgp_iteration_model_path,
             plot_title=f"{dataset_name}",
             plot_1d_path=None,
             plot_loss_path=plots_path,
@@ -259,8 +252,9 @@ def main(
         torch.save(
             {
                 "model": fixed_svgp_model.state_dict(),
+                "losses": losses,
             },
-            os.path.join(models_path, "fixed_svgp_model.pth"),
+            fixed_svgp_model_path,
         )
     set_seed(svgp_config["seed"])
     calculate_metrics(
@@ -272,9 +266,10 @@ def main(
         plots_path=plots_path,
     )
     if os.path.exists(svgp_model_path):
-        svgp_model = load_svgp(
+        svgp_model, _ = load_svgp(
             model_path=svgp_model_path,
             x_induce=induce_data.x,
+            mean=gpytorch.means.ConstantMean(),
             kernel=gpytorch.kernels.ScaleKernel(
                 gpytorch.kernels.RBFKernel(
                     ard_num_dims=experiment_data.train.x.shape[1]
@@ -283,7 +278,7 @@ def main(
             learn_inducing_locations=True,
         )
     else:
-        svgp_model = train_svgp(
+        svgp_model, losses = train_svgp(
             experiment_data=experiment_data,
             induce_data=induce_data,
             mean=gpytorch.means.ConstantMean(),
@@ -301,6 +296,7 @@ def main(
                 "number_of_learning_rate_searches"
             ],
             is_fixed=False,
+            models_path=svgp_iteration_model_path,
             plot_title=f"{dataset_name}",
             plot_1d_path=None,
             plot_loss_path=plots_path,
@@ -308,8 +304,9 @@ def main(
         torch.save(
             {
                 "model": svgp_model.state_dict(),
+                "losses": losses,
             },
-            os.path.join(models_path, "svgp_model.pth"),
+            svgp_model_path,
         )
     set_seed(svgp_config["seed"])
     calculate_metrics(

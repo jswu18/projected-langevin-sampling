@@ -10,6 +10,7 @@ from torch.utils.data import DataLoader, TensorDataset
 from tqdm import tqdm
 
 from experiments.data import Data, ExperimentData
+from experiments.loaders import load_ard_exact_gp_model, load_svgp
 from experiments.metrics import calculate_mae, calculate_mse, calculate_nll
 from experiments.plotters import (
     plot_1d_gp_prediction_and_induce_data,
@@ -156,6 +157,28 @@ def select_induce_data(
     )
 
 
+def _load_subsample_data(
+    data: Data,
+    subsample_size: int,
+):
+    if subsample_size > len(data.x):
+        return data
+    knn = NearestNeighbors(
+        n_neighbors=subsample_size,
+        p=2,
+    )
+    knn.fit(X=data.x, y=data.y)
+    x_sample = sample_point(x=data.x)
+    subsample_indices = knn.kneighbors(
+        X=x_sample,
+        return_distance=False,
+    )
+    return Data(
+        x=data.x[subsample_indices],
+        y=data.y[subsample_indices],
+    )
+
+
 def learn_subsample_gps(
     experiment_data: ExperimentData,
     kernel: gpytorch.kernels.Kernel,
@@ -164,51 +187,58 @@ def learn_subsample_gps(
     number_of_epochs: int,
     learning_rate: float,
     number_of_iterations: int,
+    model_path: str,
+    data_path: str,
     plot_1d_subsample_path: str = None,
     plot_loss_path: str = None,
 ) -> List[gpytorch.models.GP]:
     set_seed(seed)
+    create_directory(model_path)
+    create_directory(data_path)
     models = []
     losses_history = []
-    model = None
     if subsample_size > len(experiment_data.train.x):
-        model, losses = _train_exact_gp(
-            data=experiment_data.train,
-            mean=gpytorch.means.ConstantMean(),
-            kernel=deepcopy(kernel),
-            seed=seed,
-            number_of_epochs=number_of_epochs,
-            learning_rate=learning_rate,
-        )
-        losses_history.append(losses)
-        models.append(model)
+        number_of_iterations = 1
+        model_name = "full_exact_gp"
     else:
-        set_seed(seed)
-        knn = NearestNeighbors(
-            n_neighbors=subsample_size,
-            p=2,
+        model_name = "subsample_exact_gp"
+    set_seed(seed)
+    for i in range(number_of_iterations):
+        subsample_model_path = os.path.join(
+            model_path, f"{model_name}_{i+1}_of_{number_of_iterations}.pth"
         )
-        knn.fit(X=experiment_data.train.x, y=experiment_data.train.y)
-        for i in range(number_of_iterations):
-            x_sample = sample_point(x=experiment_data.train.x)
-            subsample_indices = knn.kneighbors(
-                X=x_sample,
-                return_distance=False,
+        subsample_data_path = os.path.join(
+            data_path, f"{model_name}_{i+1}_of_{number_of_iterations}.pth"
+        )
+        if os.path.exists(subsample_model_path) and os.path.exists(subsample_data_path):
+            model, losses = load_ard_exact_gp_model(
+                model_path=subsample_model_path,
+                data_path=subsample_data_path,
             )
-            data_subsample = Data(
-                x=experiment_data.train.x[subsample_indices],
-                y=experiment_data.train.y[subsample_indices],
+        else:
+            data = _load_subsample_data(
+                data=experiment_data.train,
+                subsample_size=subsample_size,
             )
             model, losses = _train_exact_gp(
-                data=data_subsample,
+                data=data,
                 mean=gpytorch.means.ConstantMean(),
                 kernel=deepcopy(kernel),
                 seed=seed,
                 number_of_epochs=number_of_epochs,
                 learning_rate=learning_rate,
             )
-            models.append(model)
-            losses_history.append(losses)
+            torch.save(
+                {
+                    "model": model.state_dict(),
+                    "losses": losses,
+                },
+                subsample_model_path,
+            )
+            torch.save(
+                data,
+                subsample_data_path,
+            )
             if plot_1d_subsample_path is not None:
                 create_directory(plot_1d_subsample_path)
                 plot_1d_gp_prediction_and_induce_data(
@@ -220,17 +250,8 @@ def learn_subsample_gps(
                         f"gp-subsample-iteration-{i + 1}.png",
                     ),
                 )
-    if plot_1d_subsample_path is not None:
-        create_directory(plot_1d_subsample_path)
-        plot_1d_gp_prediction_and_induce_data(
-            model=model,
-            experiment_data=experiment_data,
-            title=f"Subsample GP ({subsample_size=})",
-            save_path=os.path.join(
-                plot_1d_subsample_path,
-                f"gp-subsample.png",
-            ),
-        )
+        losses_history.append(losses)
+        models.append(model)
     if plot_loss_path is not None:
         create_directory(plot_loss_path)
         plot_losses(
@@ -456,38 +477,64 @@ def train_svgp(
     learning_rate_lower: float,
     number_of_learning_rate_searches: int,
     is_fixed: bool,
+    models_path: str,
     observation_noise: float = None,
     plot_title: Optional[str] = None,
     plot_1d_path: Optional[str] = None,
     plot_loss_path: Optional[str] = None,
 ) -> (svGP, List[float]):
+    create_directory(models_path)
     model_name = "fixed-svgp" if is_fixed else "svgp"
     best_nll = float("inf")
     best_mse = float("inf")
     best_mae = float("inf")
     losses_history = []
     model_out = None
-    for log_learning_rate in torch.linspace(
-        math.log(learning_rate_lower),
-        math.log(learning_rate_upper),
-        number_of_learning_rate_searches,
+    losses_out = None
+    for i, log_learning_rate in enumerate(
+        torch.linspace(
+            math.log(learning_rate_lower),
+            math.log(learning_rate_upper),
+            number_of_learning_rate_searches,
+        )
     ):
+        model_iteration_path = os.path.join(
+            models_path,
+            f"svgp_{i+1}_of_{number_of_learning_rate_searches}.pth",
+        )
         learning_rate = math.exp(log_learning_rate)
         set_seed(seed)
-        model, losses = _train_svgp(
-            train_data=experiment_data.train,
-            induce_data=induce_data,
-            mean=deepcopy(mean),
-            kernel=deepcopy(kernel),
-            seed=seed,
-            number_of_epochs=number_of_epochs,
-            batch_size=batch_size,
-            learning_rate=learning_rate,
-            learn_inducing_locations=False if is_fixed else True,
-            learn_kernel_parameters=False if is_fixed else True,
-            learn_observation_noise=False if is_fixed else True,
-            observation_noise=observation_noise,
-        )
+        if os.path.exists(model_iteration_path):
+            model, losses = load_svgp(
+                model_path=model_iteration_path,
+                x_induce=induce_data.x,
+                mean=deepcopy(mean),
+                kernel=deepcopy(kernel),
+                learn_inducing_locations=False if is_fixed else True,
+            )
+        else:
+            model, losses = _train_svgp(
+                train_data=experiment_data.train,
+                induce_data=induce_data,
+                mean=deepcopy(mean),
+                kernel=deepcopy(kernel),
+                seed=seed,
+                number_of_epochs=number_of_epochs,
+                batch_size=batch_size,
+                learning_rate=learning_rate,
+                learn_inducing_locations=False if is_fixed else True,
+                learn_kernel_parameters=False if is_fixed else True,
+                learn_observation_noise=False if is_fixed else True,
+                observation_noise=observation_noise,
+            )
+            torch.save(
+                {
+                    "model": model.state_dict(),
+                    "losses": losses,
+                },
+                model_iteration_path,
+            )
+        losses_history.append(losses)
         prediction = model.forward(experiment_data.train.x)
         nll = calculate_nll(
             prediction=prediction,
@@ -502,12 +549,12 @@ def train_svgp(
             prediction=prediction,
             y=experiment_data.train.y,
         )
-        losses_history.append(losses)
         if nll < best_nll:
             best_nll = nll
             best_mae = mae
             best_mse = mse
             model_out = model
+            losses_out = losses
     if plot_1d_path is not None:
         create_directory(plot_1d_path)
         plot_1d_gp_prediction_and_induce_data(
@@ -534,4 +581,4 @@ def train_svgp(
                 f"{model_name}-losses.png",
             ),
         )
-    return model_out
+    return model_out, losses_out

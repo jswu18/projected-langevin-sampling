@@ -1,3 +1,5 @@
+from typing import Tuple
+
 import gpytorch
 import torch
 
@@ -80,12 +82,13 @@ def load_projected_wasserstein_gradient_flow(
 def load_svgp(
     model_path: str,
     x_induce: torch.Tensor,
+    mean: gpytorch.means.Mean,
     kernel: gpytorch.kernels.Kernel,
     learn_inducing_locations: bool,
-) -> svGP:
+) -> Tuple[svGP, torch.Tensor]:
     model = svGP(
         x_induce=x_induce.to(torch.double),
-        mean=gpytorch.means.ConstantMean(),
+        mean=mean,
         kernel=kernel,
         learn_inducing_locations=learn_inducing_locations,
         likelihood=gpytorch.likelihoods.GaussianLikelihood(),
@@ -94,32 +97,26 @@ def load_svgp(
     model.load_state_dict(loaded_states["model"])
     model.double()
     print(f"Loaded svGP model from {model_path=}.")
-    return model
+    return model, loaded_states["losses"]
 
 
-def load_gp_models_and_induce_data(
-    induce_data_path: str,
-    subsample_gp_models_path: str,
-) -> (ExactGP, Data):
-    induce_data = torch.load(induce_data_path)
-    induce_data.x.to(torch.double)
-    induce_data.y.to(torch.double)
-    model_state_dicts = torch.load(subsample_gp_models_path)
-    models = [
-        ExactGP(
-            x=induce_data.x,
-            y=induce_data.y,
-            likelihood=gpytorch.likelihoods.GaussianLikelihood(),
-            mean=gpytorch.means.ConstantMean(),
-            kernel=gpytorch.kernels.ScaleKernel(
-                gpytorch.kernels.RBFKernel(ard_num_dims=induce_data.x.shape[1])
-            ),
-        )
-        for _ in range(len(model_state_dicts))
-    ]
-    for model, state_dict in zip(models, model_state_dicts):
-        model.load_state_dict(state_dict)
-    print(
-        f"Loaded model from {subsample_gp_models_path=} and inducing points from {induce_data_path=}."
+def load_ard_exact_gp_model(
+    model_path: str,
+    data_path: str,
+) -> Tuple[ExactGP, torch.Tensor]:
+    data = torch.load(data_path)
+    data.x.to(torch.double)
+    data.y.to(torch.double)
+    model_state_dict = torch.load(model_path)
+    model = ExactGP(
+        x=data.x,
+        y=data.y,
+        likelihood=gpytorch.likelihoods.GaussianLikelihood(),
+        mean=gpytorch.means.ConstantMean(),
+        kernel=gpytorch.kernels.ScaleKernel(
+            gpytorch.kernels.RBFKernel(ard_num_dims=data.x.shape[1])
+        ),
     )
-    return models, induce_data
+    model.load_state_dict(model_state_dict["model"])
+    print(f"Loaded model from {model_path=} and from {data_path=}.")
+    return model, model_state_dict["losses"]

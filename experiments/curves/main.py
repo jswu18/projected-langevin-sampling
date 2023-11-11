@@ -1,5 +1,6 @@
 import argparse
 import math
+import os
 from typing import Any, Dict
 
 import gpytorch
@@ -119,6 +120,19 @@ def main(
     results_curve_path = (
         f"experiments/curves/outputs/results/{type(curve_function).__name__.lower()}"
     )
+    models_path = (
+        f"experiments/curves/outputs/models/{type(curve_function).__name__.lower()}"
+    )
+    data_path = (
+        f"experiments/curves/outputs/data/{type(curve_function).__name__.lower()}"
+    )
+    subsample_gp_model_path = os.path.join(models_path, "subsample_gp")
+    subsample_gp_data_path = os.path.join(data_path, "subsample_gp")
+    fixed_svgp_iteration_model_path = os.path.join(
+        models_path, "fixed_svgp_model_iterations"
+    )
+    svgp_iteration_model_path = os.path.join(models_path, "svgp_model_iterations")
+
     subsample_gp_models = learn_subsample_gps(
         experiment_data=experiment_data,
         kernel=gpytorch.kernels.ScaleKernel(
@@ -129,6 +143,8 @@ def main(
         number_of_epochs=kernel_config["number_of_epochs"],
         learning_rate=kernel_config["learning_rate"],
         number_of_iterations=kernel_config["number_of_iterations"],
+        model_path=subsample_gp_model_path,
+        data_path=subsample_gp_data_path,
         plot_1d_subsample_path=None,
         plot_loss_path=plot_curve_path,
     )
@@ -187,7 +203,7 @@ def main(
         results_path=results_curve_path,
         plots_path=plot_curve_path,
     )
-    fixed_svgp_model = train_svgp(
+    fixed_svgp_model, _ = train_svgp(
         experiment_data=experiment_data,
         induce_data=induce_data,
         mean=gpytorch.means.ConstantMean(),
@@ -202,6 +218,7 @@ def main(
         ],
         is_fixed=True,
         observation_noise=pwgf.observation_noise,
+        models_path=fixed_svgp_iteration_model_path,
         plot_title=f"{type(curve_function).__name__}",
         plot_1d_path=plot_curve_path,
         plot_loss_path=plot_curve_path,
@@ -214,7 +231,7 @@ def main(
         results_path=results_curve_path,
         plots_path=plot_curve_path,
     )
-    svgp_model = train_svgp(
+    svgp_model, _ = train_svgp(
         experiment_data=experiment_data,
         induce_data=induce_data,
         mean=gpytorch.means.ConstantMean(),
@@ -230,6 +247,7 @@ def main(
             "number_of_learning_rate_searches"
         ],
         is_fixed=False,
+        models_path=svgp_iteration_model_path,
         plot_title=f"{type(curve_function).__name__}",
         plot_1d_path=plot_curve_path,
         plot_loss_path=plot_curve_path,
