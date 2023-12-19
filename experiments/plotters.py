@@ -6,6 +6,7 @@ import numpy as np
 import torch
 from matplotlib import pyplot as plt
 from torch.utils.data import DataLoader, TensorDataset
+from tqdm import tqdm
 
 from experiments.data import Data, ExperimentData
 from src.gps import ExactGP, svGP
@@ -347,6 +348,7 @@ def animate_1d_pwgf_predictions(
         for i in range(predicted_samples.shape[-1])
     ]
     plt.legend(loc="lower left")
+    progress_bar = tqdm(total=number_of_epochs, desc="WGF Particles GIF")
 
     def animate(iteration: int):
         _ = pwgf.update(
@@ -359,6 +361,7 @@ def animate_1d_pwgf_predictions(
         for i in range(_predicted_samples.shape[-1]):
             samples_plotted[i].set_data((x, _predicted_samples[:, i].reshape(-1)))
         ax.set_title(f"{title} ({iteration=})")
+        progress_bar.update(n=1)
         return (samples_plotted[0],)
 
     ani = animation.FuncAnimation(
@@ -467,6 +470,8 @@ def animate_1d_gp_predictions(
     )[0]
     plt.legend(loc="lower left")
 
+    progress_bar = tqdm(total=number_of_epochs, desc="GP Learning GIF")
+
     def animate(iteration: int):
         for x_batch, y_batch in train_loader:
             optimizer.zero_grad()
@@ -497,7 +502,7 @@ def animate_1d_gp_predictions(
                     0.5 * np.sin(iteration / 15 + 4 * np.pi / 3) + 0.5,
                 )
             )
-        print(iteration)
+        progress_bar.update(n=1)
         return (mean_line,)
 
     ani = animation.FuncAnimation(
