@@ -131,7 +131,6 @@ def main(
     fixed_svgp_iteration_model_path = os.path.join(
         models_path, "fixed_svgp_model_iterations"
     )
-    svgp_iteration_model_path = os.path.join(models_path, "svgp_model_iterations")
 
     subsample_gp_models = learn_subsample_gps(
         experiment_data=experiment_data,
@@ -186,6 +185,9 @@ def main(
         plot_title=f"{type(curve_function).__name__}",
         plot_particles_path=plot_curve_path,
         plot_update_magnitude_path=plot_curve_path,
+        christmas_colours=pwgf_config["christmas_colours"]
+        if "christmas_colours" in pwgf_config
+        else False,
     )
     pwgf.observation_noise = pwgf_observation_noise_search(
         data=experiment_data.train,
@@ -222,69 +224,13 @@ def main(
         plot_title=f"{type(curve_function).__name__}",
         plot_1d_path=plot_curve_path,
         plot_loss_path=plot_curve_path,
+        christmas_colours=svgp_config["christmas_colours"]
+        if "christmas_colours" in pwgf_config
+        else False,
     )
     calculate_metrics(
         model=fixed_svgp_model,
         model_name="fixed-svgp",
-        dataset_name=type(curve_function).__name__,
-        experiment_data=experiment_data,
-        results_path=results_curve_path,
-        plots_path=plot_curve_path,
-    )
-    svgp_model, _ = train_svgp(
-        experiment_data=experiment_data,
-        induce_data=induce_data,
-        mean=gpytorch.means.ConstantMean(),
-        kernel=gpytorch.kernels.ScaleKernel(
-            gpytorch.kernels.RBFKernel(ard_num_dims=experiment_data.train.x.shape[1])
-        ),
-        seed=svgp_config["seed"],
-        number_of_epochs=svgp_config["number_of_epochs"],
-        batch_size=svgp_config["batch_size"],
-        learning_rate_upper=svgp_config["learning_rate_upper"],
-        learning_rate_lower=svgp_config["learning_rate_lower"],
-        number_of_learning_rate_searches=svgp_config[
-            "number_of_learning_rate_searches"
-        ],
-        is_fixed=False,
-        models_path=svgp_iteration_model_path,
-        plot_title=f"{type(curve_function).__name__}",
-        plot_1d_path=plot_curve_path,
-        plot_loss_path=plot_curve_path,
-    )
-    calculate_metrics(
-        model=svgp_model,
-        model_name="svgp",
-        dataset_name=type(curve_function).__name__,
-        experiment_data=experiment_data,
-        results_path=results_curve_path,
-        plots_path=plot_curve_path,
-    )
-    svgp_pwgf = train_projected_wasserstein_gradient_flow(
-        particle_name="svgp",
-        kernel=svgp_model.kernel,
-        experiment_data=experiment_data,
-        induce_data=Data(
-            x=svgp_model.variational_strategy.inducing_points.detach(),
-        ),
-        number_of_particles=pwgf_config["number_of_particles"],
-        number_of_epochs=pwgf_config["number_of_epochs"],
-        learning_rate_upper=pwgf_config["learning_rate_upper"],
-        learning_rate_lower=pwgf_config["learning_rate_lower"],
-        number_of_learning_rate_searches=pwgf_config[
-            "number_of_learning_rate_searches"
-        ],
-        max_particle_magnitude=pwgf_config["max_particle_magnitude"],
-        observation_noise=svgp_model.likelihood.noise,
-        jitter=pwgf_config["jitter"],
-        seed=pwgf_config["seed"],
-        plot_title=f"{type(curve_function).__name__} svGP kernel/induce data",
-        plot_particles_path=plot_curve_path,
-        plot_update_magnitude_path=plot_curve_path,
-    )
-    calculate_metrics(
-        model=svgp_pwgf,
-        model_name="pwgf-svgp",
         dataset_name=type(curve_function).__name__,
         experiment_data=experiment_data,
         results_path=results_curve_path,
@@ -308,7 +254,7 @@ if __name__ == "__main__":
     concatenate_metrics(
         results_path="experiments/curves/outputs/results",
         data_types=["train", "validation", "test"],
-        model_names=["pwgf", "fixed-svgp", "svgp", "pwgf-svgp"],
+        model_names=["pwgf", "fixed-svgp"],
         datasets=[
             type(curve_function_).__name__.lower()
             for curve_function_ in CURVE_FUNCTIONS

@@ -13,6 +13,8 @@ from experiments.data import Data, ExperimentData
 from experiments.loaders import load_ard_exact_gp_model, load_svgp
 from experiments.metrics import calculate_mae, calculate_mse, calculate_nll
 from experiments.plotters import (
+    animate_1d_gp_predictions,
+    animate_1d_pwgf_predictions,
     plot_1d_gp_prediction_and_induce_data,
     plot_1d_pwgf_prediction,
     plot_losses,
@@ -174,8 +176,8 @@ def _load_subsample_data(
         return_distance=False,
     )
     return Data(
-        x=data.x[subsample_indices],
-        y=data.y[subsample_indices],
+        x=data.x[subsample_indices].double(),
+        y=data.y[subsample_indices].double(),
     )
 
 
@@ -192,7 +194,6 @@ def learn_subsample_gps(
     plot_1d_subsample_path: str = None,
     plot_loss_path: str = None,
 ) -> List[gpytorch.models.GP]:
-    set_seed(seed)
     create_directory(model_path)
     create_directory(data_path)
     models = []
@@ -202,7 +203,6 @@ def learn_subsample_gps(
         model_name = "full_exact_gp"
     else:
         model_name = "subsample_exact_gp"
-    set_seed(seed)
     for i in range(number_of_iterations):
         subsample_model_path = os.path.join(
             model_path, f"{model_name}_{i+1}_of_{number_of_iterations}.pth"
@@ -210,6 +210,7 @@ def learn_subsample_gps(
         subsample_data_path = os.path.join(
             data_path, f"{model_name}_{i+1}_of_{number_of_iterations}.pth"
         )
+        set_seed(seed + i)
         if os.path.exists(subsample_model_path) and os.path.exists(subsample_data_path):
             model, losses = load_ard_exact_gp_model(
                 model_path=subsample_model_path,
@@ -282,6 +283,7 @@ def train_projected_wasserstein_gradient_flow(
     plot_title: str = None,
     plot_particles_path: str = None,
     plot_update_magnitude_path: str = None,
+    christmas_colours: bool = False,
 ) -> ProjectedWassersteinGradientFlow:
     gradient_flow_kernel = GradientFlowKernel(
         base_kernel=kernel,
@@ -325,6 +327,7 @@ def train_projected_wasserstein_gradient_flow(
         upper=learning_rate_upper,
         soft_update=True,
     )
+    best_lr = learning_rate_bisection_search.current
     for _ in searches_iter:
         pwgf.reset_particles(seed=seed)
         update_log_magnitudes = []
@@ -370,12 +373,18 @@ def train_projected_wasserstein_gradient_flow(
                 y=experiment_data.train.y,
             )
             if nll < best_nll:
-                best_nll, best_mae, best_mse = nll, mae, mse
+                best_nll, best_mae, best_mse, best_lr = (
+                    nll,
+                    mae,
+                    mse,
+                    learning_rate_bisection_search.current,
+                )
                 particles_out = deepcopy(pwgf.particles.detach())
             searches_iter.set_postfix(
                 best_mae=best_mae,
                 best_mse=best_mse,
                 best_nll=best_nll,
+                best_lr=best_lr,
                 lr=learning_rate_bisection_search.current,
                 upper=learning_rate_bisection_search.upper,
                 lower=learning_rate_bisection_search.lower,
@@ -402,6 +411,21 @@ def train_projected_wasserstein_gradient_flow(
                 plot_particles_path,
                 f"particles-learned-{particle_name}.png",
             ),
+        )
+        animate_1d_pwgf_predictions(
+            pwgf=pwgf,
+            seed=seed,
+            learning_rate=best_lr,
+            number_of_epochs=number_of_epochs,
+            experiment_data=experiment_data,
+            induce_data=induce_data,
+            x=experiment_data.full.x,
+            title=plot_title,
+            save_path=os.path.join(
+                plot_particles_path,
+                f"{particle_name}.gif",
+            ),
+            christmas_colours=christmas_colours,
         )
     if plot_update_magnitude_path is not None:
         create_directory(plot_update_magnitude_path)
@@ -482,6 +506,7 @@ def train_svgp(
     plot_title: Optional[str] = None,
     plot_1d_path: Optional[str] = None,
     plot_loss_path: Optional[str] = None,
+    christmas_colours: bool = False,
 ) -> (svGP, List[float]):
     create_directory(models_path)
     model_name = "fixed-svgp" if is_fixed else "svgp"
@@ -491,6 +516,7 @@ def train_svgp(
     losses_history = []
     model_out = None
     losses_out = None
+    best_learning_rate = None
     for i, log_learning_rate in enumerate(
         torch.linspace(
             math.log(learning_rate_lower),
@@ -535,6 +561,7 @@ def train_svgp(
                 model_iteration_path,
             )
         losses_history.append(losses)
+        set_seed(seed)
         prediction = model.forward(experiment_data.train.x)
         nll = calculate_nll(
             prediction=prediction,
@@ -553,6 +580,7 @@ def train_svgp(
             best_nll = nll
             best_mae = mae
             best_mse = mse
+            best_learning_rate = learning_rate
             model_out = model
             losses_out = losses
     if plot_1d_path is not None:
@@ -568,6 +596,26 @@ def train_svgp(
                 plot_1d_path,
                 f"{model_name}.png",
             ),
+        )
+        animate_1d_gp_predictions(
+            experiment_data=experiment_data,
+            induce_data=induce_data,
+            mean=deepcopy(mean),
+            kernel=deepcopy(kernel),
+            seed=seed,
+            number_of_epochs=number_of_epochs,
+            batch_size=batch_size,
+            learning_rate=best_learning_rate,
+            title=f"{plot_title} ({model_name})" if plot_title is not None else None,
+            save_path=os.path.join(
+                plot_1d_path,
+                f"{model_name}.gif",
+            ),
+            learn_inducing_locations=False if is_fixed else True,
+            learn_kernel_parameters=False if is_fixed else True,
+            learn_observation_noise=False if is_fixed else True,
+            observation_noise=observation_noise,
+            christmas_colours=christmas_colours,
         )
     if plot_loss_path is not None:
         create_directory(plot_loss_path)

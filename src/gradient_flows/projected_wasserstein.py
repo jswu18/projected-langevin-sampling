@@ -236,6 +236,35 @@ class ProjectedWassersteinGradientFlow:
             + noise_vector
         )
 
+        # # G(x) + r(x, Z) @ r(Z, Z)^{-1} @ (U(t)-G(Z))
+        # # G(x) ~ N(0, k(x,x))
+        # # G(Z) ~ N(0, k(Z,Z))
+        # k_xx = self.kernel.base_kernel(
+        #     x1=x,
+        #     x2=x,
+        # )
+        # k_zz = self.kernel.base_kernel(
+        #     x1=self.x_induce,
+        #     x2=self.x_induce,
+        # )
+        # g_x = sample_multivariate_normal(
+        #     mean=torch.zeros(k_xx.shape[0]),
+        #     cov=k_xx,
+        #     size=(self.number_of_particles,),
+        # ).T  # (N*, P)
+        # g_z = sample_multivariate_normal(
+        #     mean=torch.zeros(k_zz.shape[0]),
+        #     cov=k_zz,
+        #     size=(self.number_of_particles,),
+        # ).T  # (M, P)
+        # return g_x + (
+        #     gpytorch.solve(
+        #         lhs=gram_x_induce,
+        #         input=self.gram_induce,
+        #         rhs=(self.particles-g_z),
+        #     )
+        # )
+
     def predict(
         self,
         x: torch.Tensor,
