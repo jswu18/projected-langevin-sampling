@@ -214,56 +214,47 @@ class ProjectedWassersteinGradientFlow:
             x1=x,
             x2=self.x_induce,
         ).to_dense()  # r(x, Z) of size (N*, M)
-        gram_x = self.kernel(
-            x1=x,
-            x2=x,
-        ).to_dense()  # r(x, x) of size (N*, N*)
-        noise_vector = self._sample_predict_noise(
-            gram_x=gram_x,
-            gram_x_induce=gram_x_induce,
-            number_of_samples=self.number_of_particles,
-            include_observation_noise=include_observation_noise,
-        )  # e(x) of size (N*, P)
-
-        # r(x, Z) @ r(Z, Z)^{-1} @ U(t) + e(x)
-        # size (N*, P)
-        return (
-            gpytorch.solve(
-                lhs=gram_x_induce,
-                input=self.gram_induce,
-                rhs=self.particles,
-            )
-            + noise_vector
-        )
-
-        # # G(x) + r(x, Z) @ r(Z, Z)^{-1} @ (U(t)-G(Z))
-        # # G(x) ~ N(0, k(x,x))
-        # # G(Z) ~ N(0, k(Z,Z))
-        # k_xx = self.kernel.base_kernel(
+        # gram_x = self.kernel(
         #     x1=x,
         #     x2=x,
-        # )
-        # k_zz = self.kernel.base_kernel(
-        #     x1=self.x_induce,
-        #     x2=self.x_induce,
-        # )
-        # g_x = sample_multivariate_normal(
-        #     mean=torch.zeros(k_xx.shape[0]),
-        #     cov=k_xx,
-        #     size=(self.number_of_particles,),
-        # ).T  # (N*, P)
-        # g_z = sample_multivariate_normal(
-        #     mean=torch.zeros(k_zz.shape[0]),
-        #     cov=k_zz,
-        #     size=(self.number_of_particles,),
-        # ).T  # (M, P)
-        # return g_x + (
+        # ).to_dense()  # r(x, x) of size (N*, N*)
+        # noise_vector = self._sample_predict_noise(
+        #     gram_x=gram_x,
+        #     gram_x_induce=gram_x_induce,
+        #     number_of_samples=self.number_of_particles,
+        #     include_observation_noise=include_observation_noise,
+        # )  # e(x) of size (N*, P)
+        #
+        # # r(x, Z) @ r(Z, Z)^{-1} @ U(t) + e(x)
+        # # size (N*, P)
+        # return (
         #     gpytorch.solve(
         #         lhs=gram_x_induce,
         #         input=self.gram_induce,
-        #         rhs=(self.particles-g_z),
+        #         rhs=self.particles,
         #     )
+        #     + noise_vector
         # )
+
+        # G(x) + r(x, Z) @ r(Z, Z)^{-1} @ (U(t)-G(Z))
+        # G([Z, x]) ~ N(0, r([Z, x], [Z, x]))
+        zx = torch.concatenate((self.x_induce, x), dim=0)  # (M+N*, D)
+        k_zx_zx = self.kernel(
+            x1=zx,
+            x2=zx,
+        )  # (M+N*, M+N*)
+        g_zx = sample_multivariate_normal(
+            mean=torch.zeros(k_zx_zx.shape[0]),
+            cov=k_zx_zx,
+            size=(self.number_of_particles,),
+        ).T  # (M+N*, P)
+        return g_zx[self.x_induce.shape[0] :, :] + (
+            gpytorch.solve(
+                lhs=gram_x_induce,
+                input=self.gram_induce,
+                rhs=(self.particles - g_zx[: self.x_induce.shape[0], :]),
+            )
+        )
 
     def predict(
         self,
