@@ -371,6 +371,7 @@ def animate_1d_pwgf_predictions(
         bitrate=1800,
     )
     ani.save(save_path, writer=writer)
+    plt.close()
 
 
 def animate_1d_gp_predictions(
@@ -509,3 +510,4 @@ def animate_1d_gp_predictions(
         bitrate=1800,
     )
     ani.save(save_path, writer=writer)
+    plt.close()
