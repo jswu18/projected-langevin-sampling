@@ -3,7 +3,7 @@ from typing import Tuple
 import torch
 
 from src.conformalise.base import ConformaliseBase
-from src.gradient_flows import ProjectedWassersteinGradientFlow
+from src.gradient_flows.regression import GradientFlowRegression
 
 
 class ConformaliseGradientFlow(ConformaliseBase):
@@ -11,7 +11,7 @@ class ConformaliseGradientFlow(ConformaliseBase):
         self,
         x_calibration: torch.Tensor,
         y_calibration: torch.Tensor,
-        gradient_flow: ProjectedWassersteinGradientFlow,
+        gradient_flow: GradientFlowRegression,
     ):
         self.gradient_flow = gradient_flow
         super().__init__(

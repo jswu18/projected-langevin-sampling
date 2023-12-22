@@ -2,7 +2,7 @@ import pytest
 import torch
 
 from mockers.kernel import MockGradientFlowKernel, MockKernel
-from src.gradient_flows import ProjectedWassersteinGradientFlow
+from src.gradient_flows import GradientFlowBinaryClassification
 from src.utils import set_seed
 
 
@@ -53,7 +53,7 @@ def test_initialise_particles(
         base_kernel=MockKernel(),
         approximation_samples=x_train,
     )
-    pwgf = ProjectedWassersteinGradientFlow(
+    pwgf = GradientFlowBinaryClassification(
         number_of_particles=number_of_particles,
         seed=seed,
         kernel=kernel,
@@ -100,8 +100,8 @@ def test_initialise_particles(
             1.0,
             torch.tensor(
                 [
-                    [-6.318556215166498, -3.3139141325395953, -26.852652634868846],
-                    [-4.418808309172321, -4.0371477131348446, -43.87779529313816],
+                    [-11.3819, -15.2329, -10.7718],
+                    [-11.0185, -18.9572, -23.0770],
                 ]
             ).double(),
         ],
@@ -123,7 +123,7 @@ def test_calculate_update(
         base_kernel=MockKernel(),
         approximation_samples=x_train,
     )
-    pwgf = ProjectedWassersteinGradientFlow(
+    pwgf = GradientFlowBinaryClassification(
         number_of_particles=particles.shape[1],
         kernel=kernel,
         x_induce=x_induce.double(),
@@ -197,7 +197,7 @@ def test_sample_predict_noise(
         base_kernel=MockKernel(),
         approximation_samples=x_train,
     )
-    pwgf = ProjectedWassersteinGradientFlow(
+    pwgf = GradientFlowBinaryClassification(
         number_of_particles=1,
         kernel=kernel,
         x_induce=x_induce.double(),
@@ -253,8 +253,8 @@ def test_sample_predict_noise(
             1.0,
             torch.tensor(
                 [
-                    [48.06903810757625, -91.82947513859177, -118.34296206986339],
-                    [14.137185077667498, -29.61670322388101, -36.394965285630754],
+                    [1.0000e00, 1.3732e-46, 1.7633e-56],
+                    [1.0000e00, 1.8876e-13, 2.7567e-17],
                 ]
             ).double(),
         ],
@@ -276,7 +276,7 @@ def test_predict_pwgf(
         base_kernel=MockKernel(),
         approximation_samples=x_train,
     )
-    pwgf = ProjectedWassersteinGradientFlow(
+    pwgf = GradientFlowBinaryClassification(
         number_of_particles=particles.shape[1],
         kernel=kernel,
         x_induce=x_induce.double(),

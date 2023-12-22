@@ -1,14 +1,14 @@
 import gpytorch
 import torch
 
-from src.gradient_flows import ProjectedWassersteinGradientFlow
+from src.gradient_flows.regression import GradientFlowRegression
 from src.temper.base import TemperBase
 
 
 class TemperGradientFlow(TemperBase):
     def __init__(
         self,
-        gradient_flow: ProjectedWassersteinGradientFlow,
+        gradient_flow: GradientFlowRegression,
         x_calibration: torch.Tensor,
         y_calibration: torch.Tensor,
     ):

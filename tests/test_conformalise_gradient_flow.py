@@ -3,7 +3,7 @@ import torch
 
 from mockers.kernel import MockGradientFlowKernel, MockKernel
 from src.conformalise import ConformaliseGradientFlow
-from src.gradient_flows import ProjectedWassersteinGradientFlow
+from src.gradient_flows.regression import GradientFlowRegression
 from src.utils import set_seed
 
 
@@ -70,7 +70,7 @@ def test_conformalise_pwgf_mean(
         base_kernel=MockKernel(),
         approximation_samples=x_train.double(),
     )
-    pwgf = ProjectedWassersteinGradientFlow(
+    pwgf = GradientFlowRegression(
         number_of_particles=particles.shape[1],
         kernel=kernel,
         x_induce=x_induce.double(),
@@ -163,7 +163,7 @@ def test_conformalise_pwgf_covariance_matrix(
         base_kernel=MockKernel(),
         approximation_samples=x_train.double(),
     )
-    pwgf = ProjectedWassersteinGradientFlow(
+    pwgf = GradientFlowRegression(
         number_of_particles=particles.shape[1],
         kernel=kernel,
         x_induce=x_induce.double(),
@@ -255,7 +255,7 @@ def test_conformalise_pwgf_average_interval_width(
         base_kernel=MockKernel(),
         approximation_samples=x_train.double(),
     )
-    pwgf = ProjectedWassersteinGradientFlow(
+    pwgf = GradientFlowRegression(
         number_of_particles=particles.shape[1],
         kernel=kernel,
         x_induce=x_induce.double(),
