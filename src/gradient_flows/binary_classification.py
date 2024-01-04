@@ -83,7 +83,8 @@ class GradientFlowBinaryClassification(GradientFlowBase):
         # + sqrt(2 * eta) * e
         # size (M, P)
         particle_update = (
-            -(learning_rate / self.observation_noise)
+            # +(learning_rate / self.observation_noise)
+            +learning_rate
             * self.base_gram_induce_train
             @ (
                 torch.mul(self.y_train[:, None], prediction)
@@ -98,6 +99,18 @@ class GradientFlowBinaryClassification(GradientFlowBase):
         return particle_update.to_dense().detach()  # size (M, P)
 
     def predict_samples(
+        self,
+        x: torch.Tensor,
+        include_observation_noise: bool = True,
+    ) -> torch.Tensor:
+        return self.sigmoid(
+            self._predict_samples(
+                x=x,
+                include_observation_noise=include_observation_noise,
+            )
+        )  # size (N*, P)
+
+    def _predict_samples(
         self,
         x: torch.Tensor,
         include_observation_noise: bool = True,
@@ -149,14 +162,11 @@ class GradientFlowBinaryClassification(GradientFlowBase):
             cov=k_zx_zx,
             size=(self.number_of_particles,),
         ).T  # (M+N*, P)
-        return self.sigmoid(
-            g_zx[self.x_induce.shape[0] :, :]
-            + (
-                gpytorch.solve(
-                    lhs=gram_x_induce,
-                    input=self.gram_induce,
-                    rhs=(self.particles - g_zx[: self.x_induce.shape[0], :]),
-                )
+        return g_zx[self.x_induce.shape[0] :, :] + (
+            gpytorch.solve(
+                lhs=gram_x_induce,
+                input=self.gram_induce,
+                rhs=(self.particles - g_zx[: self.x_induce.shape[0], :]),
             )
         )  # size (N*, P)
 

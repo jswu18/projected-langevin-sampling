@@ -154,11 +154,11 @@ class GradientFlowBase(ABC):
         :param include_observation_noise: whether to include observation noise
         :return: noise samples of size (N*, number_of_samples)
         """
-        gram_x_induce = self.kernel(
+        gram_x_induce = self.kernel.forward(
             x1=x,
             x2=self.x_induce,
         )  # r(x, Z)
-        gram_x = self.kernel(
+        gram_x = self.kernel.forward(
             x1=x,
             x2=x,
         )  # r(x, x)
