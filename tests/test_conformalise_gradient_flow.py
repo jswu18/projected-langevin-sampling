@@ -49,7 +49,7 @@ from src.utils import set_seed
                     [5.1, 2.1, 9.5],
                 ]
             ),
-            torch.tensor([-45.917715538988084, -6.5844544039101045]),
+            torch.tensor([-45.3855, -5.6557]),
         ],
     ],
 )
@@ -139,8 +139,8 @@ def test_conformalise_pwgf_mean(
             ),
             torch.tensor(
                 [
-                    [29.132120605438356, 0],
-                    [0, 3.2602388858795166],
+                    [29.2608, 0],
+                    [0, 4.0157],
                 ]
             ),
         ],
@@ -232,7 +232,7 @@ def test_conformalise_pwgf_covariance_matrix(
                 ]
             ),
             0.95,
-            13.189324758638877,
+            11.35959889279669,
         ],
     ],
 )

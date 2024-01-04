@@ -39,6 +39,10 @@ class GradientFlowBinaryClassification(GradientFlowBase):
             jitter=jitter,
             seed=seed,
         )
+        self.base_gram_induce = self.base_gram_induce[0, :, :]  # k(Z, X) of size (M, M)
+        self.base_gram_induce_train = self.base_gram_induce_train[
+            0, :, :
+        ]  # k(Z, X) of size (M, N)
 
     @staticmethod
     def sigmoid(y):
@@ -55,27 +59,13 @@ class GradientFlowBinaryClassification(GradientFlowBase):
         P is the number of particles
         D is the dimensionality of the data
         """
-
-        # K(Z, X) is (M, N)
-        # A is (N, M)
-        # U is (M, P)
-
-        # U_{i+1} = U_{i} - \eta k(Z, X) [
-        # Y(\phi(A U_i)) + (1-Y) (1-\phi(A U_i))
-        # ] - \eta M k(Z, Z)^{-1} U_i + \sqrt(2\eta k(Z, Z)) \xi
-
-        # with A := k(X, Z) k(Z, Z)^{-1}
-        # \phi(x) = (1+exp(-y))^{-1} sigmoid function
-        # \xi ~ N(0, I_M), maybe  e ~ N(0, k(Z, Z)) of size (M, P)? or sample from bernoulli instead of normal?
-
-        # (N, P)
         prediction = self.sigmoid(
             gpytorch.solve(
                 lhs=self.base_gram_induce_train.to_dense().T,
                 input=self.base_gram_induce,
                 rhs=self.particles,
             )
-        )
+        )  # \phi(k(X, Z) @ k(Z, Z)^{-1} U(t)) of size (N, P)
         inverse_base_gram_particle_vector = gpytorch.solve(
             self.base_gram_induce, self.particles
         )  # k(Z, Z)^{-1} @ U(t) of size (M, P)
@@ -86,13 +76,12 @@ class GradientFlowBinaryClassification(GradientFlowBase):
         ).T  # e ~ N(0, k(Z, Z)) of size (M, P)
 
         # - (eta/sigma^2) * K(Z, X) @ [
-        #  torch.multiply(Y,  \phi(k(X, Z) @ k(Z, Z)^{-1} U(t))) (N, 1), (N, P)
-        #   + torch.multiply((1-Y), (1 - \phi(k(X, Z) @ k(Z, Z)^{-1} U(t)))  (N, 1), (N, P)
+        #  torch.multiply(Y,  \phi(k(X, Z) @ k(Z, Z)^{-1} U(t))) (N, 1)
+        #   + torch.multiply((1-Y), (1 - \phi(k(X, Z) @ k(Z, Z)^{-1} U(t)))
         # ]
         # - eta * M * k(Z, Z)^{-1} @ U(t)
         # + sqrt(2 * eta) * e
         # size (M, P)
-
         particle_update = (
             -(learning_rate / self.observation_noise)
             * self.base_gram_induce_train
@@ -120,7 +109,7 @@ class GradientFlowBinaryClassification(GradientFlowBase):
         :param include_observation_noise: whether to include observation noise in the sample
         :return: samples of size (N*, P)
         """
-        gram_x_induce = self.kernel(
+        gram_x_induce = self.kernel.forward(
             x1=x,
             x2=self.x_induce,
         ).to_dense()  # r(x, Z) of size (N*, M)
@@ -137,19 +126,21 @@ class GradientFlowBinaryClassification(GradientFlowBase):
         #
         # # r(x, Z) @ r(Z, Z)^{-1} @ U(t) + e(x)
         # # size (N*, P)
-        # return (
-        #     gpytorch.solve(
-        #         lhs=gram_x_induce,
-        #         input=self.gram_induce,
-        #         rhs=self.particles,
+        # return self.sigmoid(
+        #     (
+        #         gpytorch.solve(
+        #             lhs=gram_x_induce,
+        #             input=self.gram_induce,
+        #             rhs=self.particles,
+        #         )
+        #         + noise_vector
         #     )
-        #     + noise_vector
         # )
 
         # G(x) + r(x, Z) @ r(Z, Z)^{-1} @ (U(t)-G(Z))
         # G([Z, x]) ~ N(0, r([Z, x], [Z, x]))
         zx = torch.concatenate((self.x_induce, x), dim=0)  # (M+N*, D)
-        k_zx_zx = self.kernel(
+        k_zx_zx = self.kernel.forward(
             x1=zx,
             x2=zx,
         )  # (M+N*, M+N*)
@@ -167,13 +158,13 @@ class GradientFlowBinaryClassification(GradientFlowBase):
                     rhs=(self.particles - g_zx[: self.x_induce.shape[0], :]),
                 )
             )
-        )
+        )  # size (N*, P)
 
     def predict(
         self,
         x: torch.Tensor,
         jitter: float = 1e-20,
-    ) -> gpytorch.distributions.MultivariateNormal:
+    ) -> torch.distributions.Bernoulli:
         """
         Predicts the mean and variance for a given input.
         :param x: input of size (N*, D)
@@ -181,7 +172,6 @@ class GradientFlowBinaryClassification(GradientFlowBase):
         :return: normal distribution of size (N*,)
         """
         samples = self.predict_samples(x=x)
-        return gpytorch.distributions.MultivariateNormal(
-            mean=samples.mean(dim=1),
-            covariance_matrix=torch.diag(torch.clip(samples.var(axis=1), jitter, None)),
+        return torch.distributions.Bernoulli(
+            probs=samples.mean(dim=1),
         )

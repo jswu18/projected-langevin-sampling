@@ -43,13 +43,13 @@ class GradientFlowBase(ABC):
         self.y_train = y_train  # size (N,)
         self.jitter = jitter
 
-        self.gram_induce = self.kernel(
+        self.gram_induce = self.kernel.forward(
             x1=x_induce, x2=x_induce
         )  # r(Z, Z) of size (M, M)
         self.base_gram_induce = self.kernel.base_kernel(
             x1=x_induce, x2=x_induce
         )  # k(Z, X) of size (M, M)
-        self.gram_induce_train = self.kernel(
+        self.gram_induce_train = self.kernel.forward(
             x1=x_induce, x2=x_train
         )  # r(Z, X) of size (M, N)
         self.base_gram_induce_train = self.kernel.base_kernel(
@@ -114,7 +114,6 @@ class GradientFlowBase(ABC):
         gram_x: torch.Tensor,
         gram_x_induce: torch.Tensor,
         number_of_samples: int,
-        include_observation_noise: bool = True,
     ) -> torch.Tensor:
         """
         Samples from the predictive noise distribution.
@@ -123,33 +122,29 @@ class GradientFlowBase(ABC):
         :param number_of_samples: number of samples to draw
         :return:
         """
-        if include_observation_noise:
-            cov = (
-                gram_x
-                - gpytorch.solve(
-                    lhs=gram_x_induce,
-                    input=self.gram_induce,
-                    rhs=gram_x_induce.T,
-                )
-            ) + torch.tensor(self.observation_noise) * torch.eye(gram_x.shape[0])
-        else:
-            cov = gram_x - gpytorch.solve(
-                lhs=gram_x_induce,
-                input=self.gram_induce,
-                rhs=gram_x_induce.T,
-            )
+        cov = gram_x - gpytorch.solve(
+            lhs=gram_x_induce,
+            input=self.gram_induce,
+            rhs=gram_x_induce.T,
+        )
         # e(x) ~ N(0, r(x, x) - r(x, Z) @ r(Z, Z)^{-1} @ r(Z, x) + sigma^2 I)
-        return sample_multivariate_normal(
-            mean=torch.zeros(gram_x.shape[0]),
-            cov=cov,
-            size=(number_of_samples,),
-        ).T  # size (N*, number_of_samples)
+        return (
+            sample_multivariate_normal(
+                mean=torch.zeros(gram_x.shape[0]),
+                cov=cov,
+                size=(number_of_samples,),
+            ).T
+            + sample_multivariate_normal(
+                mean=torch.zeros(1),
+                cov=torch.tensor(self.observation_noise).reshape(1, 1),
+                size=(number_of_samples,),
+            ).reshape(-1)[None, :]
+        )  # size (N*, number_of_samples)
 
     def sample_predict_noise(
         self,
         x: torch.Tensor,
         number_of_samples: int = 1,
-        include_observation_noise: bool = True,
     ) -> torch.Tensor:
         """
         Samples from the predictive noise distribution for a given input.
@@ -171,7 +166,6 @@ class GradientFlowBase(ABC):
             gram_x=gram_x.to_dense(),
             gram_x_induce=gram_x_induce.to_dense(),
             number_of_samples=number_of_samples,
-            include_observation_noise=include_observation_noise,
         )  # size (N*, number_of_samples)
 
     @abstractmethod
@@ -194,8 +188,8 @@ class GradientFlowBase(ABC):
         self,
         x: torch.Tensor,
         jitter: float = 1e-20,
-    ) -> gpytorch.distributions.MultivariateNormal:
+    ) -> torch.distributions.Distribution:
         raise NotImplementedError
 
-    def __call__(self, x: torch.Tensor) -> gpytorch.distributions.Distribution:
+    def __call__(self, x: torch.Tensor) -> torch.distributions.Distribution:
         return self.predict(x=x)

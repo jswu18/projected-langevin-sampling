@@ -64,16 +64,12 @@ class ConditionalVarianceInduceDataSelector(InduceDataSelector):
         x = x[perm, ...]
         # note this will throw an out of bounds exception if we do not update each entry
         indices = np.zeros(m, dtype=int) + number_of_training_points
-        di = (
-            kernel(
-                x1=x,
-                x2=x,
-            )
-            .diagonal()
-            .detach()
-            .numpy()
-            + jitter
+        gram = kernel(
+            x1=x,
+            x2=x,
         )
+        gram = gram if gram.ndim == 2 else gram[0, :, :]
+        di = gram.diagonal().detach().numpy() + jitter
         indices[0] = np.argmax(di)  # select first point, add to index 0
         ci = np.zeros(
             (m - 1, number_of_training_points)
@@ -90,6 +86,11 @@ class ConditionalVarianceInduceDataSelector(InduceDataSelector):
                 )
                 .detach()
                 .numpy()
+            )
+            gram_matrix_raw = (
+                gram_matrix_raw
+                if gram_matrix_raw.ndim == 2
+                else gram_matrix_raw[0, :, :]
             )
             gram_matrix = np.round(np.squeeze(gram_matrix_raw), 20)  # [N]
             gram_matrix[j] += jitter

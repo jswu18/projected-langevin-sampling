@@ -93,12 +93,14 @@ class GradientFlowRegression(GradientFlowBase):
             x1=x,
             x2=x,
         ).to_dense()  # r(x, x) of size (N*, N*)
-        noise_vector = self._sample_predict_noise(
-            gram_x=gram_x,
-            gram_x_induce=gram_x_induce,
-            number_of_samples=self.number_of_particles,
-            include_observation_noise=include_observation_noise,
-        )  # e(x) of size (N*, P)
+        if include_observation_noise:
+            noise_vector = self._sample_predict_noise(
+                gram_x=gram_x,
+                gram_x_induce=gram_x_induce,
+                number_of_samples=self.number_of_particles,
+            )  # e(x) of size (N*, P)
+        else:
+            noise_vector = 0.0
 
         # r(x, Z) @ r(Z, Z)^{-1} @ U(t) + e(x)
         # size (N*, P)
