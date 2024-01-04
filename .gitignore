@@ -34,3 +34,6 @@ __pycache__
 # Shell scripts
 /**/**/shell_commands
 *.sh
+
+# zip files
+*.zip

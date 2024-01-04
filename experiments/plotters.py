@@ -10,7 +10,7 @@ from tqdm import tqdm
 
 from experiments.data import Data, ExperimentData
 from src.gps import ExactGP, svGP
-from src.gradient_flows import ProjectedWassersteinGradientFlow
+from src.gradient_flows import GradientFlowRegression
 from src.utils import set_seed
 
 _DATA_COLORS = {
@@ -301,7 +301,7 @@ def plot_true_versus_predicted(
 
 
 def animate_1d_pwgf_predictions(
-    pwgf: ProjectedWassersteinGradientFlow,
+    pwgf: GradientFlowRegression,
     seed: int,
     learning_rate: float,
     number_of_epochs: int,
@@ -348,16 +348,23 @@ def animate_1d_pwgf_predictions(
         for i in range(predicted_samples.shape[-1])
     ]
     plt.legend(loc="lower left")
-    progress_bar = tqdm(total=number_of_epochs, desc="WGF Particles GIF")
+    progress_bar = tqdm(total=number_of_epochs + 1, desc="WGF Particles GIF")
+    noise = pwgf.sample_predict_noise(
+        x=experiment_data.full.x,
+        number_of_samples=pwgf.number_of_particles,
+    ).detach()
 
     def animate(iteration: int):
         _ = pwgf.update(
             learning_rate=torch.tensor(learning_rate),
         )
-        _predicted_samples = pwgf.predict_samples(
-            x=experiment_data.full.x,
-            include_observation_noise=False,
-        ).detach()
+        _predicted_samples = (
+            pwgf.predict_samples(
+                x=experiment_data.full.x,
+                include_observation_noise=False,
+            ).detach()
+            + noise
+        )
         for i in range(_predicted_samples.shape[-1]):
             samples_plotted[i].set_data((x, _predicted_samples[:, i].reshape(-1)))
         ax.set_title(f"{title} ({iteration=})")
@@ -390,8 +397,6 @@ def animate_1d_gp_predictions(
     save_path: str,
     learn_inducing_locations: bool,
     learn_kernel_parameters: bool,
-    learn_observation_noise: bool,
-    observation_noise: float = None,
     christmas_colours: bool = False,
 ) -> None:
     fig, ax = plt.subplots(figsize=(13, 6.5))
@@ -429,9 +434,6 @@ def animate_1d_gp_predictions(
     if not learn_kernel_parameters:
         all_params -= {model.kernel.base_kernel.raw_lengthscale}
         all_params -= {model.kernel.raw_outputscale}
-    if not learn_observation_noise:
-        all_params -= {model.likelihood.raw_noise}
-        model.likelihood.noise = observation_noise
     model.likelihood.double()
     model.likelihood.train()
     if torch.cuda.is_available():
@@ -470,7 +472,7 @@ def animate_1d_gp_predictions(
     )[0]
     plt.legend(loc="lower left")
 
-    progress_bar = tqdm(total=number_of_epochs, desc="GP Learning GIF")
+    progress_bar = tqdm(total=number_of_epochs + 1, desc="GP Learning GIF")
 
     def animate(iteration: int):
         for x_batch, y_batch in train_loader:

@@ -148,11 +148,6 @@ DATASET_SCHEMA_MAPPING = {
     DatasetSchema.concrete: ConcreteDataset,
     DatasetSchema.energy_cooling: EnergyCoolingDataset,
     DatasetSchema.energy_heating: EnergyHeatingDataset,
-    DatasetSchema.kin8nm: Kin8nmDataset,
-    DatasetSchema.naval_compressor: NavalCompressorDataset,
-    DatasetSchema.naval_turbine: NavalTurbineDataset,
-    DatasetSchema.power: PowerDataset,
-    DatasetSchema.protein: ProteinDataset,
     DatasetSchema.wine: WineDataset,
     DatasetSchema.yacht: YachtDataset,
 }

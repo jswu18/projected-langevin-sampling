@@ -1,7 +1,7 @@
 import math
 import os
 from copy import deepcopy
-from typing import List, Optional
+from typing import List, Optional, Union
 
 import gpytorch
 import torch
@@ -23,9 +23,9 @@ from experiments.plotters import (
 from experiments.utils import create_directory
 from src.bisection_search import LogBisectionSearch
 from src.gps import ExactGP, svGP
-from src.gradient_flows.projected_wasserstein import ProjectedWassersteinGradientFlow
+from src.gradient_flows import GradientFlowRegression
+from src.gradient_flows.base import GradientFlowBase
 from src.induce_data_selectors import InduceDataSelector
-from src.kernels import GradientFlowKernel
 from src.samplers import sample_point
 from src.utils import set_seed
 
@@ -37,6 +37,7 @@ def _train_exact_gp(
     seed: int,
     number_of_epochs: int,
     learning_rate: float,
+    likelihood: gpytorch.likelihoods.Likelihood,
 ) -> (ExactGP, List[float]):
     set_seed(seed)
     model = ExactGP(
@@ -44,7 +45,7 @@ def _train_exact_gp(
         kernel=kernel,
         x=data.x,
         y=data.y,
-        likelihood=gpytorch.likelihoods.GaussianLikelihood(),
+        likelihood=likelihood,
     )
     likelihood = model.likelihood
     model.double()
@@ -58,7 +59,7 @@ def _train_exact_gp(
     for _ in epochs_iter:
         optimizer.zero_grad()
         output = model(data.x)
-        loss = -mll(output, data.y)
+        loss = -mll(output, data.y).sum()
         losses.append(loss.item())
         loss.backward()
         optimizer.step()
@@ -77,8 +78,6 @@ def _train_svgp(
     learning_rate: float,
     learn_inducing_locations: bool,
     learn_kernel_parameters: bool,
-    learn_observation_noise: bool,
-    observation_noise: float = None,
 ) -> (ExactGP, List[float]):
     set_seed(seed)
     model = svGP(
@@ -98,9 +97,6 @@ def _train_svgp(
     if not learn_kernel_parameters:
         all_params -= {model.kernel.base_kernel.raw_lengthscale}
         all_params -= {model.kernel.raw_outputscale}
-    if not learn_observation_noise:
-        all_params -= {model.likelihood.raw_noise}
-        model.likelihood.noise = observation_noise
     model.likelihood.double()
     model.likelihood.train()
     if torch.cuda.is_available():
@@ -122,7 +118,7 @@ def _train_svgp(
 
     epochs_iter = tqdm(
         range(number_of_epochs),
-        desc=f"svGP Epoch ({learn_kernel_parameters=}, {learn_inducing_locations=}, {learn_observation_noise=})",
+        desc=f"svGP Epoch ({learn_kernel_parameters=}, {learn_inducing_locations=})",
     )
     losses = []
     for _ in epochs_iter:
@@ -154,7 +150,7 @@ def select_induce_data(
     y_induce = data.y[induce_indices]
     return Data(
         x=x_induce.double(),
-        y=y_induce.double(),
+        y=y_induce.type(data.y.dtype),
         name="induce",
     )
 
@@ -184,6 +180,7 @@ def _load_subsample_data(
 def learn_subsample_gps(
     experiment_data: ExperimentData,
     kernel: gpytorch.kernels.Kernel,
+    likelihood: gpytorch.likelihoods.Likelihood,
     subsample_size: int,
     seed: int,
     number_of_epochs: int,
@@ -193,6 +190,7 @@ def learn_subsample_gps(
     data_path: str,
     plot_1d_subsample_path: str = None,
     plot_loss_path: str = None,
+    number_of_classes: int = 1,
 ) -> List[gpytorch.models.GP]:
     create_directory(model_path)
     create_directory(data_path)
@@ -211,10 +209,18 @@ def learn_subsample_gps(
             data_path, f"{model_name}_{i+1}_of_{number_of_iterations}.pth"
         )
         set_seed(seed + i)
+        mean = (
+            gpytorch.means.ConstantMean(batch_shape=torch.Size((number_of_classes,)))
+            if number_of_classes > 1
+            else gpytorch.means.ConstantMean()
+        )
         if os.path.exists(subsample_model_path) and os.path.exists(subsample_data_path):
             model, losses = load_ard_exact_gp_model(
                 model_path=subsample_model_path,
                 data_path=subsample_data_path,
+                likelihood=likelihood,
+                mean=mean,
+                kernel=deepcopy(kernel),
             )
         else:
             data = _load_subsample_data(
@@ -223,11 +229,12 @@ def learn_subsample_gps(
             )
             model, losses = _train_exact_gp(
                 data=data,
-                mean=gpytorch.means.ConstantMean(),
+                mean=mean,
                 kernel=deepcopy(kernel),
                 seed=seed,
                 number_of_epochs=number_of_epochs,
                 learning_rate=learning_rate,
+                likelihood=likelihood,
             )
             torch.save(
                 {
@@ -267,39 +274,21 @@ def learn_subsample_gps(
 
 
 def train_projected_wasserstein_gradient_flow(
+    pwgf: GradientFlowBase,
     particle_name: str,
-    kernel: gpytorch.kernels.Kernel,
     experiment_data: ExperimentData,
     induce_data: Data,
-    number_of_particles: int,
     number_of_epochs: int,
     learning_rate_upper: float,
     learning_rate_lower: float,
     number_of_learning_rate_searches: int,
     max_particle_magnitude: float,
-    observation_noise: float,
-    jitter: float,
     seed: int,
     plot_title: str = None,
     plot_particles_path: str = None,
     plot_update_magnitude_path: str = None,
     christmas_colours: bool = False,
-) -> ProjectedWassersteinGradientFlow:
-    gradient_flow_kernel = GradientFlowKernel(
-        base_kernel=kernel,
-        approximation_samples=experiment_data.train.x,
-    )
-    pwgf = ProjectedWassersteinGradientFlow(
-        number_of_particles=number_of_particles,
-        seed=seed,
-        kernel=gradient_flow_kernel,
-        x_induce=induce_data.x,
-        y_induce=induce_data.y,
-        x_train=experiment_data.train.x,
-        y_train=experiment_data.train.y,
-        jitter=jitter,
-        observation_noise=observation_noise,
-    )
+) -> GradientFlowRegression:
     if plot_particles_path is not None:
         create_directory(plot_particles_path)
         plot_1d_pwgf_prediction(
@@ -308,7 +297,7 @@ def train_projected_wasserstein_gradient_flow(
             x=experiment_data.full.x,
             predicted_samples=pwgf.predict_samples(
                 x=experiment_data.full.x,
-                include_observation_noise=False,
+                include_observation_noise=True,
             ).detach(),
             title=f"{plot_title} (initial particles)"
             if plot_title is not None
@@ -361,18 +350,20 @@ def train_projected_wasserstein_gradient_flow(
             )
             nll = calculate_nll(
                 prediction=prediction,
-                y=experiment_data.train.y,
+                y=experiment_data.train.y.double(),
                 y_std=experiment_data.y_std,
             )
             mse = calculate_mse(
                 prediction=prediction,
-                y=experiment_data.train.y,
+                y=experiment_data.train.y.double(),
             )
             mae = calculate_mae(
                 prediction=prediction,
-                y=experiment_data.train.y,
+                y=experiment_data.train.y.double(),
             )
             if nll < best_nll:
+                # if mae < best_mae:
+                # if mse < best_mse:
                 best_nll, best_mae, best_mse, best_lr = (
                     nll,
                     mae,
@@ -402,7 +393,7 @@ def train_projected_wasserstein_gradient_flow(
             x=experiment_data.full.x,
             predicted_samples=pwgf.predict_samples(
                 x=experiment_data.full.x,
-                include_observation_noise=False,
+                include_observation_noise=True,
             ).detach(),
             title=f"{plot_title} (learned particles)"
             if plot_title is not None
@@ -444,7 +435,7 @@ def train_projected_wasserstein_gradient_flow(
 
 def pwgf_observation_noise_search(
     data: Data,
-    model: ProjectedWassersteinGradientFlow,
+    model: GradientFlowRegression,
     observation_noise_upper: float,
     observation_noise_lower: float,
     number_of_searches: int,
@@ -502,7 +493,6 @@ def train_svgp(
     number_of_learning_rate_searches: int,
     is_fixed: bool,
     models_path: str,
-    observation_noise: float = None,
     plot_title: Optional[str] = None,
     plot_1d_path: Optional[str] = None,
     plot_loss_path: Optional[str] = None,
@@ -550,8 +540,6 @@ def train_svgp(
                 learning_rate=learning_rate,
                 learn_inducing_locations=False if is_fixed else True,
                 learn_kernel_parameters=False if is_fixed else True,
-                learn_observation_noise=False if is_fixed else True,
-                observation_noise=observation_noise,
             )
             torch.save(
                 {
@@ -613,8 +601,6 @@ def train_svgp(
             ),
             learn_inducing_locations=False if is_fixed else True,
             learn_kernel_parameters=False if is_fixed else True,
-            learn_observation_noise=False if is_fixed else True,
-            observation_noise=observation_noise,
             christmas_colours=christmas_colours,
         )
     if plot_loss_path is not None:

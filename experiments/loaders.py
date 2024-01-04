@@ -5,7 +5,7 @@ import torch
 
 from experiments.data import Data, ExperimentData
 from src.gps import ExactGP, svGP
-from src.gradient_flows import ProjectedWassersteinGradientFlow
+from src.gradient_flows import GradientFlowRegression
 from src.kernels import GradientFlowKernel
 
 
@@ -16,10 +16,10 @@ def load_projected_wasserstein_gradient_flow(
     experiment_data: ExperimentData,
     induce_data: Data,
     jitter: float,
-) -> (ProjectedWassersteinGradientFlow, torch.Tensor):
+) -> (GradientFlowRegression, torch.Tensor):
     model_config = torch.load(model_path)
     particles = model_config["particles"].to(torch.double)
-    pwgf = ProjectedWassersteinGradientFlow(
+    pwgf = GradientFlowRegression(
         number_of_particles=particles.shape[1],
         kernel=GradientFlowKernel(
             base_kernel=base_kernel,
@@ -61,6 +61,9 @@ def load_svgp(
 def load_ard_exact_gp_model(
     model_path: str,
     data_path: str,
+    likelihood: gpytorch.likelihoods.Likelihood,
+    mean: gpytorch.means.Mean,
+    kernel: gpytorch.kernels.Kernel,
 ) -> Tuple[ExactGP, torch.Tensor]:
     data = torch.load(data_path)
     data.x.to(torch.double)
@@ -69,11 +72,9 @@ def load_ard_exact_gp_model(
     model = ExactGP(
         x=data.x,
         y=data.y,
-        likelihood=gpytorch.likelihoods.GaussianLikelihood(),
-        mean=gpytorch.means.ConstantMean(),
-        kernel=gpytorch.kernels.ScaleKernel(
-            gpytorch.kernels.RBFKernel(ard_num_dims=data.x.shape[1])
-        ),
+        likelihood=likelihood,
+        mean=mean,
+        kernel=kernel,
     )
     model.load_state_dict(model_state_dict["model"])
     print(f"Loaded model from {model_path=} and from {data_path=}.")

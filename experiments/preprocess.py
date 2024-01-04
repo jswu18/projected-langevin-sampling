@@ -133,29 +133,17 @@ def set_up_experiment(
     x: torch.Tensor,
     y: torch.Tensor,
     train_data_percentage: float,
-    test_data_percentage: float,
-    validation_data_percentage: float,
     normalise: bool = True,
 ) -> ExperimentData:
-    # adapted from:
-    # https://datascience.stackexchange.com/questions/15135/train-test-validation-set-splitting-in-sklearn
     (
         x_train,
-        x_test_and_validation,
+        x_test,
         y_train,
-        y_test_and_validation,
+        y_test,
     ) = train_test_split(
         x,
         y,
         test_size=1 - train_data_percentage,
-        random_state=seed,
-    )
-
-    x_validation, x_test, y_validation, y_test = train_test_split(
-        x_test_and_validation,
-        y_test_and_validation,
-        test_size=test_data_percentage
-        / (test_data_percentage + validation_data_percentage),
         random_state=seed,
     )
     if normalise:
@@ -164,7 +152,6 @@ def set_up_experiment(
         y = (y - y_mean) / y_std
         y_train = (y_train - y_mean) / y_std
         y_test = (y_test - y_mean) / y_std
-        y_validation = (y_validation - y_mean) / y_std
     else:
         y_mean = 0.0
         y_std = 1.0
@@ -173,11 +160,6 @@ def set_up_experiment(
         full=Data(x=torch.tensor(x), y=torch.tensor(y), name="full"),
         train=Data(x=torch.tensor(x_train), y=torch.tensor(y_train), name="train"),
         test=Data(x=torch.tensor(x_test), y=torch.tensor(y_test), name="test"),
-        validation=Data(
-            x=torch.tensor(x_validation),
-            y=torch.tensor(y_validation),
-            name="validation",
-        ),
         y_mean=y_mean,
         y_std=y_std,
     )

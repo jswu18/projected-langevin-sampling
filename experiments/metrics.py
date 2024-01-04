@@ -15,39 +15,58 @@ from experiments.plotters import plot_true_versus_predicted
 from experiments.utils import create_directory
 from src.conformalise import ConformaliseBase
 from src.gps import ExactGP, svGP
-from src.gradient_flows import ProjectedWassersteinGradientFlow
+from src.gradient_flows import GradientFlowRegression
 from src.utils import set_seed
 
 
 def calculate_mae(
-    prediction: gpytorch.distributions.MultivariateNormal,
+    prediction: torch.distributions.Distribution,
     y: torch.Tensor,
 ) -> float:
-    return gpytorch.metrics.mean_absolute_error(
-        pred_dist=prediction,
-        test_y=y,
-    ).item()
+    if isinstance(prediction, gpytorch.distributions.MultivariateNormal):
+        return gpytorch.metrics.mean_absolute_error(
+            pred_dist=prediction,
+            test_y=y,
+        ).item()
+    elif isinstance(prediction, torch.distributions.Bernoulli):
+        return prediction.probs.sub(y).abs().mean().item()
+    else:
+        raise ValueError(f"Prediction type {type(prediction)} not supported")
 
 
 def calculate_mse(
-    prediction: gpytorch.distributions.MultivariateNormal,
+    prediction: torch.distributions.Distribution,
     y: torch.Tensor,
 ) -> float:
-    return gpytorch.metrics.mean_squared_error(
-        pred_dist=prediction,
-        test_y=y,
-    ).item()
+    if isinstance(prediction, gpytorch.distributions.MultivariateNormal):
+        return gpytorch.metrics.mean_squared_error(
+            pred_dist=prediction,
+            test_y=y,
+        ).item()
+    elif isinstance(prediction, torch.distributions.Bernoulli):
+        return prediction.probs.sub(y).pow(2).mean().item()
+    else:
+        raise ValueError(f"Prediction type {type(prediction)} not supported")
 
 
 def calculate_nll(
-    prediction: gpytorch.distributions.MultivariateNormal,
+    prediction: torch.distributions.Distribution,
     y: torch.Tensor,
     y_std: float,
 ) -> float:
-    return gpytorch.metrics.mean_standardized_log_loss(
-        pred_dist=prediction,
-        test_y=y,
-    ).item() + math.log(y_std)
+    if isinstance(prediction, gpytorch.distributions.MultivariateNormal):
+        return gpytorch.metrics.mean_standardized_log_loss(
+            pred_dist=prediction,
+            test_y=y,
+        ).item() + math.log(y_std)
+    elif isinstance(prediction, torch.distributions.Bernoulli):
+        return torch.nn.functional.binary_cross_entropy(
+            input=prediction.probs,
+            target=y,
+            reduction="mean",
+        ).item()
+    else:
+        raise ValueError(f"Prediction type {type(prediction)} not supported")
 
 
 def calculate_average_interval_width(
@@ -66,29 +85,18 @@ def calculate_average_interval_width(
 
 
 def calculate_metrics(
-    model: Union[ExactGP, svGP, ProjectedWassersteinGradientFlow],
+    model: Union[ExactGP, svGP, GradientFlowRegression],
     experiment_data: ExperimentData,
     model_name: str,
     dataset_name: str,
     results_path: str,
     plots_path: str,
 ):
-    temper_model = construct_tempered_model(
-        model=model,
-        data=experiment_data.validation,
-    )
-    conformal_model = construct_conformalised_model(
-        model=model,
-        data=experiment_data.validation,
-    )
     for _model, _model_name in [
         (model, model_name),
-        (temper_model, f"{model_name}-temper"),
-        (conformal_model, f"{model_name}-conformal"),
     ]:
         for data in [
             experiment_data.train,
-            experiment_data.validation,
             experiment_data.test,
         ]:
             set_seed(0)
@@ -162,50 +170,28 @@ def concatenate_metrics(
     datasets: List[str],
     metrics: List[str],
 ) -> None:
-    model_names_ = []
-    for model_type in ["", "-temper", "-conformal"]:
-        model_names_.extend([f"{model_name}{model_type}" for model_name in model_names])
     for data_type in data_types:
         for metric in metrics:
             df_list = []
             for dataset in datasets:
                 try:
-                    if metric == "average_interval_width":
-                        df_list.append(
-                            pd.concat(
-                                [
-                                    pd.read_csv(
-                                        os.path.join(
-                                            results_path,
-                                            dataset,
-                                            f"{model_name}-conformal",
-                                            f"{metric}_{data_type}.csv",
-                                        ),
-                                        index_col="dataset",
-                                    )
-                                    for model_name in model_names
-                                ],
-                                axis=1,
-                            )
+                    df_list.append(
+                        pd.concat(
+                            [
+                                pd.read_csv(
+                                    os.path.join(
+                                        results_path,
+                                        dataset,
+                                        model,
+                                        f"{metric}_{data_type}.csv",
+                                    ),
+                                    index_col="dataset",
+                                )
+                                for model in model_names
+                            ],
+                            axis=1,
                         )
-                    else:
-                        df_list.append(
-                            pd.concat(
-                                [
-                                    pd.read_csv(
-                                        os.path.join(
-                                            results_path,
-                                            dataset,
-                                            model,
-                                            f"{metric}_{data_type}.csv",
-                                        ),
-                                        index_col="dataset",
-                                    )
-                                    for model in model_names_
-                                ],
-                                axis=1,
-                            )
-                        )
+                    )
                 except Exception as e:
                     print(e)
                     print(f"Dataset {dataset} failed to load results.")
