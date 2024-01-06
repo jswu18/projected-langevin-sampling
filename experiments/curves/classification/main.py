@@ -227,7 +227,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     with open(args.config_path, "r") as file:
         loaded_config = yaml.safe_load(file)
-    for curve_function_ in [CURVE_FUNCTIONS[6], CURVE_FUNCTIONS[7], CURVE_FUNCTIONS[9]]:
+    for curve_function_ in CURVE_FUNCTIONS:
         main(
             curve_function=curve_function_,
             data_config=loaded_config["data"],
