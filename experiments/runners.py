@@ -1,7 +1,7 @@
 import math
 import os
 from copy import deepcopy
-from typing import List, Optional, Union
+from typing import List, Optional
 
 import gpytorch
 import torch
@@ -338,6 +338,7 @@ def train_projected_wasserstein_gradient_flow(
                     best_mae=best_mae,
                     best_mse=best_mse,
                     best_nll=best_nll,
+                    best_lr=best_lr,
                     lr=learning_rate_bisection_search.current,
                     upper=learning_rate_bisection_search.upper,
                     lower=learning_rate_bisection_search.lower,
@@ -362,8 +363,8 @@ def train_projected_wasserstein_gradient_flow(
                 y=experiment_data.train.y.double(),
             )
             if nll < best_nll:
-                # if mae < best_mae:
-                # if mse < best_mse:
+            # if mae < best_mae:
+            # if mse < best_mse:
                 best_nll, best_mae, best_mse, best_lr = (
                     nll,
                     mae,
