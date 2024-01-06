@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Optional, Tuple
 
 import torch
 from sklearn.model_selection import train_test_split
@@ -12,7 +12,10 @@ def _split_regression_data_intervals(
     y: torch.Tensor,
     number_of_test_intervals: int,
     total_number_of_intervals: int,
-) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    y_untransformed: Optional[torch.Tensor] = None,
+) -> Tuple[
+    torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor
+]:
     interval_size = x.shape[0] // total_number_of_intervals
     number_of_intervals_on_edge = int(1 / 8 * total_number_of_intervals)
     test_interval_indices = (
@@ -36,6 +39,18 @@ def _split_regression_data_intervals(
             if interval not in test_interval_indices
         ]
     )
+    if y_untransformed is not None:
+        y_train_untransformed = torch.concatenate(
+            [
+                y_untransformed[
+                    interval_size * interval : interval_size * (interval + 1)
+                ]
+                for interval in range(total_number_of_intervals)
+                if interval not in test_interval_indices
+            ]
+        )
+    else:
+        y_train_untransformed = None
     x_test = torch.concatenate(
         [
             x[interval_size * interval : interval_size * (interval + 1)]
@@ -50,7 +65,19 @@ def _split_regression_data_intervals(
             if interval in test_interval_indices
         ]
     )
-    return x_train, y_train, x_test, y_test
+    if y_untransformed is not None:
+        y_test_untransformed = torch.concatenate(
+            [
+                y_untransformed[
+                    interval_size * interval : interval_size * (interval + 1)
+                ]
+                for interval in range(total_number_of_intervals)
+                if interval in test_interval_indices
+            ]
+        )
+    else:
+        y_test_untransformed = None
+    return x_train, y_train, y_train_untransformed, x_test, y_test, y_test_untransformed
 
 
 def split_regression_data_intervals(
@@ -61,32 +88,56 @@ def split_regression_data_intervals(
     number_of_test_intervals: int,
     total_number_of_intervals: int,
     train_data_percentage: float,
+    y_untransformed: Optional[torch.Tensor] = None,
 ):
     (
         x_train_validation,
         y_train_validation,
+        y_train_validation_untransformed,
         x_test,
         y_test,
+        y_test_untransformed,
     ) = _split_regression_data_intervals(
         seed=split_seed,
         x=x,
         y=y,
+        y_untransformed=y_untransformed,
         number_of_test_intervals=number_of_test_intervals,
         total_number_of_intervals=total_number_of_intervals,
     )
-    x_train, x_validation, y_train, y_validation = train_test_split(
-        x_train_validation,
-        y_train_validation,
-        test_size=1 - train_data_percentage,
-        random_state=seed,
-    )
+    y_train_untransformed, y_validation_untransformed = None, None
+    if y_untransformed is not None:
+        (
+            x_train,
+            x_validation,
+            y_train,
+            y_validation,
+            y_train_untransformed,
+            y_validation_untransformed,
+        ) = train_test_split(
+            x_train_validation,
+            y_train_validation,
+            y_train_validation_untransformed,
+            test_size=1 - train_data_percentage,
+            random_state=seed,
+        )
+    else:
+        x_train, x_validation, y_train, y_validation = train_test_split(
+            x_train_validation,
+            y_train_validation,
+            test_size=1 - train_data_percentage,
+            random_state=seed,
+        )
     return (
         x_train,
         y_train,
+        y_train_untransformed,
         x_test,
         y_test,
+        y_test_untransformed,
         x_validation,
         y_validation,
+        y_validation_untransformed,
     )
 
 

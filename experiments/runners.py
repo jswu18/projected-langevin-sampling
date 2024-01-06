@@ -148,9 +148,17 @@ def select_induce_data(
         kernel=kernel,
     )
     y_induce = data.y[induce_indices]
+    y_induce_untransformed = (
+        data.y_untransformed[induce_indices]
+        if data.y_untransformed is not None
+        else None
+    )
     return Data(
         x=x_induce.double(),
         y=y_induce.type(data.y.dtype),
+        y_untransformed=y_induce_untransformed.type(data.y_untransformed.dtype)
+        if y_induce_untransformed is not None
+        else None,
         name="induce",
     )
 
@@ -290,6 +298,7 @@ def train_projected_wasserstein_gradient_flow(
     plot_update_magnitude_path: str = None,
     christmas_colours: bool = False,
     metric_to_minimise: str = "nll",
+    initial_particles_noise_only: bool = False,
 ) -> torch.Tensor:
     if plot_particles_path is not None:
         create_directory(plot_particles_path)
@@ -300,7 +309,9 @@ def train_projected_wasserstein_gradient_flow(
             predicted_samples=pwgf.predict_untransformed_samples(
                 x=experiment_data.full.x,
                 particles=pwgf.initialise_particles(
-                    number_of_particles=number_of_particles, seed=seed
+                    number_of_particles=number_of_particles,
+                    seed=seed,
+                    noise_only=initial_particles_noise_only,
                 ),
             ).detach(),
             title=f"{plot_title} (initial particles)"
@@ -325,6 +336,7 @@ def train_projected_wasserstein_gradient_flow(
         particles = pwgf.initialise_particles(
             number_of_particles=number_of_particles,
             seed=seed,
+            noise_only=initial_particles_noise_only,
         )
         update_log_magnitudes = []
         set_seed(seed)
@@ -422,6 +434,7 @@ def train_projected_wasserstein_gradient_flow(
             pwgf=pwgf,
             seed=seed,
             number_of_particles=number_of_particles,
+            initial_particles_noise_only=initial_particles_noise_only,
             learning_rate=best_lr,
             number_of_epochs=number_of_epochs,
             experiment_data=experiment_data,

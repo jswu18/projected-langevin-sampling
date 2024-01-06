@@ -45,33 +45,58 @@ def get_experiment_data(
     train_data_percentage: float,
 ) -> ExperimentData:
     x = torch.linspace(-2, 2, number_of_data_points).reshape(-1, 1)
+    y_untransformed = curve_function.calculate_curve(
+        x=x,
+    ).reshape(-1)
     y = curve_function.classification(
         seed=seed,
-        x=x,
+        y_untransformed=y_untransformed,
     )
     (
         x_train,
         y_train,
+        y_train_untransformed,
         x_test,
         y_test,
+        y_test_untransformed,
         x_validation,
         y_validation,
+        y_validation_untransformed,
     ) = split_regression_data_intervals(
         seed=seed,
         split_seed=curve_function.seed,
         x=x,
         y=y,
+        y_untransformed=y_untransformed,
         number_of_test_intervals=number_of_test_intervals,
         total_number_of_intervals=total_number_of_intervals,
         train_data_percentage=train_data_percentage,
     )
     experiment_data = ExperimentData(
         name=type(curve_function).__name__.lower(),
-        full=Data(x=x.double(), y=y.type(torch.int), name="full"),
-        train=Data(x=x_train.double(), y=y_train.type(torch.int), name="train"),
-        test=Data(x=x_test.double(), y=y_test.type(torch.int), name="test"),
+        full=Data(
+            x=x.double(),
+            y=y.type(torch.int),
+            y_untransformed=y_untransformed,
+            name="full",
+        ),
+        train=Data(
+            x=x_train.double(),
+            y=y_train.type(torch.int),
+            y_untransformed=y_train_untransformed,
+            name="train",
+        ),
+        test=Data(
+            x=x_test.double(),
+            y=y_test.type(torch.int),
+            y_untransformed=y_test_untransformed,
+            name="test",
+        ),
         validation=Data(
-            x=x_validation.double(), y=y_validation.type(torch.int), name="validation"
+            x=x_validation.double(),
+            y=y_validation.type(torch.int),
+            y_untransformed=y_validation_untransformed,
+            name="validation",
         ),
     )
     return experiment_data
@@ -83,20 +108,11 @@ def plot_experiment_data(
     title: str,
     curve_name: str,
 ) -> None:
-    regression_curve = curve_function.calculate_curve(
-        x=experiment_data.full.x,
-    )
     fig, ax = plt.subplots(figsize=(13, 6.5))
     fig, ax = plot_1d_experiment_data(
         fig=fig,
         ax=ax,
         experiment_data=experiment_data,
-    )
-    plt.plot(
-        experiment_data.full.x,
-        regression_curve - regression_curve.mean(),
-        color="gray",
-        label="latent curve",
     )
     ax.legend()
     ax.set_title(title)
@@ -220,6 +236,7 @@ def main(
         if "christmas_colours" in pwgf_config
         else False,
         metric_to_minimise=pwgf_config["metric_to_minimise"],
+        initial_particles_noise_only=pwgf_config["initial_particles_noise_only"],
     )
 
 

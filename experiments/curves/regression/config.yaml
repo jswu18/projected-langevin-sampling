@@ -18,10 +18,10 @@ induce_data:
   induce_data_power: 2
 pwgf:
   number_of_particles: 100
-  number_of_epochs: 300
+  number_of_epochs: 2000
   learning_rate_upper: 1.0e+2
   learning_rate_lower: 1.0e-30
-  max_particle_magnitude: 1.0e+3
+  max_particle_magnitude: 1.0e+2
   number_of_learning_rate_searches: 25
   jitter: 0
   seed: 0
@@ -30,11 +30,12 @@ pwgf:
   number_of_observation_noise_searches: 25
   christmas_colours: True
   metric_to_minimise: nll
+  initial_particles_noise_only: False
 svgp:
   seed: 0
-  number_of_epochs: 2000
+  number_of_epochs: 5000
   batch_size: 100
-  learning_rate_upper: 1.0e-2
-  learning_rate_lower: 1.0e-4
-  number_of_learning_rate_searches: 3
+  learning_rate_upper: 1.0e-1
+  learning_rate_lower: 1.0e-5
+  number_of_learning_rate_searches: 5
   christmas_colours: False

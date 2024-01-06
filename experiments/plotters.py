@@ -66,11 +66,10 @@ def plot_1d_data(
     data: Data,
     save_path: str = None,
     title: str = None,
+    color: str = "tab:blue",
 ) -> Tuple[plt.Figure, plt.Axes]:
     if data.name in _DATA_COLORS:
         color = _DATA_COLORS[data.name]
-    else:
-        color = "tab:blue"
     if data.name in _DATA_TRANSPARENCY:
         alpha = _DATA_TRANSPARENCY[data.name]
     else:
@@ -116,6 +115,13 @@ def plot_1d_experiment_data(
                 save_path=None,
                 title=None,
             )
+    if experiment_data.full.y_untransformed is not None:
+        ax.plot(
+            experiment_data.full.x,
+            experiment_data.full.y_untransformed.reshape(experiment_data.full.x.shape),
+            label="latent curve",
+            color="gray",
+        )
     if title is not None:
         ax.set_title(title)
     if save_path is not None:
@@ -161,11 +167,14 @@ def plot_1d_pwgf_prediction(
         ax=ax,
         experiment_data=experiment_data,
     )
-    fig, ax = plot_1d_data(
-        fig=fig,
-        ax=ax,
-        data=induce_data,
-    )
+    for i in range(induce_data.x.shape[0]):
+        plt.axvline(
+            x=induce_data.x[i],
+            color="tab:blue",
+            alpha=0.2,
+            label="induce" if i == 0 else None,
+            zorder=0,
+        )
     for i in range(predicted_samples.shape[1]):
         fig, ax = plot_1d_particle(
             fig=fig,
@@ -217,11 +226,13 @@ def plot_1d_gp_prediction_and_induce_data(
         ax=ax,
         experiment_data=experiment_data,
     )
-    if induce_data is not None:
-        fig, ax = plot_1d_data(
-            fig=fig,
-            ax=ax,
-            data=induce_data,
+    for i in range(induce_data.x.shape[0]):
+        plt.axvline(
+            x=induce_data.x[i],
+            color="tab:blue",
+            alpha=0.2,
+            label="induce" if i == 0 else None,
+            zorder=0,
         )
     prediction = model.likelihood(model(experiment_data.full.x))
     fig, ax = plot_1d_gp_prediction(
@@ -303,6 +314,7 @@ def plot_true_versus_predicted(
 def animate_1d_pwgf_predictions(
     pwgf: GradientFlowBase,
     number_of_particles: int,
+    initial_particles_noise_only: bool,
     seed: int,
     learning_rate: float,
     number_of_epochs: int,
@@ -320,11 +332,14 @@ def animate_1d_pwgf_predictions(
         ax=ax,
         experiment_data=experiment_data,
     )
-    fig, ax = plot_1d_data(
-        fig=fig,
-        ax=ax,
-        data=induce_data,
-    )
+    for i in range(induce_data.x.shape[0]):
+        plt.axvline(
+            x=induce_data.x[i],
+            color="tab:blue",
+            alpha=0.2,
+            label="induce" if i == 0 else None,
+            zorder=0,
+        )
     plt.xlim(x.min(), x.max())
     plt.ylim(
         experiment_data.full.y.min() - 1,
@@ -332,7 +347,9 @@ def animate_1d_pwgf_predictions(
     )
 
     particles = pwgf.initialise_particles(
-        number_of_particles=number_of_particles, seed=seed
+        number_of_particles=number_of_particles,
+        seed=seed,
+        noise_only=initial_particles_noise_only,
     )
     predictive_noise = pwgf.sample_predictive_noise(
         x=experiment_data.full.x,
@@ -357,7 +374,6 @@ def animate_1d_pwgf_predictions(
         for i in range(predicted_samples.shape[-1])
     ]
     plt.legend(loc="lower left")
-    progress_bar = tqdm(total=number_of_epochs + 1, desc="WGF Particles GIF")
 
     class ParticleWrapper:
         """
@@ -366,19 +382,27 @@ def animate_1d_pwgf_predictions(
 
         def __init__(self, particles: torch.Tensor):
             self.particles = particles
+            self.num_updates = 0
 
         def update(self, particle_update):
             self.particles += particle_update
+            self.num_updates += 1
 
     particle_wrapper = ParticleWrapper(particles=particles)
+    fps = min(number_of_epochs // animation_duration, 30)
+    number_of_frames = 1 + number_of_epochs // (
+        (number_of_epochs // (animation_duration * fps)) + 1
+    )
+    progress_bar = tqdm(total=number_of_frames + 1, desc="WGF Particles GIF")
 
     def animate(iteration: int):
-        particle_wrapper.update(
-            pwgf.calculate_particle_update(
-                particles=particle_wrapper.particles,
-                learning_rate=torch.tensor(learning_rate),
+        for _ in range((number_of_epochs // (animation_duration * fps)) + 1):
+            particle_wrapper.update(
+                pwgf.calculate_particle_update(
+                    particles=particle_wrapper.particles,
+                    learning_rate=torch.tensor(learning_rate),
+                )
             )
-        )
         _predicted_samples = pwgf.predict_untransformed_samples(
             x=experiment_data.full.x,
             particles=particle_wrapper.particles,
@@ -386,17 +410,17 @@ def animate_1d_pwgf_predictions(
         ).detach()
         for i in range(_predicted_samples.shape[-1]):
             samples_plotted[i].set_data((x, _predicted_samples[:, i].reshape(-1)))
-        ax.set_title(f"{title} ({iteration=})")
+        ax.set_title(f"{title} (iteration={particle_wrapper.num_updates})")
         progress_bar.update(n=1)
         return (samples_plotted[0],)
 
     ani = animation.FuncAnimation(
-        fig, animate, repeat=True, frames=number_of_epochs, interval=50
+        fig, animate, repeat=True, frames=number_of_frames, interval=50
     )
 
     # To save the animation using Pillow as a gif
     writer = animation.PillowWriter(
-        fps=number_of_epochs // animation_duration,
+        fps=fps,
         bitrate=1800,
     )
     ani.save(save_path, writer=writer)
@@ -425,11 +449,14 @@ def animate_1d_gp_predictions(
         ax=ax,
         experiment_data=experiment_data,
     )
-    fig, ax = plot_1d_data(
-        fig=fig,
-        ax=ax,
-        data=induce_data,
-    )
+    for i in range(induce_data.x.shape[0]):
+        plt.axvline(
+            x=induce_data.x[i],
+            color="tab:blue",
+            alpha=0.2,
+            label="induce" if i == 0 else None,
+            zorder=0,
+        )
     plt.xlim(experiment_data.full.x.min(), experiment_data.full.x.max())
     plt.ylim(
         experiment_data.full.y.min() - 1,
@@ -492,15 +519,29 @@ def animate_1d_gp_predictions(
     )[0]
     plt.legend(loc="lower left")
 
-    progress_bar = tqdm(total=number_of_epochs + 1, desc="GP Learning GIF")
+    class Counter:
+        def __init__(self):
+            self.count = 0
+
+        def increment(self):
+            self.count += 1
+
+    counter = Counter()
+    fps = min(number_of_epochs // animation_duration, 30)
+    number_of_frames = 1 + number_of_epochs // (
+        (number_of_epochs // (animation_duration * fps)) + 1
+    )
+    progress_bar = tqdm(total=number_of_frames + 1, desc="GP Learning GIF")
 
     def animate(iteration: int):
-        for x_batch, y_batch in train_loader:
-            optimizer.zero_grad()
-            output = model(x_batch)
-            loss = -mll(output, y_batch)
-            loss.backward()
-            optimizer.step()
+        for _ in range((number_of_epochs // (animation_duration * fps)) + 1):
+            for x_batch, y_batch in train_loader:
+                optimizer.zero_grad()
+                output = model(x_batch)
+                loss = -mll(output, y_batch)
+                loss.backward()
+                optimizer.step()
+            counter.increment()
         _prediction = model.likelihood(model(experiment_data.full.x))
         _mean_prediction = _prediction.mean.detach()
         _stdev_prediction = torch.sqrt(_prediction.variance.detach())
@@ -515,7 +556,7 @@ def animate_1d_gp_predictions(
         mean_line.set_data(
             (experiment_data.full.x.reshape(-1), _mean_prediction.reshape(-1))
         )
-        ax.set_title(f"{title} ({iteration=})")
+        ax.set_title(f"{title} (iteration={counter.count})")
         if christmas_colours:
             fill.set_color(
                 (
@@ -528,12 +569,12 @@ def animate_1d_gp_predictions(
         return (mean_line,)
 
     ani = animation.FuncAnimation(
-        fig, animate, repeat=True, frames=number_of_epochs, interval=50
+        fig, animate, repeat=True, frames=number_of_frames, interval=50
     )
 
     # To save the animation using Pillow as a gif
     writer = animation.PillowWriter(
-        fps=number_of_epochs // animation_duration,
+        fps=fps,
         bitrate=1800,
     )
     ani.save(save_path, writer=writer)

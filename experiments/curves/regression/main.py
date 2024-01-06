@@ -53,10 +53,13 @@ def get_experiment_data(
     (
         x_train,
         y_train,
+        _,
         x_test,
         y_test,
+        _,
         x_validation,
         y_validation,
+        _,
     ) = split_regression_data_intervals(
         seed=seed,
         split_seed=curve_function.seed,
@@ -193,6 +196,7 @@ def main(
         max_particle_magnitude=pwgf_config["max_particle_magnitude"],
         seed=pwgf_config["seed"],
         metric_to_minimise=pwgf_config["metric_to_minimise"],
+        initial_particles_noise_only=pwgf_config["initial_particles_noise_only"],
     )
     pwgf.observation_noise = pwgf_observation_noise_search(
         data=experiment_data.train,
@@ -224,6 +228,7 @@ def main(
         if "christmas_colours" in pwgf_config
         else False,
         metric_to_minimise=pwgf_config["metric_to_minimise"],
+        initial_particles_noise_only=pwgf_config["initial_particles_noise_only"],
     )
     calculate_metrics(
         model=pwgf,
