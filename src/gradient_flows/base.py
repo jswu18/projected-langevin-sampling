@@ -19,11 +19,11 @@ class GradientFlowBase(ABC):
     def __init__(
         self,
         x_induce: torch.Tensor,
-        y_train: torch.Tensor,
+        y_induce: torch.Tensor,
         x_train: torch.Tensor,
+        y_train: torch.Tensor,
         kernel: GradientFlowKernel,
         observation_noise: float,
-        y_induce: Optional[torch.Tensor] = None,
         jitter: float = 0.0,
     ):
         self.observation_noise = observation_noise
