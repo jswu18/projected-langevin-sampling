@@ -54,8 +54,6 @@ def test_initialise_particles(
         approximation_samples=x_train,
     )
     pwgf = GradientFlowRegression(
-        number_of_particles=number_of_particles,
-        seed=seed,
         kernel=kernel,
         x_induce=x_induce,
         y_induce=y_induce,
@@ -64,7 +62,10 @@ def test_initialise_particles(
         jitter=jitter,
         observation_noise=1.0,
     )
-    assert torch.allclose(pwgf.particles.detach(), particles)
+    assert torch.allclose(
+        pwgf.initialise_particles(number_of_particles=number_of_particles, seed=seed),
+        particles,
+    )
 
 
 @pytest.mark.parametrize(
@@ -124,7 +125,6 @@ def test_calculate_update(
         approximation_samples=x_train,
     )
     pwgf = GradientFlowRegression(
-        number_of_particles=particles.shape[1],
         kernel=kernel,
         x_induce=x_induce.double(),
         y_induce=y_induce.double(),
@@ -133,9 +133,9 @@ def test_calculate_update(
         jitter=jitter,
         observation_noise=observation_noise,
     )
-    pwgf.particles = particles
     set_seed(seed)
-    calculated_update = pwgf.update(
+    calculated_update = pwgf.calculate_particle_update(
+        particles=particles,
         learning_rate=torch.tensor(learning_rate),
     ).detach()
     assert torch.allclose(calculated_update, update)
@@ -172,16 +172,11 @@ def test_calculate_update(
             0,
             3,
             1.0,
-            torch.tensor(
-                [
-                    [-3.773752772759514, 8.80760558263265, 9.55827805104479],
-                    [0.5889956970270249, 0.4838228442057882, -1.1760369278932046],
-                ]
-            ).double(),
+            torch.tensor([[-6.1471], [-7.2732], [-2.8229], [-7.3632]]).double(),
         ],
     ],
 )
-def test_sample_predict_noise(
+def test_sample_predictive_noise(
     x: torch.Tensor,
     x_induce: torch.Tensor,
     y_induce: torch.Tensor,
@@ -198,7 +193,6 @@ def test_sample_predict_noise(
         approximation_samples=x_train,
     )
     pwgf = GradientFlowRegression(
-        number_of_particles=1,
         kernel=kernel,
         x_induce=x_induce.double(),
         y_induce=y_induce.double(),
@@ -208,9 +202,10 @@ def test_sample_predict_noise(
         observation_noise=observation_noise,
     )
     set_seed(seed)
-    sampled_predict_noise = pwgf.sample_predict_noise(
+    particles = pwgf.initialise_particles(number_of_particles=1, seed=seed)
+    sampled_predict_noise = pwgf.sample_predictive_noise(
+        particles=particles,
         x=x.double(),
-        number_of_samples=number_of_samples,
     ).detach()
     assert torch.allclose(sampled_predict_noise, predict_noise)
 
@@ -253,8 +248,8 @@ def test_sample_predict_noise(
             1.0,
             torch.tensor(
                 [
-                    [48.5792, -91.0778, -119.2535],
-                    [16.0783, -29.0686, -39.2867],
+                    [52.5968, -105.6018, -128.3776],
+                    [15.4785, -29.2983, -38.1299],
                 ]
             ).double(),
         ],
@@ -277,7 +272,6 @@ def test_predict_pwgf(
         approximation_samples=x_train,
     )
     pwgf = GradientFlowRegression(
-        number_of_particles=particles.shape[1],
         kernel=kernel,
         x_induce=x_induce.double(),
         y_induce=y_induce.double(),
@@ -286,9 +280,9 @@ def test_predict_pwgf(
         jitter=jitter,
         observation_noise=observation_noise,
     )
-    pwgf.particles = particles
     set_seed(seed)
     predicted_samples = pwgf.predict_samples(
+        particles=particles,
         x=x.double(),
     ).detach()
     assert torch.allclose(predicted_samples, prediction)

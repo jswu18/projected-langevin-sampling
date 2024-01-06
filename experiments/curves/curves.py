@@ -36,7 +36,7 @@ class Curve(ABC):
         else:
             generator = None
         regression_curve = self.calculate_curve(x).reshape(-1)
-        probabilities = GradientFlowBinaryClassification.sigmoid(
+        probabilities = GradientFlowBinaryClassification.transform(
             y=10 * regression_curve,
         )
         return torch.bernoulli(probabilities, generator=generator).type(torch.bool)

@@ -160,7 +160,7 @@ def main(
         )
 
         if os.path.exists(pwgf_path):
-            pwgf = load_projected_wasserstein_gradient_flow(
+            pwgf, particles = load_projected_wasserstein_gradient_flow(
                 model_path=pwgf_path,
                 base_kernel=deepcopy(average_ard_kernel),
                 observation_noise=float(likelihood.noise),
@@ -174,8 +174,6 @@ def main(
                 approximation_samples=experiment_data.train.x,
             )
             pwgf = GradientFlowRegression(
-                number_of_particles=pwgf_config["number_of_particles"],
-                seed=pwgf_config["seed"],
                 kernel=gradient_flow_kernel,
                 x_induce=induce_data.x,
                 y_induce=induce_data.y,
@@ -184,8 +182,9 @@ def main(
                 jitter=pwgf_config["jitter"],
                 observation_noise=float(likelihood.noise),
             )
-            pwgf = train_projected_wasserstein_gradient_flow(
+            particles = train_projected_wasserstein_gradient_flow(
                 pwgf=pwgf,
+                number_of_particles=pwgf_config["number_of_particles"],
                 particle_name="average-kernel",
                 experiment_data=experiment_data,
                 induce_data=induce_data,
@@ -200,10 +199,12 @@ def main(
                 plot_title=f"{dataset_name}",
                 plot_particles_path=None,
                 plot_update_magnitude_path=plots_path,
+                metric_to_minimise=pwgf_config["metric_to_minimise"],
             )
             pwgf.observation_noise = pwgf_observation_noise_search(
                 data=experiment_data.train,
                 model=pwgf,
+                particles=particles,
                 observation_noise_upper=pwgf_config["observation_noise_upper"],
                 observation_noise_lower=pwgf_config["observation_noise_lower"],
                 number_of_searches=pwgf_config["number_of_observation_noise_searches"],
@@ -211,7 +212,7 @@ def main(
             )
             torch.save(
                 {
-                    "particles": pwgf.particles,
+                    "particles": particles,
                     "observation_noise": pwgf.observation_noise,
                 },
                 pwgf_path,
@@ -219,6 +220,7 @@ def main(
         set_seed(pwgf_config["seed"])
         calculate_metrics(
             model=pwgf,
+            particles=particles,
             model_name="pwgf",
             dataset_name=dataset_name,
             experiment_data=experiment_data,

@@ -10,7 +10,7 @@ from tqdm import tqdm
 
 from experiments.data import Data, ExperimentData
 from src.gps import ExactGP, svGP
-from src.gradient_flows import GradientFlowRegression
+from src.gradient_flows.base import GradientFlowBase
 from src.utils import set_seed
 
 _DATA_COLORS = {
@@ -301,7 +301,8 @@ def plot_true_versus_predicted(
 
 
 def animate_1d_pwgf_predictions(
-    pwgf: GradientFlowRegression,
+    pwgf: GradientFlowBase,
+    number_of_particles: int,
     seed: int,
     learning_rate: float,
     number_of_epochs: int,
@@ -311,6 +312,7 @@ def animate_1d_pwgf_predictions(
     title: str,
     save_path: str,
     christmas_colours: bool = False,
+    animation_duration: int = 15,
 ) -> None:
     fig, ax = plt.subplots(figsize=(13, 6.5))
     fig, ax = plot_1d_experiment_data(
@@ -329,10 +331,17 @@ def animate_1d_pwgf_predictions(
         experiment_data.full.y.max() + 1,
     )
 
-    pwgf.reset_particles(seed=seed)
+    particles = pwgf.initialise_particles(
+        number_of_particles=number_of_particles, seed=seed
+    )
+    predictive_noise = pwgf.sample_predictive_noise(
+        x=experiment_data.full.x,
+        particles=particles,
+    ).detach()
     predicted_samples = pwgf.predict_samples(
         x=experiment_data.full.x,
-        include_observation_noise=False,
+        particles=particles,
+        noise=predictive_noise,
     ).detach()
     samples_plotted = [
         ax.plot(
@@ -349,22 +358,32 @@ def animate_1d_pwgf_predictions(
     ]
     plt.legend(loc="lower left")
     progress_bar = tqdm(total=number_of_epochs + 1, desc="WGF Particles GIF")
-    noise = pwgf.sample_predict_noise(
-        x=experiment_data.full.x,
-        number_of_samples=pwgf.number_of_particles,
-    ).detach()
+
+    class ParticleWrapper:
+        """
+        Wrapper class to allow particles to be updated in the animation function.
+        """
+
+        def __init__(self, particles: torch.Tensor):
+            self.particles = particles
+
+        def update(self, particle_update):
+            self.particles += particle_update
+
+    particle_wrapper = ParticleWrapper(particles=particles)
 
     def animate(iteration: int):
-        _ = pwgf.update(
-            learning_rate=torch.tensor(learning_rate),
+        particle_wrapper.update(
+            pwgf.calculate_particle_update(
+                particles=particle_wrapper.particles,
+                learning_rate=torch.tensor(learning_rate),
+            )
         )
-        _predicted_samples = (
-            pwgf.predict_samples(
-                x=experiment_data.full.x,
-                include_observation_noise=False,
-            ).detach()
-            + noise
-        )
+        _predicted_samples = pwgf.predict_untransformed_samples(
+            x=experiment_data.full.x,
+            particles=particle_wrapper.particles,
+            noise=predictive_noise,
+        ).detach()
         for i in range(_predicted_samples.shape[-1]):
             samples_plotted[i].set_data((x, _predicted_samples[:, i].reshape(-1)))
         ax.set_title(f"{title} ({iteration=})")
@@ -377,7 +396,7 @@ def animate_1d_pwgf_predictions(
 
     # To save the animation using Pillow as a gif
     writer = animation.PillowWriter(
-        fps=15,
+        fps=number_of_epochs // animation_duration,
         bitrate=1800,
     )
     ani.save(save_path, writer=writer)
@@ -398,6 +417,7 @@ def animate_1d_gp_predictions(
     learn_inducing_locations: bool,
     learn_kernel_parameters: bool,
     christmas_colours: bool = False,
+    animation_duration: int = 15,
 ) -> None:
     fig, ax = plt.subplots(figsize=(13, 6.5))
     fig, ax = plot_1d_experiment_data(
@@ -513,7 +533,7 @@ def animate_1d_gp_predictions(
 
     # To save the animation using Pillow as a gif
     writer = animation.PillowWriter(
-        fps=30,
+        fps=number_of_epochs // animation_duration,
         bitrate=1800,
     )
     ani.save(save_path, writer=writer)

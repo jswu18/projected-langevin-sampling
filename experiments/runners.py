@@ -275,6 +275,7 @@ def learn_subsample_gps(
 
 def train_projected_wasserstein_gradient_flow(
     pwgf: GradientFlowBase,
+    number_of_particles: int,
     particle_name: str,
     experiment_data: ExperimentData,
     induce_data: Data,
@@ -288,16 +289,19 @@ def train_projected_wasserstein_gradient_flow(
     plot_particles_path: str = None,
     plot_update_magnitude_path: str = None,
     christmas_colours: bool = False,
-) -> GradientFlowRegression:
+    metric_to_minimise: str = "nll",
+) -> torch.Tensor:
     if plot_particles_path is not None:
         create_directory(plot_particles_path)
         plot_1d_pwgf_prediction(
             experiment_data=experiment_data,
             induce_data=induce_data,
             x=experiment_data.full.x,
-            predicted_samples=pwgf.predict_samples(
+            predicted_samples=pwgf.predict_untransformed_samples(
                 x=experiment_data.full.x,
-                include_observation_noise=True,
+                particles=pwgf.initialise_particles(
+                    number_of_particles=number_of_particles, seed=seed
+                ),
             ).detach(),
             title=f"{plot_title} (initial particles)"
             if plot_title is not None
@@ -318,21 +322,26 @@ def train_projected_wasserstein_gradient_flow(
     )
     best_lr = learning_rate_bisection_search.current
     for _ in searches_iter:
-        pwgf.reset_particles(seed=seed)
+        particles = pwgf.initialise_particles(
+            number_of_particles=number_of_particles,
+            seed=seed,
+        )
         update_log_magnitudes = []
         set_seed(seed)
         for i in range(number_of_epochs):
-            particle_update = pwgf.update(
+            particle_update = pwgf.calculate_particle_update(
+                particles=particles,
                 learning_rate=torch.tensor(learning_rate_bisection_search.current),
             )
+            particles += particle_update
             update_log_magnitudes.append(
                 float(
                     torch.log(torch.norm(particle_update, dim=1).mean()).detach().item()
                 )
             )
             if (
-                torch.isnan(pwgf.particles).any()
-                or torch.max(torch.abs(pwgf.particles)) > max_particle_magnitude
+                torch.isnan(particles).any()
+                or torch.max(torch.abs(particles)) > max_particle_magnitude
             ).item():
                 searches_iter.set_postfix(
                     best_mae=best_mae,
@@ -348,6 +357,7 @@ def train_projected_wasserstein_gradient_flow(
         else:  # only executed if the inner loop did NOT break
             prediction = pwgf.predict(
                 x=experiment_data.train.x,
+                particles=particles,
             )
             nll = calculate_nll(
                 prediction=prediction,
@@ -362,16 +372,20 @@ def train_projected_wasserstein_gradient_flow(
                 prediction=prediction,
                 y=experiment_data.train.y.double(),
             )
-            if nll < best_nll:
-            # if mae < best_mae:
-            # if mse < best_mse:
+            if metric_to_minimise not in ["nll", "mse", "mae"]:
+                raise ValueError(f"Unknown metric to minimise: {metric_to_minimise}")
+            elif (
+                (metric_to_minimise == "nll" and nll < best_nll)
+                or (metric_to_minimise == "mse" and mse < best_mse)
+                or (metric_to_minimise == "mae" and mae < best_mae)
+            ):
                 best_nll, best_mae, best_mse, best_lr = (
                     nll,
                     mae,
                     mse,
                     learning_rate_bisection_search.current,
                 )
-                particles_out = deepcopy(pwgf.particles.detach())
+                particles_out = deepcopy(particles.detach())
             searches_iter.set_postfix(
                 best_mae=best_mae,
                 best_mse=best_mse,
@@ -385,16 +399,16 @@ def train_projected_wasserstein_gradient_flow(
                 learning_rate_bisection_search.current
             ] = update_log_magnitudes
             learning_rate_bisection_search.update_lower()
-    pwgf.particles = particles_out
+    particles = particles_out
     if plot_particles_path is not None:
         create_directory(plot_particles_path)
         plot_1d_pwgf_prediction(
             experiment_data=experiment_data,
             induce_data=induce_data,
             x=experiment_data.full.x,
-            predicted_samples=pwgf.predict_samples(
+            predicted_samples=pwgf.predict_untransformed_samples(
                 x=experiment_data.full.x,
-                include_observation_noise=True,
+                particles=particles,
             ).detach(),
             title=f"{plot_title} (learned particles)"
             if plot_title is not None
@@ -407,6 +421,7 @@ def train_projected_wasserstein_gradient_flow(
         animate_1d_pwgf_predictions(
             pwgf=pwgf,
             seed=seed,
+            number_of_particles=number_of_particles,
             learning_rate=best_lr,
             number_of_epochs=number_of_epochs,
             experiment_data=experiment_data,
@@ -431,12 +446,13 @@ def train_projected_wasserstein_gradient_flow(
                 f"update-magnitude-{particle_name}.png",
             ),
         )
-    return pwgf
+    return particles
 
 
 def pwgf_observation_noise_search(
     data: Data,
     model: GradientFlowRegression,
+    particles: torch.Tensor,
     observation_noise_upper: float,
     observation_noise_lower: float,
     number_of_searches: int,
@@ -454,6 +470,7 @@ def pwgf_observation_noise_search(
         lower_nll = calculate_nll(
             prediction=model.predict(
                 x=data.x,
+                particles=particles,
             ),
             y=data.y,
             y_std=y_std,
@@ -463,6 +480,7 @@ def pwgf_observation_noise_search(
         upper_nll = calculate_nll(
             prediction=model.predict(
                 x=data.x,
+                particles=particles,
             ),
             y=data.y,
             y_std=y_std,

@@ -18,7 +18,6 @@ class GradientFlowBase(ABC):
 
     def __init__(
         self,
-        number_of_particles: int,
         x_induce: torch.Tensor,
         y_train: torch.Tensor,
         x_train: torch.Tensor,
@@ -26,16 +25,8 @@ class GradientFlowBase(ABC):
         observation_noise: float,
         y_induce: Optional[torch.Tensor] = None,
         jitter: float = 0.0,
-        seed: Optional[int] = None,
     ):
         self.observation_noise = observation_noise
-        self.number_of_particles = number_of_particles  # P
-        self.particles = self.initialise_particles(
-            number_of_particles=number_of_particles,
-            x=x_induce,
-            y=y_induce,
-            seed=seed,
-        )  # size (M, P)
         self.kernel = kernel
         self.x_induce = x_induce  # size (M, D)
         self.y_induce = y_induce  # size (M,)
@@ -56,32 +47,16 @@ class GradientFlowBase(ABC):
             x1=x_induce, x2=x_train
         )  # k(Z, X) of size (M, N)
 
-    def reset_particles(
-        self,
-        seed: Optional[int] = None,
-    ):
-        self.particles = self.initialise_particles(
-            number_of_particles=self.number_of_particles,
-            x=self.x_induce,
-            y=self.y_induce,
-            seed=seed,
-        )  # size (M, P)
-
-    @property
-    def particles(self) -> torch.Tensor:
-        return self._particles
-
-    @particles.setter
-    def particles(self, particles: torch.Tensor):
-        self._particles = particles
-        self.number_of_particles = particles.shape[1]
-
     @staticmethod
+    @abstractmethod
+    def transform(y: torch.Tensor) -> torch.Tensor:
+        raise NotImplementedError
+
     def initialise_particles(
+        self,
         number_of_particles: int,
-        x: torch.Tensor,
-        y: Optional[torch.Tensor] = None,
         seed: Optional[int] = None,
+        noise_only: Optional[bool] = False,
     ) -> torch.Tensor:
         if seed is not None:
             generator = torch.Generator().manual_seed(seed)
@@ -93,103 +68,151 @@ class GradientFlowBase(ABC):
                 mean=0.0,
                 std=1.0,
                 size=(
-                    x.shape[0],
+                    self.y_induce.shape[0],
                     number_of_particles,
                 ),
                 generator=generator,
             )
         ).double()  # size (M, P)
-        return (y[:, None] + noise) if y is not None else noise  # size (M, P)
-        # return noise
+        return noise if noise_only else (self.y_induce[:, None] + noise)  # size (M, P)
 
     @abstractmethod
-    def update(
-        self,
-        learning_rate: torch.Tensor,
-    ) -> torch.Tensor:
+    def _calculate_cost_derivative(self, particles) -> torch.Tensor:
+        """
+        The derivative of the cost function with respect to the second component.
+        :return: matrix of size (N, P)
+        """
         raise NotImplementedError
 
-    def _sample_predict_noise(
+    def calculate_particle_update(
         self,
-        gram_x: torch.Tensor,
-        gram_x_induce: torch.Tensor,
-        number_of_samples: int,
+        particles: torch.Tensor,
+        learning_rate: torch.Tensor,
     ) -> torch.Tensor:
-        """
-        Samples from the predictive noise distribution.
-        :param gram_x: gram matrix of size (N*, N*)
-        :param gram_x_induce: gram matrix of size (N*, M)
-        :param number_of_samples: number of samples to draw
-        :return:
-        """
-        cov = gram_x - gpytorch.solve(
-            lhs=gram_x_induce,
-            input=self.gram_induce,
-            rhs=gram_x_induce.T,
+        assert particles.shape[0] == self.x_induce.shape[0], (
+            f"Particles have shape {particles.shape} but inducing points have shape "
+            f"{self.x_induce.shape}"
         )
-        # e(x) ~ N(0, r(x, x) - r(x, Z) @ r(Z, Z)^{-1} @ r(Z, x) + sigma^2 I)
-        return (
-            sample_multivariate_normal(
-                mean=torch.zeros(gram_x.shape[0]),
-                cov=cov,
-                size=(number_of_samples,),
-            ).T
-            + sample_multivariate_normal(
-                mean=torch.zeros(1),
-                cov=torch.tensor(self.observation_noise).reshape(1, 1),
-                size=(number_of_samples,),
-            ).reshape(-1)[None, :]
-        )  # size (N*, number_of_samples)
 
-    def sample_predict_noise(
+        inverse_base_gram_particle_vector = gpytorch.solve(
+            self.base_gram_induce, particles
+        )  # k(Z, Z)^{-1} @ U(t) of size (M, P)
+        noise_vector = sample_multivariate_normal(
+            mean=torch.zeros(particles.shape[0]),
+            cov=self.base_gram_induce,
+            size=(particles.shape[1],),
+        ).T  # e ~ N(0, k(Z, Z)) of size (M, P)
+        cost_derivative = self._calculate_cost_derivative(
+            particles=particles
+        )  # size (N, P)
+
+        # - eta * k(Z, X) @ d_2 c(Y, k(X, Z) @ k(Z, Z)^{-1} @ U(t))
+        # - eta * M * k(Z, Z)^{-1} @ U(t)
+        # + sqrt(2 * eta) * e
+        # size (M, P)
+        particle_update = (
+            -learning_rate * self.base_gram_induce_train @ cost_derivative
+            - learning_rate
+            * (self.x_induce.shape[0])
+            * inverse_base_gram_particle_vector
+            + torch.sqrt(2.0 * learning_rate) * noise_vector
+        ).detach()
+        return particle_update.to_dense().detach()  # size (M, P)
+
+    def sample_predictive_noise(
         self,
+        particles: torch.Tensor,
         x: torch.Tensor,
-        number_of_samples: int = 1,
-    ) -> torch.Tensor:
+    ):
         """
-        Samples from the predictive noise distribution for a given input.
+        Calculates the predictive noise for a given input.
+        G([Z, x]) ~ N(0, r([Z, x], [Z, x]))
 
+        :param particles: particles of size (M, P)
         :param x: input of size (N*, D)
-        :param number_of_samples: number of samples to draw
-        :param include_observation_noise: whether to include observation noise
-        :return: noise samples of size (N*, number_of_samples)
+        :return: predictive noise of size (N*, P)
         """
-        gram_x_induce = self.kernel.forward(
-            x1=x,
-            x2=self.x_induce,
-        )  # r(x, Z)
-        gram_x = self.kernel.forward(
-            x1=x,
-            x2=x,
-        )  # r(x, x)
-        return self._sample_predict_noise(
-            gram_x=gram_x.to_dense(),
-            gram_x_induce=gram_x_induce.to_dense(),
-            number_of_samples=number_of_samples,
-        )  # size (N*, number_of_samples)
+        zx = torch.concatenate((self.x_induce, x), dim=0)  # (M+N*, D)
+        noise_covariance = self.kernel.forward(
+            x1=zx,
+            x2=zx,
+        )  # (M+N*, M+N*)
+        return sample_multivariate_normal(
+            mean=torch.zeros(noise_covariance.shape[0]),
+            cov=noise_covariance,
+            size=(particles.shape[1],),
+        ).T  # (M+N*, P)
 
-    @abstractmethod
-    def predict_samples(
+    def predict_untransformed_samples(
         self,
+        particles: torch.Tensor,
         x: torch.Tensor,
-        include_observation_noise: bool = True,
+        noise: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         """
         Predicts samples for a given input.
 
+        :param particles: particles of size (M, P)
         :param x: input of size (N*, D)
-        :param include_observation_noise: whether to include observation noise in the sample
+        :param noise: noise of size (N*, P), if None, it is sampled from the predictive noise distribution
         :return: samples of size (N*, P)
         """
-        raise NotImplementedError
+        gram_x_induce = self.kernel.forward(
+            x1=x,
+            x2=self.x_induce,
+        ).to_dense()  # r(x, Z) of size (N*, M)
+
+        # G([Z, x]) ~ N(0, r([Z, x], [Z, x]))
+        if noise is None:
+            noise = self.sample_predictive_noise(
+                particles=particles,
+                x=x,
+            )
+
+        # G(x) + r(x, Z) @ r(Z, Z)^{-1} @ (U(t)-G(Z))
+        return noise[self.x_induce.shape[0] :, :] + (
+            gpytorch.solve(
+                lhs=gram_x_induce,
+                input=self.gram_induce,
+                rhs=(particles - noise[: self.x_induce.shape[0], :]),
+            )
+        )  # size (N*, P)
+
+    def predict_samples(
+        self,
+        particles: torch.Tensor,
+        x: torch.Tensor,
+        noise: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
+        """
+        Predicts transformed samples for a given input.
+
+        :param particles: particles of size (M, P)
+        :param x: input of size (N*, D)
+        :param noise: noise of size (N*, P), if None, it is sampled from the predictive noise distribution
+        :return: samples of size (N*, P)
+        """
+        return self.transform(
+            self.predict_untransformed_samples(
+                particles=particles,
+                x=x,
+                noise=noise,
+            )
+        )
 
     @abstractmethod
     def predict(
         self,
         x: torch.Tensor,
-        jitter: float = 1e-20,
+        particles: torch.Tensor,
+        noise: Optional[torch.Tensor] = None,
     ) -> torch.distributions.Distribution:
         raise NotImplementedError
 
-    def __call__(self, x: torch.Tensor) -> torch.distributions.Distribution:
-        return self.predict(x=x)
+    def __call__(
+        self,
+        x: torch.Tensor,
+        particles: torch.Tensor,
+        noise: Optional[torch.Tensor] = None,
+    ) -> torch.distributions.Distribution:
+        return self.predict(x=x, particles=particles, noise=noise)

@@ -29,6 +29,7 @@ pwgf:
   observation_noise_lower: 1.0e-4
   number_of_observation_noise_searches: 25
   christmas_colours: True
+  metric_to_minimise: nll
 svgp:
   seed: 0
   number_of_epochs: 2000

@@ -170,8 +170,6 @@ def main(
         approximation_samples=experiment_data.train.x,
     )
     pwgf = GradientFlowRegression(
-        number_of_particles=pwgf_config["number_of_particles"],
-        seed=pwgf_config["seed"],
         kernel=gradient_flow_kernel,
         x_induce=induce_data.x,
         y_induce=induce_data.y,
@@ -180,8 +178,9 @@ def main(
         jitter=pwgf_config["jitter"],
         observation_noise=float(likelihood.noise),
     )
-    pwgf = train_projected_wasserstein_gradient_flow(
+    particles = train_projected_wasserstein_gradient_flow(
         pwgf=pwgf,
+        number_of_particles=pwgf_config["number_of_particles"],
         particle_name="average-kernel-unoptimised-obs-noise",
         experiment_data=experiment_data,
         induce_data=induce_data,
@@ -193,18 +192,20 @@ def main(
         ],
         max_particle_magnitude=pwgf_config["max_particle_magnitude"],
         seed=pwgf_config["seed"],
+        metric_to_minimise=pwgf_config["metric_to_minimise"],
     )
     pwgf.observation_noise = pwgf_observation_noise_search(
         data=experiment_data.train,
         model=pwgf,
+        particles=particles,
         observation_noise_upper=pwgf_config["observation_noise_upper"],
         observation_noise_lower=pwgf_config["observation_noise_lower"],
         number_of_searches=pwgf_config["number_of_observation_noise_searches"],
         y_std=experiment_data.y_std,
     )
-    pwgf.reset_particles(seed=pwgf_config["seed"])
-    pwgf = train_projected_wasserstein_gradient_flow(
+    particles = train_projected_wasserstein_gradient_flow(
         pwgf=pwgf,
+        number_of_particles=pwgf_config["number_of_particles"],
         particle_name="average-kernel",
         experiment_data=experiment_data,
         induce_data=induce_data,
@@ -222,9 +223,11 @@ def main(
         christmas_colours=pwgf_config["christmas_colours"]
         if "christmas_colours" in pwgf_config
         else False,
+        metric_to_minimise=pwgf_config["metric_to_minimise"],
     )
     calculate_metrics(
         model=pwgf,
+        particles=particles,
         model_name="pwgf",
         dataset_name=type(curve_function).__name__,
         experiment_data=experiment_data,

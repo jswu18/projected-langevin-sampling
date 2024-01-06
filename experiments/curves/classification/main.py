@@ -191,18 +191,17 @@ def main(
         number_of_classes=likelihood.num_classes,
     )
     pwgf = GradientFlowBinaryClassification(
-        number_of_particles=pwgf_config["number_of_particles"],
-        seed=pwgf_config["seed"],
         kernel=gradient_flow_kernel,
         x_induce=induce_data.x,
-        y_induce=None,
+        y_induce=induce_data.y,
         x_train=experiment_data.train.x,
         y_train=experiment_data.train.y,
         jitter=pwgf_config["jitter"],
-        observation_noise=float(likelihood.noise.mean()),
+        observation_noise=float(likelihood.noise[0]),
     )
-    pwgf = train_projected_wasserstein_gradient_flow(
+    particles = train_projected_wasserstein_gradient_flow(
         pwgf=pwgf,
+        number_of_particles=pwgf_config["number_of_particles"],
         particle_name="average-kernel",
         experiment_data=experiment_data,
         induce_data=induce_data,
@@ -220,6 +219,7 @@ def main(
         christmas_colours=pwgf_config["christmas_colours"]
         if "christmas_colours" in pwgf_config
         else False,
+        metric_to_minimise=pwgf_config["metric_to_minimise"],
     )
 
 

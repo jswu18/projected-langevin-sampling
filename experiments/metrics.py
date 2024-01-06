@@ -1,19 +1,14 @@
 import math
 import os
-from typing import List, Union
+from typing import List, Optional, Union
 
 import gpytorch
 import pandas as pd
 import torch
 
-from experiments.constructors import (
-    construct_conformalised_model,
-    construct_tempered_model,
-)
 from experiments.data import ExperimentData
 from experiments.plotters import plot_true_versus_predicted
 from experiments.utils import create_directory
-from src.conformalise import ConformaliseBase
 from src.gps import ExactGP, svGP
 from src.gradient_flows import GradientFlowRegression
 from src.utils import set_seed
@@ -69,21 +64,6 @@ def calculate_nll(
         raise ValueError(f"Prediction type {type(prediction)} not supported")
 
 
-def calculate_average_interval_width(
-    model: ConformaliseBase,
-    x: torch.Tensor,
-    coverage: float,
-    y_std: float,
-) -> float:
-    return (
-        y_std
-        * model.calculate_average_interval_width(
-            x=x,
-            coverage=coverage,
-        ).item()
-    )
-
-
 def calculate_metrics(
     model: Union[ExactGP, svGP, GradientFlowRegression],
     experiment_data: ExperimentData,
@@ -91,6 +71,7 @@ def calculate_metrics(
     dataset_name: str,
     results_path: str,
     plots_path: str,
+    particles: Optional[torch.Tensor] = None,
 ):
     for _model, _model_name in [
         (model, model_name),
@@ -100,11 +81,12 @@ def calculate_metrics(
             experiment_data.test,
         ]:
             set_seed(0)
-            prediction = _model(
-                data.x  # not indicating parameter name because this can vary
-            )
-            if isinstance(_model, svGP):
-                prediction = _model.likelihood(prediction)
+            if isinstance(_model, svGP) or isinstance(_model, ExactGP):
+                prediction = _model.likelihood(_model.forward(data.x))
+            elif isinstance(_model, GradientFlowRegression):
+                prediction = _model(x=data.x, particles=particles)
+            else:
+                raise ValueError(f"Model type {type(_model)} not supported")
             mae = calculate_mae(
                 y=data.y,
                 prediction=prediction,
@@ -132,25 +114,6 @@ def calculate_metrics(
                 os.path.join(results_path, _model_name, f"nll_{data.name}.csv"),
                 index_label="dataset",
             )
-            if isinstance(_model, ConformaliseBase):
-                average_interval_width = calculate_average_interval_width(
-                    model=_model,
-                    x=data.x,
-                    coverage=0.95,
-                    y_std=experiment_data.y_std,
-                )
-                pd.DataFrame(
-                    [[average_interval_width]],
-                    columns=[_model_name],
-                    index=[dataset_name],
-                ).to_csv(
-                    os.path.join(
-                        results_path,
-                        _model_name,
-                        f"average_interval_width_{data.name}.csv",
-                    ),
-                    index_label="dataset",
-                )
             create_directory(os.path.join(plots_path, _model_name))
             plot_true_versus_predicted(
                 y_true=data.y,

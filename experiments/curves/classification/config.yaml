@@ -17,7 +17,7 @@ induce_data:
   induce_data_power: 2
 pwgf:
   number_of_particles: 100
-  number_of_epochs: 300
+  number_of_epochs: 500
   learning_rate_upper: 1.0e+2
   learning_rate_lower: 1.0e-30
   max_particle_magnitude: 1.0e+3
@@ -28,6 +28,7 @@ pwgf:
   observation_noise_lower: 1.0e-4
   number_of_observation_noise_searches: 25
   christmas_colours: True
+  metric_to_minimise: mae
 svgp:
   seed: 0
   number_of_epochs: 2000

@@ -20,7 +20,6 @@ def load_projected_wasserstein_gradient_flow(
     model_config = torch.load(model_path)
     particles = model_config["particles"].to(torch.double)
     pwgf = GradientFlowRegression(
-        number_of_particles=particles.shape[1],
         kernel=GradientFlowKernel(
             base_kernel=base_kernel,
             approximation_samples=experiment_data.train.x,
@@ -32,9 +31,8 @@ def load_projected_wasserstein_gradient_flow(
         jitter=jitter,
         observation_noise=observation_noise,
     )
-    pwgf.particles = particles
-    print(f"Loaded PWGF model from {model_path=}.")
-    return pwgf
+    print(f"Loaded PWGF model and particles from {model_path=}.")
+    return pwgf, particles
 
 
 def load_svgp(
