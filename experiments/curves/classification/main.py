@@ -5,6 +5,7 @@ from typing import Any, Dict
 
 import gpytorch
 import matplotlib.pyplot as plt
+import numpy as np
 import torch
 import yaml
 
@@ -42,16 +43,15 @@ def get_experiment_data(
     seed: int,
     number_of_test_intervals: int,
     total_number_of_intervals: int,
-    train_data_percentage: float,
 ) -> ExperimentData:
     x = torch.linspace(-2, 2, number_of_data_points).reshape(-1, 1)
-    y_untransformed = curve_function.calculate_curve(
+    y_curve = curve_function.calculate_curve(
         x=x,
     ).reshape(-1)
     y = curve_function.classification(
-        seed=seed,
-        y_untransformed=y_untransformed,
+        y_curve=y_curve,
     )
+    y_untransformed = GradientFlowBinaryClassification.transform(y=y_curve)
     (
         x_train,
         y_train,
@@ -59,18 +59,13 @@ def get_experiment_data(
         x_test,
         y_test,
         y_test_untransformed,
-        x_validation,
-        y_validation,
-        y_validation_untransformed,
     ) = split_regression_data_intervals(
-        seed=seed,
         split_seed=curve_function.seed,
         x=x,
         y=y,
         y_untransformed=y_untransformed,
         number_of_test_intervals=number_of_test_intervals,
         total_number_of_intervals=total_number_of_intervals,
-        train_data_percentage=train_data_percentage,
     )
     experiment_data = ExperimentData(
         name=type(curve_function).__name__.lower(),
@@ -91,12 +86,6 @@ def get_experiment_data(
             y=y_test.type(torch.int),
             y_untransformed=y_test_untransformed,
             name="test",
-        ),
-        validation=Data(
-            x=x_validation.double(),
-            y=y_validation.type(torch.int),
-            y_untransformed=y_validation_untransformed,
-            name="validation",
         ),
     )
     return experiment_data
@@ -138,7 +127,6 @@ def main(
         seed=data_config["seed"],
         number_of_test_intervals=data_config["number_of_test_intervals"],
         total_number_of_intervals=data_config["total_number_of_intervals"],
-        train_data_percentage=data_config["train_data_percentage"],
     )
     plot_experiment_data(
         curve_function=curve_function,
@@ -185,6 +173,17 @@ def main(
     average_ard_kernel = construct_average_ard_kernel(
         kernels=[model.kernel for model in subsample_gp_models],
     )
+
+    # distances = torch.cdist(experiment_data.train.x, experiment_data.train.x)
+    # distances = distances[np.triu_indices_from(distances, k=1)]
+    # ard_kernel = gpytorch.kernels.ScaleKernel(
+    #     gpytorch.kernels.RBFKernel(
+    #     ),
+    # )
+    # ard_kernel.base_kernel.lengthscale = np.sqrt(distances.median()/2)
+    # ard_kernel.outputscale = 2
+    # ard_kernel.base_kernel.lengthscale = 0.1
+    # average_ard_kernel = ard_kernel
     likelihood = construct_average_dirichlet_likelihood(
         likelihoods=[model.likelihood for model in subsample_gp_models],
     )
@@ -203,7 +202,7 @@ def main(
     )
     gradient_flow_kernel = GradientFlowKernel(
         base_kernel=average_ard_kernel,
-        approximation_samples=experiment_data.train.x,
+        approximation_samples=induce_data.x,
         number_of_classes=likelihood.num_classes,
     )
     pwgf = GradientFlowBinaryClassification(
@@ -231,6 +230,7 @@ def main(
         seed=pwgf_config["seed"],
         plot_title=f"{type(curve_function).__name__}",
         plot_particles_path=plot_curve_path,
+        animate_1d_path=plot_curve_path,
         plot_update_magnitude_path=plot_curve_path,
         christmas_colours=pwgf_config["christmas_colours"]
         if "christmas_colours" in pwgf_config

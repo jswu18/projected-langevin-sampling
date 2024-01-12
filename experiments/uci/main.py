@@ -171,7 +171,7 @@ def main(
         else:
             gradient_flow_kernel = GradientFlowKernel(
                 base_kernel=average_ard_kernel,
-                approximation_samples=experiment_data.train.x,
+                approximation_samples=induce_data.x,
             )
             pwgf = GradientFlowRegression(
                 kernel=gradient_flow_kernel,
@@ -198,17 +198,12 @@ def main(
                 seed=pwgf_config["seed"],
                 plot_title=f"{dataset_name}",
                 plot_particles_path=None,
+                animate_1d_path=None,
                 plot_update_magnitude_path=plots_path,
                 metric_to_minimise=pwgf_config["metric_to_minimise"],
-            )
-            pwgf.observation_noise = pwgf_observation_noise_search(
-                data=experiment_data.train,
-                model=pwgf,
-                particles=particles,
-                observation_noise_upper=pwgf_config["observation_noise_upper"],
-                observation_noise_lower=pwgf_config["observation_noise_lower"],
-                number_of_searches=pwgf_config["number_of_observation_noise_searches"],
-                y_std=experiment_data.y_std,
+                initial_particles_noise_only=pwgf_config[
+                    "initial_particles_noise_only"
+                ],
             )
             torch.save(
                 {
@@ -232,7 +227,7 @@ def main(
                 model_path=fixed_svgp_model_path,
                 x_induce=induce_data.x,
                 mean=gpytorch.means.ConstantMean(),
-                kernel=deepcopy(average_ard_kernel),
+                kernel=pwgf.kernel,
                 learn_inducing_locations=False,
             )
         else:
@@ -240,7 +235,7 @@ def main(
                 experiment_data=experiment_data,
                 induce_data=induce_data,
                 mean=gpytorch.means.ConstantMean(),
-                kernel=deepcopy(average_ard_kernel),
+                kernel=pwgf.kernel,
                 seed=svgp_config["seed"],
                 number_of_epochs=svgp_config["number_of_epochs"],
                 batch_size=svgp_config["batch_size"],
@@ -253,6 +248,7 @@ def main(
                 models_path=fixed_svgp_iteration_model_path,
                 plot_title=f"{dataset_name}",
                 plot_1d_path=None,
+                animate_1d_path=None,
                 plot_loss_path=plots_path,
             )
             torch.save(

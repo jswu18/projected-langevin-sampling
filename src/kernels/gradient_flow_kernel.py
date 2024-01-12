@@ -38,7 +38,6 @@ class GradientFlowKernel(gpytorch.kernels.Kernel):
         gram_x1_sample = self.base_kernel.forward(
             x1=x1,
             x2=self.approximation_samples,
-            diag=diag,
             last_dim_is_batch=last_dim_is_batch,
         )
         gram_x1_sample = (
@@ -47,12 +46,16 @@ class GradientFlowKernel(gpytorch.kernels.Kernel):
         gram_x2_sample = self.base_kernel.forward(
             x1=x2,
             x2=self.approximation_samples,
-            diag=diag,
             last_dim_is_batch=last_dim_is_batch,
         )
         gram_x2_sample = (
             gram_x2_sample if self.number_of_classes == 1 else gram_x2_sample[0, :, :]
         )
+        if diag:
+            return torch.mul(
+                torch.div(1, self.number_of_approximation_samples),
+                (gram_x1_sample @ gram_x2_sample.T),
+            ).diag()
         return torch.mul(
             torch.div(1, self.number_of_approximation_samples),
             (gram_x1_sample @ gram_x2_sample.T),

@@ -42,7 +42,6 @@ def get_experiment_data(
     sigma_true: float,
     number_of_test_intervals: int,
     total_number_of_intervals: int,
-    train_data_percentage: float,
 ) -> ExperimentData:
     x = torch.linspace(-2, 2, number_of_data_points).reshape(-1, 1)
     y = curve_function.regression(
@@ -57,26 +56,18 @@ def get_experiment_data(
         x_test,
         y_test,
         _,
-        x_validation,
-        y_validation,
-        _,
     ) = split_regression_data_intervals(
-        seed=seed,
         split_seed=curve_function.seed,
         x=x,
         y=y,
         number_of_test_intervals=number_of_test_intervals,
         total_number_of_intervals=total_number_of_intervals,
-        train_data_percentage=train_data_percentage,
     )
     experiment_data = ExperimentData(
         name=type(curve_function).__name__.lower(),
         full=Data(x=x.double(), y=y.double(), name="full"),
         train=Data(x=x_train.double(), y=y_train.double(), name="train"),
         test=Data(x=x_test.double(), y=y_test.double(), name="test"),
-        validation=Data(
-            x=x_validation.double(), y=y_validation.double(), name="validation"
-        ),
     )
     return experiment_data
 
@@ -116,7 +107,6 @@ def main(
         sigma_true=data_config["sigma_true"],
         number_of_test_intervals=data_config["number_of_test_intervals"],
         total_number_of_intervals=data_config["total_number_of_intervals"],
-        train_data_percentage=data_config["train_data_percentage"],
     )
     plot_experiment_data(
         experiment_data=experiment_data,
@@ -170,7 +160,7 @@ def main(
     )
     gradient_flow_kernel = GradientFlowKernel(
         base_kernel=average_ard_kernel,
-        approximation_samples=experiment_data.train.x,
+        approximation_samples=induce_data.x,
     )
     pwgf = GradientFlowRegression(
         kernel=gradient_flow_kernel,
@@ -180,32 +170,6 @@ def main(
         y_train=experiment_data.train.y,
         jitter=pwgf_config["jitter"],
         observation_noise=float(likelihood.noise),
-    )
-    particles = train_projected_wasserstein_gradient_flow(
-        pwgf=pwgf,
-        number_of_particles=pwgf_config["number_of_particles"],
-        particle_name="average-kernel-unoptimised-obs-noise",
-        experiment_data=experiment_data,
-        induce_data=induce_data,
-        number_of_epochs=pwgf_config["number_of_epochs"],
-        learning_rate_upper=pwgf_config["learning_rate_upper"],
-        learning_rate_lower=pwgf_config["learning_rate_lower"],
-        number_of_learning_rate_searches=pwgf_config[
-            "number_of_learning_rate_searches"
-        ],
-        max_particle_magnitude=pwgf_config["max_particle_magnitude"],
-        seed=pwgf_config["seed"],
-        metric_to_minimise=pwgf_config["metric_to_minimise"],
-        initial_particles_noise_only=pwgf_config["initial_particles_noise_only"],
-    )
-    pwgf.observation_noise = pwgf_observation_noise_search(
-        data=experiment_data.train,
-        model=pwgf,
-        particles=particles,
-        observation_noise_upper=pwgf_config["observation_noise_upper"],
-        observation_noise_lower=pwgf_config["observation_noise_lower"],
-        number_of_searches=pwgf_config["number_of_observation_noise_searches"],
-        y_std=experiment_data.y_std,
     )
     particles = train_projected_wasserstein_gradient_flow(
         pwgf=pwgf,
@@ -223,6 +187,7 @@ def main(
         seed=pwgf_config["seed"],
         plot_title=f"{type(curve_function).__name__}",
         plot_particles_path=plot_curve_path,
+        animate_1d_path=plot_curve_path,
         plot_update_magnitude_path=plot_curve_path,
         christmas_colours=pwgf_config["christmas_colours"]
         if "christmas_colours" in pwgf_config
@@ -243,7 +208,7 @@ def main(
         experiment_data=experiment_data,
         induce_data=induce_data,
         mean=gpytorch.means.ConstantMean(),
-        kernel=average_ard_kernel,
+        kernel=pwgf.kernel,
         seed=svgp_config["seed"],
         number_of_epochs=svgp_config["number_of_epochs"],
         batch_size=svgp_config["batch_size"],
@@ -256,6 +221,7 @@ def main(
         models_path=fixed_svgp_iteration_model_path,
         plot_title=f"{type(curve_function).__name__}",
         plot_1d_path=plot_curve_path,
+        animate_1d_path=plot_curve_path,
         plot_loss_path=plot_curve_path,
         christmas_colours=svgp_config["christmas_colours"]
         if "christmas_colours" in pwgf_config

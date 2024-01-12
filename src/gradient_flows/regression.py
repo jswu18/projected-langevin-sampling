@@ -39,6 +39,17 @@ class GradientFlowRegression(GradientFlowBase):
     def transform(y: torch.Tensor) -> torch.Tensor:
         return y
 
+    def _calculate_cost(self, particles: torch.Tensor):
+        inverse_base_gram_particle_vector = gpytorch.solve(
+            self.base_gram_induce, particles
+        )  # k(Z, Z)^{-1} @ U(t) of size (M, P)
+
+        # (1/sigma^2) * (k(X, Z) @ k(Z, Z)^{-1} @ U(t) - Y) of size (N, P)
+        return (1 / (2 * self.observation_noise)) * torch.square(
+            self.base_gram_induce_train.T @ inverse_base_gram_particle_vector
+            - self.y_train[:, None]
+        )
+
     def _calculate_cost_derivative(
         self,
         particles: torch.Tensor,

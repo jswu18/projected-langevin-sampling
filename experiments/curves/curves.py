@@ -31,15 +31,11 @@ class Curve(ABC):
         ).reshape(-1)
 
     @staticmethod
-    def classification(y_untransformed: torch.Tensor, seed: int = None) -> torch.Tensor:
-        if seed is not None:
-            generator = torch.Generator().manual_seed(seed)
-        else:
-            generator = None
+    def classification(y_curve: torch.Tensor) -> torch.Tensor:
         probabilities = GradientFlowBinaryClassification.transform(
-            y=y_untransformed,
+            y=y_curve,
         )
-        return torch.bernoulli(probabilities, generator=generator).type(torch.bool)
+        return torch.Tensor(probabilities > 0.5)
 
 
 class Curve1(Curve):

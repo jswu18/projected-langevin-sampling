@@ -81,19 +81,17 @@ def _split_regression_data_intervals(
 
 
 def split_regression_data_intervals(
-    seed: int,
     split_seed: int,
     x: torch.Tensor,
     y: torch.Tensor,
     number_of_test_intervals: int,
     total_number_of_intervals: int,
-    train_data_percentage: float,
     y_untransformed: Optional[torch.Tensor] = None,
 ):
     (
-        x_train_validation,
-        y_train_validation,
-        y_train_validation_untransformed,
+        x_train,
+        y_train,
+        y_train_untransformed,
         x_test,
         y_test,
         y_test_untransformed,
@@ -105,29 +103,6 @@ def split_regression_data_intervals(
         number_of_test_intervals=number_of_test_intervals,
         total_number_of_intervals=total_number_of_intervals,
     )
-    y_train_untransformed, y_validation_untransformed = None, None
-    if y_untransformed is not None:
-        (
-            x_train,
-            x_validation,
-            y_train,
-            y_validation,
-            y_train_untransformed,
-            y_validation_untransformed,
-        ) = train_test_split(
-            x_train_validation,
-            y_train_validation,
-            y_train_validation_untransformed,
-            test_size=1 - train_data_percentage,
-            random_state=seed,
-        )
-    else:
-        x_train, x_validation, y_train, y_validation = train_test_split(
-            x_train_validation,
-            y_train_validation,
-            test_size=1 - train_data_percentage,
-            random_state=seed,
-        )
     return (
         x_train,
         y_train,
@@ -135,9 +110,6 @@ def split_regression_data_intervals(
         x_test,
         y_test,
         y_test_untransformed,
-        x_validation,
-        y_validation,
-        y_validation_untransformed,
     )
 
 

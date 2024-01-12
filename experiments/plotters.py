@@ -15,16 +15,12 @@ from src.utils import set_seed
 
 _DATA_COLORS = {
     "train": "tab:blue",
-    "validation": "tab:green",
     "test": "tab:orange",
-    "induce": "black",
 }
 
 _DATA_TRANSPARENCY = {
     "train": 0.3,
-    "validation": 0.3,
     "test": 0.3,
-    "induce": 1.0,
 }
 
 
@@ -67,13 +63,10 @@ def plot_1d_data(
     save_path: str = None,
     title: str = None,
     color: str = "tab:blue",
+    alpha: float = 0.3,
 ) -> Tuple[plt.Figure, plt.Axes]:
     if data.name in _DATA_COLORS:
         color = _DATA_COLORS[data.name]
-    if data.name in _DATA_TRANSPARENCY:
-        alpha = _DATA_TRANSPARENCY[data.name]
-    else:
-        alpha = 1.0
     if data.y is not None:
         ax.scatter(
             data.x,
@@ -114,12 +107,13 @@ def plot_1d_experiment_data(
                 data=data,
                 save_path=None,
                 title=None,
+                alpha=0.3,
             )
     if experiment_data.full.y_untransformed is not None:
         ax.plot(
             experiment_data.full.x,
             experiment_data.full.y_untransformed.reshape(experiment_data.full.x.shape),
-            label="latent curve",
+            label="latent",
             color="gray",
         )
     if title is not None:
@@ -248,17 +242,28 @@ def plot_1d_gp_prediction_and_induce_data(
     plt.close(fig)
 
 
-def plot_update_magnitude(
-    update_log_magnitude_history: Dict[float, List[float]],
+def plot_energy_potentials(
+    energy_potentials_history: Dict[float, List[float]],
     title: str,
     save_path: str,
 ):
     fig, ax = plt.subplots(figsize=(13, 6.5))
-    for name, update_magnitudes in update_log_magnitude_history.items():
-        ax.plot(update_magnitudes, label=name)
+    for i, learning_rate in enumerate(sorted(energy_potentials_history.keys())):
+        shade = 0.3 + (1 - (i / len(energy_potentials_history))) * 0.6
+        ax.plot(
+            energy_potentials_history[learning_rate],
+            label=learning_rate,
+            color=[shade, shade, shade],
+        )
     ax.set_title(title)
     ax.set_xlabel("epoch")
-    ax.set_ylabel("update log magnitude")
+    ax.set_ylabel("energy potential")
+    plt.ylim(
+        [
+            min([min(x) for x in energy_potentials_history.values()]),
+            max([x[0] for x in energy_potentials_history.values()]),
+        ]
+    )
     ax.legend()
     fig.tight_layout()
     fig.savefig(
@@ -341,10 +346,7 @@ def animate_1d_pwgf_predictions(
             zorder=0,
         )
     plt.xlim(x.min(), x.max())
-    plt.ylim(
-        experiment_data.full.y.min() - 1,
-        experiment_data.full.y.max() + 1,
-    )
+    ax.autoscale(enable=False)  # turn off autoscale before plotting particles
 
     particles = pwgf.initialise_particles(
         number_of_particles=number_of_particles,
@@ -403,7 +405,7 @@ def animate_1d_pwgf_predictions(
                     learning_rate=torch.tensor(learning_rate),
                 )
             )
-        _predicted_samples = pwgf.predict_untransformed_samples(
+        _predicted_samples = pwgf.predict_samples(
             x=experiment_data.full.x,
             particles=particle_wrapper.particles,
             noise=predictive_noise,
@@ -479,8 +481,8 @@ def animate_1d_gp_predictions(
     all_params = set(model.parameters())
 
     if not learn_kernel_parameters:
-        all_params -= {model.kernel.base_kernel.raw_lengthscale}
-        all_params -= {model.kernel.raw_outputscale}
+        all_params -= {model.kernel.base_kernel.base_kernel.raw_lengthscale}
+        all_params -= {model.kernel.base_kernel.raw_outputscale}
     model.likelihood.double()
     model.likelihood.train()
     if torch.cuda.is_available():

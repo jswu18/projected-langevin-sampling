@@ -84,6 +84,34 @@ class GradientFlowBase(ABC):
         """
         raise NotImplementedError
 
+    @abstractmethod
+    def _calculate_cost(self, particles) -> torch.Tensor:
+        """
+        The cost function for each particle.
+        :return: matrix of size (P, )
+        """
+        raise NotImplementedError
+
+    def calculate_energy_potential(self, particles: torch.Tensor) -> float:
+        """
+        Calculates the energy potential of the particles.
+        :param particles: particles of size (M, P)
+        :return: loss of size (P,)
+        """
+        cost = self._calculate_cost(particles=particles)  # size (P, )
+
+        inverse_base_gram_induce_particles = gpytorch.solve(
+            self.base_gram_induce, particles
+        )  # k(Z, Z)^{-1} @ U(t) of size (M, P)
+
+        # cost + M/2 * (k(Z, Z)^{-1} @ particle)^T (k(Z, Z)^{-1} @ particle)
+        particle_energy_potential = cost + self.x_induce.shape[0] / 2 * torch.square(
+            inverse_base_gram_induce_particles
+        ).sum(
+            dim=0
+        )  # size (P,)
+        return particle_energy_potential.mean().item()
+
     def calculate_particle_update(
         self,
         particles: torch.Tensor,

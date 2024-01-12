@@ -17,8 +17,8 @@ from experiments.plotters import (
     animate_1d_pwgf_predictions,
     plot_1d_gp_prediction_and_induce_data,
     plot_1d_pwgf_prediction,
+    plot_energy_potentials,
     plot_losses,
-    plot_update_magnitude,
 )
 from experiments.utils import create_directory
 from src.bisection_search import LogBisectionSearch
@@ -26,6 +26,7 @@ from src.gps import ExactGP, svGP
 from src.gradient_flows import GradientFlowRegression
 from src.gradient_flows.base import GradientFlowBase
 from src.induce_data_selectors import InduceDataSelector
+from src.kernels import GradientFlowKernel
 from src.samplers import sample_point
 from src.utils import set_seed
 
@@ -71,7 +72,7 @@ def _train_svgp(
     train_data: Data,
     induce_data: Data,
     mean: gpytorch.means.Mean,
-    kernel: gpytorch.kernels.Kernel,
+    kernel: GradientFlowKernel,
     seed: int,
     number_of_epochs: int,
     batch_size: int,
@@ -95,8 +96,8 @@ def _train_svgp(
     all_params = set(model.parameters())
 
     if not learn_kernel_parameters:
-        all_params -= {model.kernel.base_kernel.raw_lengthscale}
-        all_params -= {model.kernel.raw_outputscale}
+        all_params -= {model.kernel.base_kernel.base_kernel.raw_lengthscale}
+        all_params -= {model.kernel.base_kernel.raw_outputscale}
     model.likelihood.double()
     model.likelihood.train()
     if torch.cuda.is_available():
@@ -295,6 +296,7 @@ def train_projected_wasserstein_gradient_flow(
     seed: int,
     plot_title: str = None,
     plot_particles_path: str = None,
+    animate_1d_path: str = None,
     plot_update_magnitude_path: str = None,
     christmas_colours: bool = False,
     metric_to_minimise: str = "nll",
@@ -306,7 +308,7 @@ def train_projected_wasserstein_gradient_flow(
             experiment_data=experiment_data,
             induce_data=induce_data,
             x=experiment_data.full.x,
-            predicted_samples=pwgf.predict_untransformed_samples(
+            predicted_samples=pwgf.predict_samples(
                 x=experiment_data.full.x,
                 particles=pwgf.initialise_particles(
                     number_of_particles=number_of_particles,
@@ -323,9 +325,14 @@ def train_projected_wasserstein_gradient_flow(
             ),
         )
     particles_out = None
-    best_mae, best_mse, best_nll = float("inf"), float("inf"), float("inf")
+    best_energy_potential, best_mae, best_mse, best_nll = (
+        float("inf"),
+        float("inf"),
+        float("inf"),
+        float("inf"),
+    )
     searches_iter = tqdm(range(number_of_learning_rate_searches), desc="WGF LR Search")
-    update_log_magnitude_history = {}
+    energy_potentials_history = {}
     learning_rate_bisection_search = LogBisectionSearch(
         lower=learning_rate_lower,
         upper=learning_rate_upper,
@@ -338,7 +345,7 @@ def train_projected_wasserstein_gradient_flow(
             seed=seed,
             noise_only=initial_particles_noise_only,
         )
-        update_log_magnitudes = []
+        energy_potentials = [pwgf.calculate_energy_potential(particles=particles)]
         set_seed(seed)
         for i in range(number_of_epochs):
             particle_update = pwgf.calculate_particle_update(
@@ -346,16 +353,12 @@ def train_projected_wasserstein_gradient_flow(
                 learning_rate=torch.tensor(learning_rate_bisection_search.current),
             )
             particles += particle_update
-            update_log_magnitudes.append(
-                float(
-                    torch.log(torch.norm(particle_update, dim=1).mean()).detach().item()
-                )
+            energy_potentials.append(
+                pwgf.calculate_energy_potential(particles=particles)
             )
-            if (
-                torch.isnan(particles).any()
-                or torch.max(torch.abs(particles)) > max_particle_magnitude
-            ).item():
+            if (torch.isnan(particles).any()).item():
                 searches_iter.set_postfix(
+                    best_energy_potential=best_energy_potential,
                     best_mae=best_mae,
                     best_mse=best_mse,
                     best_nll=best_nll,
@@ -384,21 +387,24 @@ def train_projected_wasserstein_gradient_flow(
                 prediction=prediction,
                 y=experiment_data.train.y.double(),
             )
-            if metric_to_minimise not in ["nll", "mse", "mae"]:
-                raise ValueError(f"Unknown metric to minimise: {metric_to_minimise}")
-            elif (
-                (metric_to_minimise == "nll" and nll < best_nll)
-                or (metric_to_minimise == "mse" and mse < best_mse)
-                or (metric_to_minimise == "mae" and mae < best_mae)
-            ):
+            # if metric_to_minimise not in ["nll", "mse", "mae"]:
+            #     raise ValueError(f"Unknown metric to minimise: {metric_to_minimise}")
+            # elif (
+            #     (metric_to_minimise == "nll" and nll < best_nll)
+            #     or (metric_to_minimise == "mse" and mse < best_mse)
+            #     or (metric_to_minimise == "mae" and mae < best_mae)
+            # ):
+            if energy_potentials[-1] < best_energy_potential:
                 best_nll, best_mae, best_mse, best_lr = (
                     nll,
                     mae,
                     mse,
                     learning_rate_bisection_search.current,
                 )
+                best_energy_potential = energy_potentials[-1]
                 particles_out = deepcopy(particles.detach())
             searches_iter.set_postfix(
+                best_energy_potential=best_energy_potential,
                 best_mae=best_mae,
                 best_mse=best_mse,
                 best_nll=best_nll,
@@ -407,10 +413,13 @@ def train_projected_wasserstein_gradient_flow(
                 upper=learning_rate_bisection_search.upper,
                 lower=learning_rate_bisection_search.lower,
             )
-            update_log_magnitude_history[
+            energy_potentials_history[
                 learning_rate_bisection_search.current
-            ] = update_log_magnitudes
-            learning_rate_bisection_search.update_lower()
+            ] = energy_potentials
+            if energy_potentials[-1] < energy_potentials[0]:
+                learning_rate_bisection_search.update_lower()
+            else:
+                learning_rate_bisection_search.update_upper()
     particles = particles_out
     if plot_particles_path is not None:
         create_directory(plot_particles_path)
@@ -418,7 +427,7 @@ def train_projected_wasserstein_gradient_flow(
             experiment_data=experiment_data,
             induce_data=induce_data,
             x=experiment_data.full.x,
-            predicted_samples=pwgf.predict_untransformed_samples(
+            predicted_samples=pwgf.predict_samples(
                 x=experiment_data.full.x,
                 particles=particles,
             ).detach(),
@@ -430,6 +439,7 @@ def train_projected_wasserstein_gradient_flow(
                 f"particles-learned-{particle_name}.png",
             ),
         )
+    if animate_1d_path is not None:
         animate_1d_pwgf_predictions(
             pwgf=pwgf,
             seed=seed,
@@ -449,14 +459,14 @@ def train_projected_wasserstein_gradient_flow(
         )
     if plot_update_magnitude_path is not None:
         create_directory(plot_update_magnitude_path)
-        plot_update_magnitude(
-            update_log_magnitude_history=update_log_magnitude_history,
-            title=f"{plot_title} (update magnitude)"
+        plot_energy_potentials(
+            energy_potentials_history=energy_potentials_history,
+            title=f"{plot_title} (energy potentials)"
             if plot_title is not None
             else None,
             save_path=os.path.join(
                 plot_update_magnitude_path,
-                f"update-magnitude-{particle_name}.png",
+                f"energy-potential-{particle_name}.png",
             ),
         )
     return particles
@@ -516,7 +526,7 @@ def train_svgp(
     experiment_data: ExperimentData,
     induce_data: Data,
     mean: gpytorch.means.Mean,
-    kernel: gpytorch.kernels.Kernel,
+    kernel: GradientFlowKernel,
     seed: int,
     number_of_epochs: int,
     batch_size: int,
@@ -527,6 +537,7 @@ def train_svgp(
     models_path: str,
     plot_title: Optional[str] = None,
     plot_1d_path: Optional[str] = None,
+    animate_1d_path: Optional[str] = None,
     plot_loss_path: Optional[str] = None,
     christmas_colours: bool = False,
 ) -> (svGP, List[float]):
@@ -535,6 +546,7 @@ def train_svgp(
     best_nll = float("inf")
     best_mse = float("inf")
     best_mae = float("inf")
+    best_loss = float("inf")
     losses_history = []
     model_out = None
     losses_out = None
@@ -596,10 +608,12 @@ def train_svgp(
             prediction=prediction,
             y=experiment_data.train.y,
         )
-        if nll < best_nll:
+        loss = losses[-1]
+        if loss < best_loss:
             best_nll = nll
             best_mae = mae
             best_mse = mse
+            best_loss = loss
             best_learning_rate = learning_rate
             model_out = model
             losses_out = losses
@@ -617,6 +631,7 @@ def train_svgp(
                 f"{model_name}.png",
             ),
         )
+    if animate_1d_path is not None:
         animate_1d_gp_predictions(
             experiment_data=experiment_data,
             induce_data=induce_data,
