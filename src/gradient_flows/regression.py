@@ -48,7 +48,7 @@ class GradientFlowRegression(GradientFlowBase):
         return (1 / (2 * self.observation_noise)) * torch.square(
             self.base_gram_induce_train.T @ inverse_base_gram_particle_vector
             - self.y_train[:, None]
-        )
+        ).sum(dim=0)
 
     def _calculate_cost_derivative(
         self,

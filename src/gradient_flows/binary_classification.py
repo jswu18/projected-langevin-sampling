@@ -51,9 +51,10 @@ class GradientFlowBinaryClassification(GradientFlowBase):
                 rhs=particles,
             )
         )  # \phi(k(X, Z) @ k(Z, Z)^{-1} U(t)) of size (N, P)
-        return -self.y_train[:, None] * torch.log(prediction) - (
-            1 - self.y_train[:, None]
-        ) * torch.log(1 - prediction)
+        return (
+            -self.y_train[:, None] * torch.log(prediction)
+            - (1 - self.y_train[:, None]) * torch.log(1 - prediction)
+        ).sum(dim=0)
 
     def _calculate_cost_derivative(
         self,

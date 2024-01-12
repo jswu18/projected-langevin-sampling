@@ -73,7 +73,7 @@ class GradientFlowEigenvalueRegression(GradientFlowBase):
         return (1 / (2 * self.observation_noise)) * torch.square(
             self.base_gram_induce_train.T @ self.scaled_eigenvectors @ particles
             - self.y_train[:, None]
-        )
+        ).sum(dim=0)
 
     def calculate_energy_potential(self, particles: torch.Tensor) -> float:
         """
