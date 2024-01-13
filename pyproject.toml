@@ -31,6 +31,10 @@ pytest-cov = "^4.1.0"
 name = "PyPI"
 priority = "primary"
 
+
+[tool.poetry.group.dev.dependencies]
+setuptools = "^69.0.3"
+
 [tool.isort]
 skip = [".venv"]
 
