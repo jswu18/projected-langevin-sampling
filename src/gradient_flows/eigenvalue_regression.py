@@ -38,10 +38,10 @@ class GradientFlowEigenvalueRegression(GradientFlowBase):
         self.eigenvalues, self.eigenvectors = torch.linalg.eig(
             self.base_gram_induce.evaluate()
         )
-        self.eigenvalues = self.eigenvalues.double()
-        self.eigenvectors = self.eigenvectors.double()
-        if any(self.eigenvalues < 0):
-            raise ValueError("Eigenvalues must be positive.")
+        self.eigenvalues = self.eigenvalues.real.double()
+        self.eigenvectors = self.eigenvectors.real.double()
+        idx_negative = torch.where(self.eigenvalues < 0)
+        self.eigenvalues[idx_negative] = 0
         self.scaled_eigenvectors = torch.multiply(
             torch.divide(
                 torch.ones(self.eigenvalues.shape),
@@ -49,6 +49,7 @@ class GradientFlowEigenvalueRegression(GradientFlowBase):
             )[None, :],
             self.eigenvectors,
         )
+        self.scaled_eigenvectors[torch.isinf(self.scaled_eigenvectors)] = 0
 
     @staticmethod
     def transform(y: torch.Tensor) -> torch.Tensor:
