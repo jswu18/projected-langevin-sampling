@@ -162,7 +162,9 @@ def main(
         base_kernel=average_ard_kernel,
         approximation_samples=induce_data.x,
     )
-    pwgf = GradientFlowRegression(
+    from src.gradient_flows.regression_onb import GradientFlowRegressionONB
+
+    pwgf = GradientFlowRegressionONB(
         kernel=gradient_flow_kernel,
         x_induce=induce_data.x,
         y_induce=induce_data.y,
@@ -171,19 +173,22 @@ def main(
         jitter=pwgf_config["jitter"],
         observation_noise=float(likelihood.noise),
     )
+    # pwgf = GradientFlowRegression(
+    #     kernel=gradient_flow_kernel,
+    #     x_induce=induce_data.x,
+    #     y_induce=induce_data.y,
+    #     x_train=experiment_data.train.x,
+    #     y_train=experiment_data.train.y,
+    #     jitter=pwgf_config["jitter"],
+    #     observation_noise=float(likelihood.noise),
+    # )
     particles = train_projected_wasserstein_gradient_flow(
         pwgf=pwgf,
         number_of_particles=pwgf_config["number_of_particles"],
         particle_name="average-kernel",
         experiment_data=experiment_data,
         induce_data=induce_data,
-        number_of_epochs=pwgf_config["number_of_epochs"],
-        learning_rate_upper=pwgf_config["learning_rate_upper"],
-        learning_rate_lower=pwgf_config["learning_rate_lower"],
-        number_of_learning_rate_searches=pwgf_config[
-            "number_of_learning_rate_searches"
-        ],
-        max_particle_magnitude=pwgf_config["max_particle_magnitude"],
+        simulation_duration=pwgf_config["simulation_duration"],
         seed=pwgf_config["seed"],
         plot_title=f"{type(curve_function).__name__}",
         plot_particles_path=plot_curve_path,
@@ -195,46 +200,46 @@ def main(
         metric_to_minimise=pwgf_config["metric_to_minimise"],
         initial_particles_noise_only=pwgf_config["initial_particles_noise_only"],
     )
-    calculate_metrics(
-        model=pwgf,
-        particles=particles,
-        model_name="pwgf",
-        dataset_name=type(curve_function).__name__,
-        experiment_data=experiment_data,
-        results_path=results_curve_path,
-        plots_path=plot_curve_path,
-    )
-    fixed_svgp_model, _ = train_svgp(
-        experiment_data=experiment_data,
-        induce_data=induce_data,
-        mean=gpytorch.means.ConstantMean(),
-        kernel=pwgf.kernel,
-        seed=svgp_config["seed"],
-        number_of_epochs=svgp_config["number_of_epochs"],
-        batch_size=svgp_config["batch_size"],
-        learning_rate_upper=svgp_config["learning_rate_upper"],
-        learning_rate_lower=svgp_config["learning_rate_lower"],
-        number_of_learning_rate_searches=svgp_config[
-            "number_of_learning_rate_searches"
-        ],
-        is_fixed=True,
-        models_path=fixed_svgp_iteration_model_path,
-        plot_title=f"{type(curve_function).__name__}",
-        plot_1d_path=plot_curve_path,
-        animate_1d_path=plot_curve_path,
-        plot_loss_path=plot_curve_path,
-        christmas_colours=svgp_config["christmas_colours"]
-        if "christmas_colours" in pwgf_config
-        else False,
-    )
-    calculate_metrics(
-        model=fixed_svgp_model,
-        model_name="fixed-svgp",
-        dataset_name=type(curve_function).__name__,
-        experiment_data=experiment_data,
-        results_path=results_curve_path,
-        plots_path=plot_curve_path,
-    )
+    # calculate_metrics(
+    #     model=pwgf,
+    #     particles=particles,
+    #     model_name="pwgf",
+    #     dataset_name=type(curve_function).__name__,
+    #     experiment_data=experiment_data,
+    #     results_path=results_curve_path,
+    #     plots_path=plot_curve_path,
+    # )
+    # fixed_svgp_model, _ = train_svgp(
+    #     experiment_data=experiment_data,
+    #     induce_data=induce_data,
+    #     mean=gpytorch.means.ConstantMean(),
+    #     kernel=pwgf.kernel,
+    #     seed=svgp_config["seed"],
+    #     number_of_epochs=svgp_config["number_of_epochs"],
+    #     batch_size=svgp_config["batch_size"],
+    #     learning_rate_upper=svgp_config["learning_rate_upper"],
+    #     learning_rate_lower=svgp_config["learning_rate_lower"],
+    #     number_of_learning_rate_searches=svgp_config[
+    #         "number_of_learning_rate_searches"
+    #     ],
+    #     is_fixed=True,
+    #     models_path=fixed_svgp_iteration_model_path,
+    #     plot_title=f"{type(curve_function).__name__}",
+    #     plot_1d_path=plot_curve_path,
+    #     animate_1d_path=plot_curve_path,
+    #     plot_loss_path=plot_curve_path,
+    #     christmas_colours=svgp_config["christmas_colours"]
+    #     if "christmas_colours" in pwgf_config
+    #     else False,
+    # )
+    # calculate_metrics(
+    #     model=fixed_svgp_model,
+    #     model_name="fixed-svgp",
+    #     dataset_name=type(curve_function).__name__,
+    #     experiment_data=experiment_data,
+    #     results_path=results_curve_path,
+    #     plots_path=plot_curve_path,
+    # )
 
 
 if __name__ == "__main__":

@@ -248,20 +248,23 @@ def plot_energy_potentials(
     save_path: str,
 ):
     fig, ax = plt.subplots(figsize=(13, 6.5))
-    for i, learning_rate in enumerate(sorted(energy_potentials_history.keys())):
-        shade = 0.3 + (1 - (i / len(energy_potentials_history))) * 0.6
+    for i, learning_rate in enumerate(
+        sorted(energy_potentials_history.keys(), reverse=True)
+    ):
+        shade = 0.1 + (i / (max(len(energy_potentials_history) - 1, 1))) * 0.8
         ax.plot(
-            energy_potentials_history[learning_rate],
+            learning_rate * np.arange(len(energy_potentials_history[learning_rate])),
+            np.log(energy_potentials_history[learning_rate]),
             label=learning_rate,
             color=[shade, shade, shade],
         )
     ax.set_title(title)
-    ax.set_xlabel("epoch")
-    ax.set_ylabel("energy potential")
+    ax.set_xlabel("simulation time")
+    ax.set_ylabel("log energy potential")
     plt.ylim(
         [
-            min([min(x) for x in energy_potentials_history.values()]),
-            max([x[0] for x in energy_potentials_history.values()]),
+            0.8 * min([min(np.log(x)) for x in energy_potentials_history.values()]),
+            1.5 * max(np.log([x[0] for x in energy_potentials_history.values()])),
         ]
     )
     ax.legend()

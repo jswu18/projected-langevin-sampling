@@ -46,6 +46,7 @@ class GradientFlowBase(ABC):
         self.base_gram_induce_train = self.kernel.base_kernel(
             x1=x_induce, x2=x_train
         )  # k(Z, X) of size (M, N)
+        self.number_of_inducing_points = x_induce.shape[0]
 
     @staticmethod
     @abstractmethod
@@ -68,7 +69,7 @@ class GradientFlowBase(ABC):
                 mean=0.0,
                 std=1.0,
                 size=(
-                    self.y_induce.shape[0],
+                    self.number_of_inducing_points,
                     number_of_particles,
                 ),
                 generator=generator,
@@ -105,10 +106,11 @@ class GradientFlowBase(ABC):
         )  # k(Z, Z)^{-1} @ U(t) of size (M, P)
 
         # cost + M/2 * (k(Z, Z)^{-1} @ particle)^T (k(Z, Z)^{-1} @ particle)
-        particle_energy_potential = cost + self.x_induce.shape[0] / 2 * torch.square(
-            inverse_base_gram_induce_particles
-        ).sum(
-            dim=0
+        particle_energy_potential = (
+            cost
+            + self.number_of_inducing_points
+            / 2
+            * torch.square(inverse_base_gram_induce_particles).sum(dim=0)
         )  # size (P,)
         return particle_energy_potential.mean().item()
 
@@ -117,10 +119,9 @@ class GradientFlowBase(ABC):
         particles: torch.Tensor,
         learning_rate: torch.Tensor,
     ) -> torch.Tensor:
-        assert particles.shape[0] == self.x_induce.shape[0], (
-            f"Particles have shape {particles.shape} but inducing points have shape "
-            f"{self.x_induce.shape}"
-        )
+        assert (
+            particles.shape[0] == self.number_of_inducing_points
+        ), f"Particles have shape {particles.shape} but requires {self.number_of_inducing_points} inducing points."
 
         inverse_base_gram_particle_vector = gpytorch.solve(
             self.base_gram_induce, particles
@@ -141,7 +142,7 @@ class GradientFlowBase(ABC):
         particle_update = (
             -learning_rate * self.base_gram_induce_train @ cost_derivative
             - learning_rate
-            * (self.x_induce.shape[0])
+            * self.number_of_inducing_points
             * inverse_base_gram_particle_vector
             + torch.sqrt(2.0 * learning_rate) * noise_vector
         ).detach()
@@ -198,11 +199,11 @@ class GradientFlowBase(ABC):
             )
 
         # G(x) + r(x, Z) @ r(Z, Z)^{-1} @ (U(t)-G(Z))
-        return noise[self.x_induce.shape[0] :, :] + (
+        return noise[self.number_of_inducing_point :, :] + (
             gpytorch.solve(
                 lhs=gram_x_induce,
                 input=self.gram_induce,
-                rhs=(particles - noise[: self.x_induce.shape[0], :]),
+                rhs=(particles - noise[: self.number_of_inducing_point, :]),
             )
         )  # size (N*, P)
 

@@ -48,8 +48,12 @@ def get_experiment_data(
     y_curve = curve_function.calculate_curve(
         x=x,
     ).reshape(-1)
+    # y = curve_function.classification(
+    #     y_curve=y_curve,
+    # )
     y = curve_function.classification(
         y_curve=y_curve,
+        seed=seed,
     )
     y_untransformed = GradientFlowBinaryClassification.transform(y=y_curve)
     (
@@ -220,13 +224,7 @@ def main(
         particle_name="average-kernel",
         experiment_data=experiment_data,
         induce_data=induce_data,
-        number_of_epochs=pwgf_config["number_of_epochs"],
-        learning_rate_upper=pwgf_config["learning_rate_upper"],
-        learning_rate_lower=pwgf_config["learning_rate_lower"],
-        number_of_learning_rate_searches=pwgf_config[
-            "number_of_learning_rate_searches"
-        ],
-        max_particle_magnitude=pwgf_config["max_particle_magnitude"],
+        simulation_duration=pwgf_config["simulation_duration"],
         seed=pwgf_config["seed"],
         plot_title=f"{type(curve_function).__name__}",
         plot_particles_path=plot_curve_path,

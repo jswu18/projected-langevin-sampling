@@ -4,12 +4,14 @@ from copy import deepcopy
 from typing import List, Optional
 
 import gpytorch
+import numpy as np
 import torch
 from sklearn.neighbors import NearestNeighbors
 from torch.utils.data import DataLoader, TensorDataset
 from tqdm import tqdm
 
 from experiments.data import Data, ExperimentData
+from experiments.early_stopper import EarlyStopper
 from experiments.loaders import load_ard_exact_gp_model, load_svgp
 from experiments.metrics import calculate_mae, calculate_mse, calculate_nll
 from experiments.plotters import (
@@ -288,11 +290,7 @@ def train_projected_wasserstein_gradient_flow(
     particle_name: str,
     experiment_data: ExperimentData,
     induce_data: Data,
-    number_of_epochs: int,
-    learning_rate_upper: float,
-    learning_rate_lower: float,
-    number_of_learning_rate_searches: int,
-    max_particle_magnitude: float,
+    simulation_duration: float,
     seed: int,
     plot_title: str = None,
     plot_particles_path: str = None,
@@ -302,6 +300,11 @@ def train_projected_wasserstein_gradient_flow(
     metric_to_minimise: str = "nll",
     initial_particles_noise_only: bool = False,
 ) -> torch.Tensor:
+    particles_out = pwgf.initialise_particles(
+        number_of_particles=number_of_particles,
+        seed=seed,
+        noise_only=initial_particles_noise_only,
+    )
     if plot_particles_path is not None:
         create_directory(plot_particles_path)
         plot_1d_pwgf_prediction(
@@ -310,11 +313,7 @@ def train_projected_wasserstein_gradient_flow(
             x=experiment_data.full.x,
             predicted_samples=pwgf.predict_samples(
                 x=experiment_data.full.x,
-                particles=pwgf.initialise_particles(
-                    number_of_particles=number_of_particles,
-                    seed=seed,
-                    noise_only=initial_particles_noise_only,
-                ),
+                particles=particles_out,
             ).detach(),
             title=f"{plot_title} (initial particles)"
             if plot_title is not None
@@ -324,52 +323,40 @@ def train_projected_wasserstein_gradient_flow(
                 f"particles-initial-{particle_name}.png",
             ),
         )
-    particles_out = None
     best_energy_potential, best_mae, best_mse, best_nll = (
         float("inf"),
         float("inf"),
         float("inf"),
         float("inf"),
     )
-    searches_iter = tqdm(range(number_of_learning_rate_searches), desc="WGF LR Search")
+    best_lr = None
     energy_potentials_history = {}
-    learning_rate_bisection_search = LogBisectionSearch(
-        lower=learning_rate_lower,
-        upper=learning_rate_upper,
-        soft_update=True,
-    )
-    best_lr = learning_rate_bisection_search.current
-    for _ in searches_iter:
+    for learning_rate in tqdm(
+        np.logspace(-3, np.log10(simulation_duration / 1e6), 5), desc="WGF LR Search"
+    ):
+        number_of_epochs = int(simulation_duration / learning_rate)
         particles = pwgf.initialise_particles(
             number_of_particles=number_of_particles,
             seed=seed,
             noise_only=initial_particles_noise_only,
         )
-        energy_potentials = [pwgf.calculate_energy_potential(particles=particles)]
+        energy_potentials = []
+        early_stopper = EarlyStopper()
         set_seed(seed)
         for i in range(number_of_epochs):
             particle_update = pwgf.calculate_particle_update(
                 particles=particles,
-                learning_rate=torch.tensor(learning_rate_bisection_search.current),
+                learning_rate=torch.tensor(learning_rate),
             )
             particles += particle_update
-            energy_potentials.append(
-                pwgf.calculate_energy_potential(particles=particles)
-            )
-            if (torch.isnan(particles).any()).item():
-                searches_iter.set_postfix(
-                    best_energy_potential=best_energy_potential,
-                    best_mae=best_mae,
-                    best_mse=best_mse,
-                    best_nll=best_nll,
-                    best_lr=best_lr,
-                    lr=learning_rate_bisection_search.current,
-                    upper=learning_rate_bisection_search.upper,
-                    lower=learning_rate_bisection_search.lower,
-                )
-                learning_rate_bisection_search.update_upper()
+            energy_potential = pwgf.calculate_energy_potential(particles=particles)
+            if early_stopper.should_stop(
+                loss=energy_potential, learning_rate=learning_rate
+            ):
                 break
-        else:  # only executed if the inner loop did NOT break
+            energy_potentials.append(energy_potential)
+        if energy_potentials and np.isfinite(particles).all():
+            energy_potentials_history[learning_rate] = energy_potentials
             prediction = pwgf.predict(
                 x=experiment_data.train.x,
                 particles=particles,
@@ -399,27 +386,11 @@ def train_projected_wasserstein_gradient_flow(
                     nll,
                     mae,
                     mse,
-                    learning_rate_bisection_search.current,
+                    learning_rate,
                 )
                 best_energy_potential = energy_potentials[-1]
                 particles_out = deepcopy(particles.detach())
-            searches_iter.set_postfix(
-                best_energy_potential=best_energy_potential,
-                best_mae=best_mae,
-                best_mse=best_mse,
-                best_nll=best_nll,
-                best_lr=best_lr,
-                lr=learning_rate_bisection_search.current,
-                upper=learning_rate_bisection_search.upper,
-                lower=learning_rate_bisection_search.lower,
-            )
-            energy_potentials_history[
-                learning_rate_bisection_search.current
-            ] = energy_potentials
-            if energy_potentials[-1] < energy_potentials[0]:
-                learning_rate_bisection_search.update_lower()
-            else:
-                learning_rate_bisection_search.update_upper()
+                best_lr = learning_rate
     particles = particles_out
     if plot_particles_path is not None:
         create_directory(plot_particles_path)
@@ -439,25 +410,7 @@ def train_projected_wasserstein_gradient_flow(
                 f"particles-learned-{particle_name}.png",
             ),
         )
-    if animate_1d_path is not None:
-        animate_1d_pwgf_predictions(
-            pwgf=pwgf,
-            seed=seed,
-            number_of_particles=number_of_particles,
-            initial_particles_noise_only=initial_particles_noise_only,
-            learning_rate=best_lr,
-            number_of_epochs=number_of_epochs,
-            experiment_data=experiment_data,
-            induce_data=induce_data,
-            x=experiment_data.full.x,
-            title=plot_title,
-            save_path=os.path.join(
-                plot_particles_path,
-                f"{particle_name}.gif",
-            ),
-            christmas_colours=christmas_colours,
-        )
-    if plot_update_magnitude_path is not None:
+    if energy_potentials_history and plot_update_magnitude_path is not None:
         create_directory(plot_update_magnitude_path)
         plot_energy_potentials(
             energy_potentials_history=energy_potentials_history,
@@ -468,6 +421,24 @@ def train_projected_wasserstein_gradient_flow(
                 plot_update_magnitude_path,
                 f"energy-potential-{particle_name}.png",
             ),
+        )
+    if best_lr and animate_1d_path is not None:
+        animate_1d_pwgf_predictions(
+            pwgf=pwgf,
+            seed=seed,
+            number_of_particles=number_of_particles,
+            initial_particles_noise_only=initial_particles_noise_only,
+            learning_rate=best_lr,
+            number_of_epochs=int(simulation_duration / best_lr),
+            experiment_data=experiment_data,
+            induce_data=induce_data,
+            x=experiment_data.full.x,
+            title=plot_title,
+            save_path=os.path.join(
+                plot_particles_path,
+                f"{particle_name}.gif",
+            ),
+            christmas_colours=christmas_colours,
         )
     return particles
 

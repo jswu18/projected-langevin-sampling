@@ -8,7 +8,7 @@ from src.kernels import GradientFlowKernel
 from src.samplers import sample_multivariate_normal
 
 
-class GradientFlowEigenvalueRegression(GradientFlowBase):
+class GradientFlowRegressionONB(GradientFlowBase):
     """
     N is the number of training points
     M is the number of inducing points
@@ -35,21 +35,48 @@ class GradientFlowEigenvalueRegression(GradientFlowBase):
             y_induce=y_induce,
             jitter=jitter,
         )
-        self.eigenvalues, self.eigenvectors = torch.linalg.eig(
+        self.eigenvalues, self.eigenvectors = torch.linalg.eigh(
             self.base_gram_induce.evaluate()
         )
-        self.eigenvalues = self.eigenvalues.real.double()
-        self.eigenvectors = self.eigenvectors.real.double()
-        idx_negative = torch.where(self.eigenvalues < 0)
-        self.eigenvalues[idx_negative] = 0
+
+        # Remove negative eigenvalues
+        positive_eigenvalue_idx = torch.where(self.eigenvalues > 0)[0]
+        self.eigenvalues = self.eigenvalues[positive_eigenvalue_idx].real.double()
+        self.eigenvectors = self.eigenvectors[:, positive_eigenvalue_idx].real.double()
+        self.number_of_inducing_points = self.eigenvalues.shape[0]
+
+        # Scale eigenvectors
         self.scaled_eigenvectors = torch.multiply(
             torch.divide(
                 torch.ones(self.eigenvalues.shape),
-                torch.sqrt(x_induce.shape[0] * self.eigenvalues),
+                torch.sqrt(self.number_of_inducing_points * self.eigenvalues),
             )[None, :],
             self.eigenvectors,
         )
-        self.scaled_eigenvectors[torch.isinf(self.scaled_eigenvectors)] = 0
+
+    def initialise_particles(
+        self,
+        number_of_particles: int,
+        seed: Optional[int] = None,
+        noise_only: Optional[bool] = False,
+    ) -> torch.Tensor:
+        if seed is not None:
+            generator = torch.Generator().manual_seed(seed)
+        else:
+            generator = None
+
+        noise = (
+            torch.normal(
+                mean=0.0,
+                std=1.0,
+                size=(
+                    self.number_of_inducing_points,
+                    number_of_particles,
+                ),
+                generator=generator,
+            )
+        ).double()  # size (M, P)
+        return noise
 
     @staticmethod
     def transform(y: torch.Tensor) -> torch.Tensor:
@@ -100,14 +127,13 @@ class GradientFlowEigenvalueRegression(GradientFlowBase):
         particles: torch.Tensor,
         learning_rate: torch.Tensor,
     ) -> torch.Tensor:
-        assert particles.shape[0] == self.x_induce.shape[0], (
-            f"Particles have shape {particles.shape} but inducing points have shape "
-            f"{self.x_induce.shape}"
-        )
+        assert (
+            particles.shape[0] == self.number_of_inducing_points
+        ), f"Particles have shape {particles.shape} but requires {self.number_of_inducing_points} inducing points."
 
         noise_vector = sample_multivariate_normal(
             mean=torch.zeros(particles.shape[0]),
-            cov=self.base_gram_induce,
+            cov=torch.eye(particles.shape[0]),
             size=(particles.shape[1],),
         ).T  # e ~ N(0, k(Z, Z)) of size (M, P)
         cost_derivative = self._calculate_cost_derivative(
@@ -206,10 +232,10 @@ class GradientFlowEigenvalueRegression(GradientFlowBase):
                 x=x,
             )
 
-        return noise[self.x_induce.shape[0] :, :] + (
+        return noise[self.number_of_inducing_points :, :] + (
             base_gram_x_induce
             @ self.scaled_eigenvectors
-            @ (particles - noise[: self.x_induce.shape[0], :])
+            @ (particles - noise[: self.number_of_inducing_points, :])
         )
 
     def predict(

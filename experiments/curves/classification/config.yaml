@@ -2,7 +2,7 @@ data:
   number_of_data_points: 1000
   seed: 0
   number_of_test_intervals: 5
-  total_number_of_intervals: 20
+  total_number_of_intervals: 15
 kernel:
   seed: 0
   learning_rate: 0.01
@@ -16,16 +16,9 @@ induce_data:
   induce_data_power: 2
 pwgf:
   number_of_particles: 100
-  number_of_epochs: 1000
-  learning_rate_upper: 1.0e+2
-  learning_rate_lower: 1.0e-30
-  max_particle_magnitude: 1.0e+3
-  number_of_learning_rate_searches: 25
+  simulation_duration: 5.0e-1
   jitter: 0
   seed: 0
-  observation_noise_upper: 1.0e+4
-  observation_noise_lower: 1.0e-4
-  number_of_observation_noise_searches: 25
   christmas_colours: True
   metric_to_minimise: mae
   initial_particles_noise_only: True
