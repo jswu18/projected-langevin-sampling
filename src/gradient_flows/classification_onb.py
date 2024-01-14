@@ -1,13 +1,17 @@
 import torch
 
 from src.gradient_flows.base.basis.orthonormal_basis import GradientFlowONBBase
-from src.gradient_flows.base.transforms.regression import GradientFlowRegressionBase
+from src.gradient_flows.base.transforms.classification import (
+    GradientFlowClassificationBase,
+)
 from src.kernels import GradientFlowONBKernel
 
 
-class GradientFlowRegressionONB(GradientFlowONBBase, GradientFlowRegressionBase):
+class GradientFlowClassificationONB(
+    GradientFlowONBBase, GradientFlowClassificationBase
+):
     """
-    Gradient Flow regression with particles on a function space approximated by an orthonormal basis.
+    Gradient Flow classification with particles on a function space approximated by an orthonormal basis.
 
     N is the number of training points.
     M is the dimensionality of the function space approximation.
@@ -35,7 +39,7 @@ class GradientFlowRegressionONB(GradientFlowONBBase, GradientFlowRegressionBase)
             y_train=y_train,
             jitter=jitter,
         )
-        GradientFlowRegressionBase.__init__(
+        GradientFlowClassificationBase.__init__(
             self,
             kernel=kernel,
             observation_noise=observation_noise,

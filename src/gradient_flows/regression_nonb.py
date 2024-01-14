@@ -1,13 +1,13 @@
 import torch
 
-from src.gradient_flows.base.basis.orthonormal_basis import GradientFlowONBBase
+from src.gradient_flows.base.basis.non_orthonormal_basis import GradientFlowNONBBase
 from src.gradient_flows.base.transforms.regression import GradientFlowRegressionBase
-from src.kernels import GradientFlowONBKernel
+from src.kernels import GradientFlowNONBKernel
 
 
-class GradientFlowRegressionONB(GradientFlowONBBase, GradientFlowRegressionBase):
+class GradientFlowRegressionNONB(GradientFlowNONBBase, GradientFlowRegressionBase):
     """
-    Gradient Flow regression with particles on a function space approximated by an orthonormal basis.
+    Gradient Flow regression with particles on a function space approximated by a set of M inducing points.
 
     N is the number of training points.
     M is the dimensionality of the function space approximation.
@@ -17,7 +17,7 @@ class GradientFlowRegressionONB(GradientFlowONBBase, GradientFlowRegressionBase)
 
     def __init__(
         self,
-        kernel: GradientFlowONBKernel,
+        kernel: GradientFlowNONBKernel,
         observation_noise: float,
         x_induce: torch.Tensor,
         y_induce: torch.Tensor,
@@ -25,7 +25,7 @@ class GradientFlowRegressionONB(GradientFlowONBBase, GradientFlowRegressionBase)
         y_train: torch.Tensor,
         jitter: float = 0.0,
     ):
-        GradientFlowONBBase.__init__(
+        GradientFlowNONBBase.__init__(
             self,
             kernel=kernel,
             observation_noise=observation_noise,

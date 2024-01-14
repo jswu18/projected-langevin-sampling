@@ -1,5 +1,7 @@
-from src.kernels.gradient_flow_kernel import GradientFlowKernel
+from src.kernels.gradient_flow_nonb_kernel import GradientFlowNONBKernel
+from src.kernels.gradient_flow_onb_kernel import GradientFlowONBKernel
 
 __all__ = [
-    "GradientFlowKernel",
+    "GradientFlowONBKernel",
+    "GradientFlowNONBKernel",
 ]
