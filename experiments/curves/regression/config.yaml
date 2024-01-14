@@ -2,8 +2,8 @@ data:
   number_of_data_points: 1000
   seed: 0
   sigma_true: 0.5
-  number_of_test_intervals: 5
-  total_number_of_intervals: 15
+  number_of_test_intervals: 2
+  total_number_of_intervals: 16
 kernel:
   seed: 0
   learning_rate: 0.01
@@ -16,7 +16,7 @@ induce_data:
   induce_data_factor: 1
   induce_data_power: 2
 pwgf:
-  number_of_particles: 100
+  number_of_particles: 50
   simulation_duration: 5.0e-1
   jitter: 0
   seed: 0

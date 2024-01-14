@@ -5,7 +5,7 @@ import gpytorch
 import torch
 
 from src.gradient_flows.base.base import GradientFlowBase
-from src.kernels.base import GradientFlowBaseKernel
+from src.kernels.gradient_flow_kernel import GradientFlowKernel
 
 
 class GradientFlowRegressionBase(GradientFlowBase, ABC):
@@ -20,7 +20,7 @@ class GradientFlowRegressionBase(GradientFlowBase, ABC):
 
     def __init__(
         self,
-        kernel: GradientFlowBaseKernel,
+        kernel: GradientFlowKernel,
         observation_noise: float,
         x_induce: torch.Tensor,
         y_induce: torch.Tensor,

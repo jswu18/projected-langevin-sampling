@@ -27,7 +27,13 @@ from experiments.runners import (
     train_svgp,
 )
 from experiments.utils import create_directory
-from src.gradient_flows import GradientFlowBinaryClassification
+from src.gradient_flows import (
+    GradientFlowClassificationNONB,
+    GradientFlowClassificationONB,
+)
+from src.gradient_flows.base.transforms.classification import (
+    GradientFlowClassificationBase,
+)
 from src.induce_data_selectors import ConditionalVarianceInduceDataSelector
 from src.kernels import GradientFlowKernel
 
@@ -55,7 +61,7 @@ def get_experiment_data(
         y_curve=y_curve,
         seed=seed,
     )
-    y_untransformed = GradientFlowBinaryClassification.transform(y=y_curve)
+    y_untransformed = GradientFlowClassificationBase.transform(y=y_curve)
     (
         x_train,
         y_train,
@@ -177,20 +183,11 @@ def main(
     average_ard_kernel = construct_average_ard_kernel(
         kernels=[model.kernel for model in subsample_gp_models],
     )
-
-    # distances = torch.cdist(experiment_data.train.x, experiment_data.train.x)
-    # distances = distances[np.triu_indices_from(distances, k=1)]
-    # ard_kernel = gpytorch.kernels.ScaleKernel(
-    #     gpytorch.kernels.RBFKernel(
-    #     ),
-    # )
-    # ard_kernel.base_kernel.lengthscale = np.sqrt(distances.median()/2)
-    # ard_kernel.outputscale = 2
-    # ard_kernel.base_kernel.lengthscale = 0.1
-    # average_ard_kernel = ard_kernel
-    likelihood = construct_average_dirichlet_likelihood(
-        likelihoods=[model.likelihood for model in subsample_gp_models],
-    )
+    observation_noise = torch.tensor(
+        np.array(
+            [model.likelihood.noise.detach().numpy() for model in subsample_gp_models]
+        )
+    ).mean()
     induce_data = select_induce_data(
         seed=induce_data_config["seed"],
         induce_data_selector=ConditionalVarianceInduceDataSelector(),
@@ -204,38 +201,55 @@ def main(
         ),
         kernel=average_ard_kernel,
     )
-    gradient_flow_kernel = GradientFlowKernel(
-        base_kernel=average_ard_kernel,
-        approximation_samples=induce_data.x,
-        number_of_classes=likelihood.num_classes,
-    )
-    pwgf = GradientFlowBinaryClassification(
-        kernel=gradient_flow_kernel,
-        x_induce=induce_data.x,
-        y_induce=induce_data.y,
-        x_train=experiment_data.train.x,
-        y_train=experiment_data.train.y,
-        jitter=pwgf_config["jitter"],
-        observation_noise=float(likelihood.noise[0]),
-    )
-    particles = train_projected_wasserstein_gradient_flow(
-        pwgf=pwgf,
-        number_of_particles=pwgf_config["number_of_particles"],
-        particle_name="average-kernel",
-        experiment_data=experiment_data,
-        induce_data=induce_data,
-        simulation_duration=pwgf_config["simulation_duration"],
-        seed=pwgf_config["seed"],
-        plot_title=f"{type(curve_function).__name__}",
-        plot_particles_path=plot_curve_path,
-        animate_1d_path=plot_curve_path,
-        plot_update_magnitude_path=plot_curve_path,
-        christmas_colours=pwgf_config["christmas_colours"]
-        if "christmas_colours" in pwgf_config
-        else False,
-        metric_to_minimise=pwgf_config["metric_to_minimise"],
-        initial_particles_noise_only=pwgf_config["initial_particles_noise_only"],
-    )
+    pwgf_dict = {
+        "pwgf-orthonormal-basis": GradientFlowClassificationONB(
+            kernel=GradientFlowKernel(
+                base_kernel=average_ard_kernel,
+                approximation_samples=induce_data.x,
+                number_of_classes=likelihood.num_classes,
+                concatenate_input=True,
+            ),
+            x_induce=induce_data.x,
+            y_induce=induce_data.y,
+            x_train=experiment_data.train.x,
+            y_train=experiment_data.train.y,
+            jitter=pwgf_config["jitter"],
+            observation_noise=observation_noise,
+        ),
+        "pwgf-induce-data-basis": GradientFlowClassificationNONB(
+            kernel=GradientFlowKernel(
+                base_kernel=average_ard_kernel,
+                approximation_samples=induce_data.x,
+                number_of_classes=likelihood.num_classes,
+                concatenate_input=False,
+            ),
+            x_induce=induce_data.x,
+            y_induce=induce_data.y,
+            x_train=experiment_data.train.x,
+            y_train=experiment_data.train.y,
+            jitter=pwgf_config["jitter"],
+            observation_noise=observation_noise,
+        ),
+    }
+    for pwgf_name, pwgf in pwgf_dict.items():
+        particles = train_projected_wasserstein_gradient_flow(
+            pwgf=pwgf,
+            number_of_particles=pwgf_config["number_of_particles"],
+            particle_name=pwgf_name,
+            experiment_data=experiment_data,
+            induce_data=induce_data,
+            simulation_duration=pwgf_config["simulation_duration"],
+            seed=pwgf_config["seed"],
+            plot_title=f"{type(curve_function).__name__}",
+            plot_particles_path=plot_curve_path,
+            animate_1d_path=plot_curve_path,
+            plot_update_magnitude_path=plot_curve_path,
+            christmas_colours=pwgf_config["christmas_colours"]
+            if "christmas_colours" in pwgf_config
+            else False,
+            metric_to_minimise=pwgf_config["metric_to_minimise"],
+            initial_particles_noise_only=pwgf_config["initial_particles_noise_only"],
+        )
 
 
 if __name__ == "__main__":

@@ -17,14 +17,14 @@ def _split_regression_data_intervals(
     torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor
 ]:
     interval_size = x.shape[0] // total_number_of_intervals
-    number_of_intervals_on_edge = int(1 / 8 * total_number_of_intervals)
-    test_interval_indices = (
+    number_of_intervals_on_edge = max(int(1 / 8 * total_number_of_intervals), 3)
+    test_interval_indices = list(
         torch.randperm(
             total_number_of_intervals - 2 * number_of_intervals_on_edge,
             generator=torch.Generator().manual_seed(seed),
         )[:number_of_test_intervals]
         + number_of_intervals_on_edge
-    )
+    ) + [0, 1, total_number_of_intervals - 2, total_number_of_intervals - 1]
     x_train = torch.concatenate(
         [
             x[interval_size * interval : interval_size * (interval + 1)]

@@ -3,7 +3,7 @@ from typing import Optional
 
 import torch
 
-from src.kernels.base import GradientFlowBaseKernel
+from src.kernels.gradient_flow_kernel import GradientFlowKernel
 
 
 class GradientFlowBase(ABC):
@@ -16,7 +16,7 @@ class GradientFlowBase(ABC):
 
     def __init__(
         self,
-        kernel: GradientFlowBaseKernel,
+        kernel: GradientFlowKernel,
         observation_noise: float,
         x_induce: torch.Tensor,
         y_induce: torch.Tensor,

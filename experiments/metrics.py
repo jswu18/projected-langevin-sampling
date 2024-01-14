@@ -10,8 +10,7 @@ from experiments.data import ExperimentData
 from experiments.plotters import plot_true_versus_predicted
 from experiments.utils import create_directory
 from src.gps import ExactGP, svGP
-from src.gradient_flows import GradientFlowRegression
-from src.gradient_flows.base import GradientFlowBase
+from src.gradient_flows.base.base import GradientFlowBase
 from src.utils import set_seed
 
 

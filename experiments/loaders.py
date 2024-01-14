@@ -5,8 +5,7 @@ import torch
 
 from experiments.data import Data, ExperimentData
 from src.gps import ExactGP, svGP
-from src.gradient_flows import GradientFlowRegression
-from src.gradient_flows.regression_onb import GradientFlowRegressionONB
+from src.gradient_flows import GradientFlowRegressionONB
 from src.kernels import GradientFlowKernel
 
 
@@ -17,13 +16,13 @@ def load_projected_wasserstein_gradient_flow(
     experiment_data: ExperimentData,
     induce_data: Data,
     jitter: float,
-) -> (GradientFlowRegression, torch.Tensor):
+) -> (GradientFlowRegressionONB, torch.Tensor):
     model_config = torch.load(model_path)
     particles = model_config["particles"].to(torch.double)
     pwgf = GradientFlowRegressionONB(
         kernel=GradientFlowKernel(
             base_kernel=base_kernel,
-            approximation_samples=experiment_data.train.x,
+            approximation_samples=induce_data.x,
         ),
         x_induce=induce_data.x,
         y_induce=induce_data.y,

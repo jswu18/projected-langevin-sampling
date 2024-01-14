@@ -2,7 +2,9 @@ from abc import ABC, abstractmethod
 
 import torch
 
-from src.gradient_flows.binary_classification import GradientFlowBinaryClassification
+from src.gradient_flows.base.transforms.classification import (
+    GradientFlowClassificationBase,
+)
 
 
 class Curve(ABC):
@@ -43,7 +45,7 @@ class Curve(ABC):
             generator = torch.Generator().manual_seed(seed)
         else:
             generator = None
-        probabilities = GradientFlowBinaryClassification.transform(
+        probabilities = GradientFlowClassificationBase.transform(
             y=y_curve,
         )
         return torch.bernoulli(probabilities, generator=generator).type(torch.bool)

@@ -4,7 +4,7 @@ from src.gradient_flows.base.basis.non_orthonormal_basis import GradientFlowNONB
 from src.gradient_flows.base.transforms.classification import (
     GradientFlowClassificationBase,
 )
-from src.kernels import GradientFlowNONBKernel
+from src.kernels import GradientFlowKernel
 
 
 class GradientFlowClassificationNONB(
@@ -21,7 +21,7 @@ class GradientFlowClassificationNONB(
 
     def __init__(
         self,
-        kernel: GradientFlowNONBKernel,
+        kernel: GradientFlowKernel,
         observation_noise: float,
         x_induce: torch.Tensor,
         y_induce: torch.Tensor,

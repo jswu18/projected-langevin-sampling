@@ -26,7 +26,7 @@ from experiments.runners import (
 )
 from experiments.uci.constants import DATASET_SCHEMA_MAPPING
 from experiments.uci.schemas import DatasetSchema
-from src.gradient_flows import GradientFlowRegression
+from src.gradient_flows import GradientFlowRegressionNONB, GradientFlowRegressionONB
 from src.induce_data_selectors import ConditionalVarianceInduceDataSelector
 from src.kernels import GradientFlowKernel
 from src.utils import set_seed
@@ -157,44 +157,49 @@ def main(
             likelihoods=[model.likelihood for model in subsample_gp_models]
         )
 
-        if os.path.exists(pwgf_path):
-            pwgf, particles = load_projected_wasserstein_gradient_flow(
-                model_path=pwgf_path,
-                base_kernel=deepcopy(average_ard_kernel),
-                observation_noise=float(likelihood.noise),
-                experiment_data=experiment_data,
-                induce_data=induce_data,
-                jitter=pwgf_config["jitter"],
-            )
-        else:
-            gradient_flow_kernel = GradientFlowKernel(
-                base_kernel=average_ard_kernel,
-                approximation_samples=induce_data.x,
-            )
-            from src.gradient_flows.regression_onb import GradientFlowRegressionONB
-
-            pwgf = GradientFlowRegressionONB(
-                kernel=gradient_flow_kernel,
+        # if os.path.exists(pwgf_path):
+        #     pwgf, particles = load_projected_wasserstein_gradient_flow(
+        #         model_path=pwgf_path,
+        #         base_kernel=deepcopy(average_ard_kernel),
+        #         observation_noise=float(likelihood.noise),
+        #         experiment_data=experiment_data,
+        #         induce_data=induce_data,
+        #         jitter=pwgf_config["jitter"],
+        #     )
+        # else:
+        pwgf_dict = {
+            "pwgf-orthonormal-basis": GradientFlowRegressionONB(
+                kernel=GradientFlowKernel(
+                    base_kernel=average_ard_kernel,
+                    approximation_samples=induce_data.x,
+                    concatenate_input=True,
+                ),
                 x_induce=induce_data.x,
                 y_induce=induce_data.y,
                 x_train=experiment_data.train.x,
                 y_train=experiment_data.train.y,
                 jitter=pwgf_config["jitter"],
                 observation_noise=float(likelihood.noise),
-            )
-            # pwgf = GradientFlowRegression(
-            #     kernel=gradient_flow_kernel,
-            #     x_induce=induce_data.x,
-            #     y_induce=induce_data.y,
-            #     x_train=experiment_data.train.x,
-            #     y_train=experiment_data.train.y,
-            #     jitter=pwgf_config["jitter"],
-            #     observation_noise=float(likelihood.noise),
-            # )
+            ),
+            "pwgf-induce-data-basis": GradientFlowRegressionNONB(
+                kernel=GradientFlowKernel(
+                    base_kernel=average_ard_kernel,
+                    approximation_samples=induce_data.x,
+                    concatenate_input=False,
+                ),
+                x_induce=induce_data.x,
+                y_induce=induce_data.y,
+                x_train=experiment_data.train.x,
+                y_train=experiment_data.train.y,
+                jitter=pwgf_config["jitter"],
+                observation_noise=float(likelihood.noise),
+            ),
+        }
+        for pwgf_name, pwgf in pwgf_dict.items():
             particles = train_projected_wasserstein_gradient_flow(
                 pwgf=pwgf,
                 number_of_particles=pwgf_config["number_of_particles"],
-                particle_name="average-kernel",
+                particle_name=pwgf_name,
                 experiment_data=experiment_data,
                 induce_data=induce_data,
                 simulation_duration=pwgf_config["simulation_duration"],
@@ -215,16 +220,16 @@ def main(
                 },
                 pwgf_path,
             )
-        set_seed(pwgf_config["seed"])
-        calculate_metrics(
-            model=pwgf,
-            particles=particles,
-            model_name="pwgf",
-            dataset_name=dataset_name,
-            experiment_data=experiment_data,
-            results_path=results_path,
-            plots_path=plots_path,
-        )
+            set_seed(pwgf_config["seed"])
+            calculate_metrics(
+                model=pwgf,
+                particles=particles,
+                model_name=pwgf_name,
+                dataset_name=dataset_name,
+                experiment_data=experiment_data,
+                results_path=results_path,
+                plots_path=plots_path,
+            )
         # if os.path.exists(svgp_model_path):
         #     svgp_model, _ = load_svgp(
         #         model_path=svgp_model_path,
@@ -292,7 +297,11 @@ if __name__ == "__main__":
         concatenate_metrics(
             results_path=f"experiments/uci/outputs/{data_seed}/results",
             data_types=["train", "test"],
-            model_names=["pwgf", "fixed-svgp"],
+            model_names=[
+                "pwgf-orthonormal-basis",
+                "pwgf-induce-data-basis",
+                "fixed-svgp",
+            ],
             datasets=list(DatasetSchema.__members__.keys()),
             metrics=["mae", "mse", "nll"],
         )

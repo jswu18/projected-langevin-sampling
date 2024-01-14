@@ -25,8 +25,7 @@ from experiments.plotters import (
 from experiments.utils import create_directory
 from src.bisection_search import LogBisectionSearch
 from src.gps import ExactGP, svGP
-from src.gradient_flows import GradientFlowRegression
-from src.gradient_flows.base import GradientFlowBase
+from src.gradient_flows.base.base import GradientFlowBase
 from src.induce_data_selectors import InduceDataSelector
 from src.kernels import GradientFlowKernel
 from src.samplers import sample_point
@@ -307,6 +306,10 @@ def train_projected_wasserstein_gradient_flow(
     )
     if plot_particles_path is not None:
         create_directory(plot_particles_path)
+        predicted_distribution = pwgf.predict(
+            x=experiment_data.full.x,
+            particles=particles_out,
+        )
         plot_1d_pwgf_prediction(
             experiment_data=experiment_data,
             induce_data=induce_data,
@@ -315,6 +318,11 @@ def train_projected_wasserstein_gradient_flow(
                 x=experiment_data.full.x,
                 particles=particles_out,
             ).detach(),
+            predicted_distribution=predicted_distribution
+            if isinstance(
+                predicted_distribution, gpytorch.distributions.MultivariateNormal
+            )
+            else None,
             title=f"{plot_title} (initial particles)"
             if plot_title is not None
             else None,
@@ -332,7 +340,8 @@ def train_projected_wasserstein_gradient_flow(
     best_lr = None
     energy_potentials_history = {}
     for learning_rate in tqdm(
-        np.logspace(-3, np.log10(simulation_duration / 1e6), 5), desc="WGF LR Search"
+        np.logspace(-3, np.log10(simulation_duration / 1e6), 5),
+        desc=f"WGF LR Search {particle_name}",
     ):
         number_of_epochs = int(simulation_duration / learning_rate)
         particles = pwgf.initialise_particles(
@@ -346,7 +355,7 @@ def train_projected_wasserstein_gradient_flow(
         for i in range(number_of_epochs):
             particle_update = pwgf.calculate_particle_update(
                 particles=particles,
-                learning_rate=torch.tensor(learning_rate),
+                learning_rate=learning_rate,
             )
             particles += particle_update
             energy_potential = pwgf.calculate_energy_potential(particles=particles)
@@ -394,6 +403,10 @@ def train_projected_wasserstein_gradient_flow(
     particles = particles_out
     if plot_particles_path is not None:
         create_directory(plot_particles_path)
+        predicted_distribution = pwgf.predict(
+            x=experiment_data.full.x,
+            particles=particles_out,
+        )
         plot_1d_pwgf_prediction(
             experiment_data=experiment_data,
             induce_data=induce_data,
@@ -402,6 +415,11 @@ def train_projected_wasserstein_gradient_flow(
                 x=experiment_data.full.x,
                 particles=particles,
             ).detach(),
+            predicted_distribution=predicted_distribution
+            if isinstance(
+                predicted_distribution, gpytorch.distributions.MultivariateNormal
+            )
+            else None,
             title=f"{plot_title} (learned particles)"
             if plot_title is not None
             else None,
@@ -445,7 +463,7 @@ def train_projected_wasserstein_gradient_flow(
 
 def pwgf_observation_noise_search(
     data: Data,
-    model: GradientFlowRegression,
+    model: GradientFlowBase,
     particles: torch.Tensor,
     observation_noise_upper: float,
     observation_noise_lower: float,

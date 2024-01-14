@@ -10,7 +10,7 @@ from tqdm import tqdm
 
 from experiments.data import Data, ExperimentData
 from src.gps import ExactGP, svGP
-from src.gradient_flows.base import GradientFlowBase
+from src.gradient_flows.base.base import GradientFlowBase
 from src.utils import set_seed
 
 _DATA_COLORS = {
@@ -38,11 +38,11 @@ def plot_1d_gp_prediction(
         x.reshape(-1),
         (mean - 1.96 * stdev).reshape(-1),
         (mean + 1.96 * stdev).reshape(-1),
-        facecolor=(0.8, 0.8, 0.8),
+        facecolor=(0.85, 0.85, 0.85),
         label="error bound (95%)",
         zorder=0,
     )
-    ax.plot(x.reshape(-1), mean.reshape(-1), label="mean", zorder=0)
+    ax.plot(x.reshape(-1), mean.reshape(-1), label="mean", zorder=0, color="black")
     ax.set_xlabel("x")
     ax.set_ylabel("y")
     ax.legend()
@@ -114,8 +114,13 @@ def plot_1d_experiment_data(
             experiment_data.full.x,
             experiment_data.full.y_untransformed.reshape(experiment_data.full.x.shape),
             label="latent",
-            color="gray",
+            color="tab:blue",
+            linestyle=(0, (3, 1, 1, 1, 1, 1)),
+            linewidth=3,
+            alpha=0.5,
         )
+        ax.set_ylim([0, 1])
+    ax.set_xlim([-2, 2])
     if title is not None:
         ax.set_title(title)
     if save_path is not None:
@@ -136,8 +141,8 @@ def plot_1d_particle(
     ax.plot(
         x.reshape(-1),
         y.reshape(-1),
-        color=[0.3, 0.3, 0.3],
-        alpha=0.1,
+        color=[0.1, 0.1, 0.1],
+        alpha=0.15,
         zorder=0,
         label="particle" if add_label else None,
     )
@@ -153,6 +158,7 @@ def plot_1d_pwgf_prediction(
     x: torch.Tensor,
     predicted_samples: torch.Tensor,
     save_path: str,
+    predicted_distribution: gpytorch.distributions.MultivariateNormal = None,
     title: str = None,
 ):
     fig, ax = plt.subplots(figsize=(13, 6.5))
@@ -168,6 +174,15 @@ def plot_1d_pwgf_prediction(
             alpha=0.2,
             label="induce" if i == 0 else None,
             zorder=0,
+        )
+    ax.autoscale(enable=False)  # turn off autoscale before plotting particles
+    if predicted_distribution is not None:
+        fig, ax = plot_1d_gp_prediction(
+            fig=fig,
+            ax=ax,
+            x=experiment_data.full.x,
+            mean=predicted_distribution.mean.detach(),
+            variance=predicted_distribution.variance.detach(),
         )
     for i in range(predicted_samples.shape[1]):
         fig, ax = plot_1d_particle(
@@ -228,6 +243,7 @@ def plot_1d_gp_prediction_and_induce_data(
             label="induce" if i == 0 else None,
             zorder=0,
         )
+    ax.autoscale(enable=False)  # turn off autoscale before plotting gp prediction
     prediction = model.likelihood(model(experiment_data.full.x))
     fig, ax = plot_1d_gp_prediction(
         fig=fig,
@@ -405,7 +421,7 @@ def animate_1d_pwgf_predictions(
             particle_wrapper.update(
                 pwgf.calculate_particle_update(
                     particles=particle_wrapper.particles,
-                    learning_rate=torch.tensor(learning_rate),
+                    learning_rate=learning_rate,
                 )
             )
         _predicted_samples = pwgf.predict_samples(

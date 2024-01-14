@@ -25,9 +25,9 @@ from experiments.runners import (
     train_svgp,
 )
 from experiments.utils import create_directory
-from src.gradient_flows import GradientFlowRegression
+from src.gradient_flows import GradientFlowRegressionNONB, GradientFlowRegressionONB
 from src.induce_data_selectors import ConditionalVarianceInduceDataSelector
-from src.kernels import GradientFlowKernel
+from src.kernels.gradient_flow_kernel import GradientFlowKernel
 
 parser = argparse.ArgumentParser(
     description="Main script for toy regression curves experiments."
@@ -158,57 +158,63 @@ def main(
         ),
         kernel=average_ard_kernel,
     )
-    gradient_flow_kernel = GradientFlowKernel(
-        base_kernel=average_ard_kernel,
-        approximation_samples=induce_data.x,
-    )
-    from src.gradient_flows.regression_onb import GradientFlowRegressionONB
+    pwgf_dict = {
+        "pwgf-orthonormal-basis": GradientFlowRegressionONB(
+            kernel=GradientFlowKernel(
+                base_kernel=average_ard_kernel,
+                approximation_samples=induce_data.x,
+                concatenate_input=True,
+            ),
+            x_induce=induce_data.x,
+            y_induce=induce_data.y,
+            x_train=experiment_data.train.x,
+            y_train=experiment_data.train.y,
+            jitter=pwgf_config["jitter"],
+            observation_noise=float(likelihood.noise),
+        ),
+        "pwgf-induce-data-basis": GradientFlowRegressionNONB(
+            kernel=GradientFlowKernel(
+                base_kernel=average_ard_kernel,
+                approximation_samples=induce_data.x,
+                concatenate_input=False,
+            ),
+            x_induce=induce_data.x,
+            y_induce=induce_data.y,
+            x_train=experiment_data.train.x,
+            y_train=experiment_data.train.y,
+            jitter=pwgf_config["jitter"],
+            observation_noise=float(likelihood.noise),
+        ),
+    }
+    for pwgf_name, pwgf in pwgf_dict.items():
+        particles = train_projected_wasserstein_gradient_flow(
+            pwgf=pwgf,
+            number_of_particles=pwgf_config["number_of_particles"],
+            particle_name=pwgf_name,
+            experiment_data=experiment_data,
+            induce_data=induce_data,
+            simulation_duration=pwgf_config["simulation_duration"],
+            seed=pwgf_config["seed"],
+            plot_title=f"{type(curve_function).__name__}",
+            plot_particles_path=plot_curve_path,
+            animate_1d_path=plot_curve_path,
+            plot_update_magnitude_path=plot_curve_path,
+            christmas_colours=pwgf_config["christmas_colours"]
+            if "christmas_colours" in pwgf_config
+            else False,
+            metric_to_minimise=pwgf_config["metric_to_minimise"],
+            initial_particles_noise_only=pwgf_config["initial_particles_noise_only"],
+        )
+        calculate_metrics(
+            model=pwgf,
+            particles=particles,
+            model_name=pwgf_name,
+            dataset_name=type(curve_function).__name__,
+            experiment_data=experiment_data,
+            results_path=results_curve_path,
+            plots_path=plot_curve_path,
+        )
 
-    pwgf = GradientFlowRegressionONB(
-        kernel=gradient_flow_kernel,
-        x_induce=induce_data.x,
-        y_induce=induce_data.y,
-        x_train=experiment_data.train.x,
-        y_train=experiment_data.train.y,
-        jitter=pwgf_config["jitter"],
-        observation_noise=float(likelihood.noise),
-    )
-    # pwgf = GradientFlowRegression(
-    #     kernel=gradient_flow_kernel,
-    #     x_induce=induce_data.x,
-    #     y_induce=induce_data.y,
-    #     x_train=experiment_data.train.x,
-    #     y_train=experiment_data.train.y,
-    #     jitter=pwgf_config["jitter"],
-    #     observation_noise=float(likelihood.noise),
-    # )
-    particles = train_projected_wasserstein_gradient_flow(
-        pwgf=pwgf,
-        number_of_particles=pwgf_config["number_of_particles"],
-        particle_name="average-kernel",
-        experiment_data=experiment_data,
-        induce_data=induce_data,
-        simulation_duration=pwgf_config["simulation_duration"],
-        seed=pwgf_config["seed"],
-        plot_title=f"{type(curve_function).__name__}",
-        plot_particles_path=plot_curve_path,
-        animate_1d_path=plot_curve_path,
-        plot_update_magnitude_path=plot_curve_path,
-        christmas_colours=pwgf_config["christmas_colours"]
-        if "christmas_colours" in pwgf_config
-        else False,
-        metric_to_minimise=pwgf_config["metric_to_minimise"],
-        initial_particles_noise_only=pwgf_config["initial_particles_noise_only"],
-    )
-    # calculate_metrics(
-    #     model=pwgf,
-    #     particles=particles,
-    #     model_name="pwgf",
-    #     dataset_name=type(curve_function).__name__,
-    #     experiment_data=experiment_data,
-    #     results_path=results_curve_path,
-    #     plots_path=plot_curve_path,
-    # )
     # fixed_svgp_model, _ = train_svgp(
     #     experiment_data=experiment_data,
     #     induce_data=induce_data,
@@ -258,7 +264,7 @@ if __name__ == "__main__":
     concatenate_metrics(
         results_path="experiments/curves/regression/outputs/results",
         data_types=["train", "test"],
-        model_names=["pwgf", "fixed-svgp"],
+        model_names=["pwgf-orthonormal-basis", "pwgf-induce-data-basis", "fixed-svgp"],
         datasets=[
             type(curve_function_).__name__.lower()
             for curve_function_ in CURVE_FUNCTIONS

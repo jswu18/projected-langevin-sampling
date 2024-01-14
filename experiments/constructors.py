@@ -1,5 +1,5 @@
 from copy import deepcopy
-from typing import List, Union
+from typing import List
 
 import gpytorch
 import numpy as np
@@ -39,3 +39,16 @@ def construct_average_ard_kernel(
         np.array([k.outputscale.detach().numpy() for k in kernels])
     ).mean(dim=0)
     return kernel
+
+
+# def construct_average_ard_kernel(
+#     kernels: List[gpytorch.kernels.Kernel],
+# ) -> gpytorch.kernels.Kernel:
+#     kernel = gpytorch.kernels.ScaleKernel(gpytorch.kernels.RBFKernel())
+#     kernel.base_kernel.lengthscale = torch.concat(
+#         tensors=[k.base_kernel.lengthscale for k in kernels],
+#     ).mean()
+#     kernel.outputscale = np.array(
+#         [np.mean([k.outputscale.detach().numpy() for k in kernels])]
+#     )
+#     return kernel

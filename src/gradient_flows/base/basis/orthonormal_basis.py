@@ -5,7 +5,7 @@ from typing import Optional
 import torch
 
 from src.gradient_flows.base.base import GradientFlowBase
-from src.kernels import GradientFlowONBKernel
+from src.kernels import GradientFlowKernel
 from src.samplers import sample_multivariate_normal
 
 
@@ -22,7 +22,7 @@ class GradientFlowONBBase(GradientFlowBase, ABC):
 
     def __init__(
         self,
-        kernel: GradientFlowONBKernel,
+        kernel: GradientFlowKernel,
         observation_noise: float,
         x_induce: torch.Tensor,
         y_induce: torch.Tensor,
@@ -49,9 +49,6 @@ class GradientFlowONBBase(GradientFlowBase, ABC):
             y_train=y_train,
             jitter=jitter,
         )
-        self.base_gram_induce = self.kernel.base_kernel(
-            x1=x_induce, x2=x_induce
-        )  # k(Z, X) of size (M, M)
         self.eigenvalues, self.eigenvectors = torch.linalg.eigh(
             self.base_gram_induce.evaluate()
         )
@@ -183,7 +180,7 @@ class GradientFlowONBBase(GradientFlowBase, ABC):
     ):
         """
         Calculates the predictive noise for a given input.
-        G([Z, x]) ~ N(0, r([Z, x], [Z, x]))
+
         :param particles: Particles of size (M, P)
         :param x: Test points of size (N*, D)
         :return: The predictive noise of size (N*, P)
@@ -196,6 +193,8 @@ class GradientFlowONBBase(GradientFlowBase, ABC):
             x1=self.x_induce,
             x2=x,
         )
+        if base_gram_zx.ndim == 3:
+            base_gram_zx = base_gram_zx[0, :, :]
         off_diagonal_block = (
             base_gram_zx.T @ self.scaled_eigenvectors @ torch.diag(self.eigenvalues)
         )
@@ -217,7 +216,7 @@ class GradientFlowONBBase(GradientFlowBase, ABC):
                 ),
             ],
             dim=0,
-        )
+        )  # (M+N*, M+N*)
         return sample_multivariate_normal(
             mean=torch.zeros(noise_covariance.shape[0]),
             cov=noise_covariance,
@@ -241,6 +240,8 @@ class GradientFlowONBBase(GradientFlowBase, ABC):
             x1=x,
             x2=self.x_induce,
         ).to_dense()
+        if base_gram_x_induce.ndim == 3:
+            base_gram_x_induce = base_gram_x_induce[0, :, :]
 
         # G([Z, x]) ~ N(0, R)
         if noise is None:

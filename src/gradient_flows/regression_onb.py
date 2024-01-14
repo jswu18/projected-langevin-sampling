@@ -2,7 +2,7 @@ import torch
 
 from src.gradient_flows.base.basis.orthonormal_basis import GradientFlowONBBase
 from src.gradient_flows.base.transforms.regression import GradientFlowRegressionBase
-from src.kernels import GradientFlowONBKernel
+from src.kernels import GradientFlowKernel
 
 
 class GradientFlowRegressionONB(GradientFlowONBBase, GradientFlowRegressionBase):
@@ -17,7 +17,7 @@ class GradientFlowRegressionONB(GradientFlowONBBase, GradientFlowRegressionBase)
 
     def __init__(
         self,
-        kernel: GradientFlowONBKernel,
+        kernel: GradientFlowKernel,
         observation_noise: float,
         x_induce: torch.Tensor,
         y_induce: torch.Tensor,

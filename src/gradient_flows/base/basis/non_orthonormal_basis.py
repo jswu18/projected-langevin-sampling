@@ -6,7 +6,7 @@ import gpytorch
 import torch
 
 from src.gradient_flows.base.base import GradientFlowBase
-from src.kernels import GradientFlowNONBKernel
+from src.kernels import GradientFlowKernel
 from src.samplers import sample_multivariate_normal
 
 
@@ -23,7 +23,7 @@ class GradientFlowNONBBase(GradientFlowBase, ABC):
 
     def __init__(
         self,
-        kernel: GradientFlowNONBKernel,
+        kernel: GradientFlowKernel,
         observation_noise: float,
         x_induce: torch.Tensor,
         y_induce: torch.Tensor,
@@ -160,10 +160,37 @@ class GradientFlowNONBBase(GradientFlowBase, ABC):
         :param x: Test points of size (N*, D)
         :return: The predictive noise of size (N*, P)
         """
-        zx = torch.concatenate((self.x_induce, x), dim=0)  # (M+N*, D)
-        noise_covariance = self.kernel.forward(
-            x1=zx,
-            x2=zx,
+        # zx = torch.concatenate((self.x_induce, x), dim=0)  # (M+N*, D)
+        # noise_covariance = self.kernel.forward(
+        #     x1=zx,
+        #     x2=zx,
+        # )  # (M+N*, M+N*)
+        gram_x = self.kernel.forward(
+            x1=x,
+            x2=x,
+        )
+        gram_xz = self.kernel.forward(
+            x1=x,
+            x2=self.x_induce,
+        )
+        noise_covariance = torch.concatenate(
+            [
+                torch.concatenate(
+                    [
+                        self.gram_induce,
+                        gram_xz.T,
+                    ],
+                    dim=1,
+                ),
+                torch.concatenate(
+                    [
+                        gram_xz,
+                        gram_x,
+                    ],
+                    dim=1,
+                ),
+            ],
+            dim=0,
         )  # (M+N*, M+N*)
         return sample_multivariate_normal(
             mean=torch.zeros(noise_covariance.shape[0]),
