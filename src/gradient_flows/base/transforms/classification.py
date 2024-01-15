@@ -65,8 +65,8 @@ class GradientFlowClassificationBase(GradientFlowBase, ABC):
         Predicts a Bernoulli distribution for the given input.
         :param x: input of size (N*, D)
         :param particles: particles of size (P, N)
-        :param predictive_noise: Optional predictive noise of size (N, P)
-        :param observation_noise: Optional observation noise of size (N, P)
+        :param predictive_noise: Optional predictive noise of size (N*, P)
+        :param observation_noise: Optional observation noise of size (N*, P)
         :return: A Bernoulli distribution of size (N*, ).
         """
         samples = self.predict_samples(

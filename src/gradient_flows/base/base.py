@@ -246,8 +246,8 @@ class GradientFlowBase(ABC):
         self,
         particles: torch.Tensor,
         x: torch.Tensor,
-        observation_noise: torch.Tensor = None,
         predictive_noise: torch.Tensor = None,
+        observation_noise: torch.Tensor = None,
     ) -> torch.Tensor:
         """
         Predicts samples for given test points x and applies the output transformation.
@@ -275,13 +275,15 @@ class GradientFlowBase(ABC):
         self,
         x: torch.Tensor,
         particles: torch.Tensor,
-        noise: torch.Tensor = None,
+        predictive_noise: Optional[torch.Tensor] = None,
+        observation_noise: Optional[torch.Tensor] = None,
     ) -> torch.distributions.Distribution:
         """
         Predicts the appropriate distribution for given test points x.
         :param x: Test points of size (N*, D).
         :param particles: Particles of size (M, P).
-        :param noise: A noise tensor of size (N*, P), if None, it is sampled from the predictive noise distribution.
+        :param predictive_noise: Optional predictive noise of size (N*, P)
+        :param observation_noise: Optional observation noise of size (N*, P)
         :return: A distribution.
         """
         raise NotImplementedError
@@ -290,6 +292,12 @@ class GradientFlowBase(ABC):
         self,
         x: torch.Tensor,
         particles: torch.Tensor,
-        noise: torch.Tensor = None,
+        predictive_noise: Optional[torch.Tensor] = None,
+        observation_noise: Optional[torch.Tensor] = None,
     ) -> torch.distributions.Distribution:
-        return self.predict(x=x, particles=particles, noise=noise)
+        return self.predict(
+            x=x,
+            particles=particles,
+            predictive_noise=predictive_noise,
+            observation_noise=observation_noise,
+        )
