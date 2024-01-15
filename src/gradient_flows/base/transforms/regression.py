@@ -38,7 +38,8 @@ class GradientFlowRegressionBase(GradientFlowBase, ABC):
         :param observation_noise: The observation noise.
         :param jitter: A jitter for numerical stability.
         """
-        super().__init__(
+        GradientFlowBase.__init__(
+            self,
             kernel=kernel,
             observation_noise=observation_noise,
             x_induce=x_induce,
@@ -56,18 +57,25 @@ class GradientFlowRegressionBase(GradientFlowBase, ABC):
         self,
         x: torch.Tensor,
         particles: torch.Tensor,
-        noise: Optional[torch.Tensor] = None,
+        predictive_noise: Optional[torch.Tensor] = None,
+        observation_noise: Optional[torch.Tensor] = None,
         jitter: float = 1e-20,
     ) -> gpytorch.distributions.MultivariateNormal:
         """
         Predicts the mean and variance for a given input.
         :param x: input of size (N*, D)
         :param particles: particles of size (P, N)
-        :param noise: noise of size (N, P)
+        :param predictive_noise: Optional predictive noise of size (N, P)
+        :param observation_noise: Optional observation noise of size (N, P)
         :param jitter: jitter to add to the diagonal of the covariance matrix if it is not positive definite
         :return: normal distribution of size (N*,)
         """
-        samples = self.predict_samples(x=x, particles=particles, noise=noise)
+        samples = self.predict_samples(
+            x=x,
+            particles=particles,
+            predictive_noise=predictive_noise,
+            observation_noise=observation_noise,
+        )
         return gpytorch.distributions.MultivariateNormal(
             mean=samples.mean(dim=1),
             covariance_matrix=torch.diag(torch.clip(samples.var(axis=1), jitter, None)),

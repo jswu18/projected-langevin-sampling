@@ -167,13 +167,13 @@ def main(
         #         jitter=pwgf_config["jitter"],
         #     )
         # else:
+        gradient_flow_kernel = GradientFlowKernel(
+            base_kernel=average_ard_kernel,
+            approximation_samples=induce_data.x,
+        )
         pwgf_dict = {
             "pwgf-orthonormal-basis": GradientFlowRegressionONB(
-                kernel=GradientFlowKernel(
-                    base_kernel=average_ard_kernel,
-                    approximation_samples=induce_data.x,
-                    concatenate_input=True,
-                ),
+                kernel=gradient_flow_kernel,
                 x_induce=induce_data.x,
                 y_induce=induce_data.y,
                 x_train=experiment_data.train.x,
@@ -182,11 +182,7 @@ def main(
                 observation_noise=float(likelihood.noise),
             ),
             "pwgf-induce-data-basis": GradientFlowRegressionNONB(
-                kernel=GradientFlowKernel(
-                    base_kernel=average_ard_kernel,
-                    approximation_samples=induce_data.x,
-                    concatenate_input=False,
-                ),
+                kernel=gradient_flow_kernel,
                 x_induce=induce_data.x,
                 y_induce=induce_data.y,
                 x_train=experiment_data.train.x,

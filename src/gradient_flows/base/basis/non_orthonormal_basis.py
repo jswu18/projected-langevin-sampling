@@ -24,7 +24,7 @@ class GradientFlowNONBBase(GradientFlowBase, ABC):
     def __init__(
         self,
         kernel: GradientFlowKernel,
-        observation_noise: float,
+        observation_noise: Optional[float],
         x_induce: torch.Tensor,
         y_induce: torch.Tensor,
         x_train: torch.Tensor,
@@ -41,7 +41,8 @@ class GradientFlowNONBBase(GradientFlowBase, ABC):
         :param observation_noise: The observation noise.
         :param jitter: A jitter for numerical stability.
         """
-        super().__init__(
+        GradientFlowBase.__init__(
+            self,
             kernel=kernel,
             observation_noise=observation_noise,
             x_induce=x_induce,
@@ -211,10 +212,14 @@ class GradientFlowNONBBase(GradientFlowBase, ABC):
         :param noise: A noise tensor of size (N*, P), if None, it is sampled from the predictive noise distribution.
         :return: Predicted samples of size (N*, P).
         """
+
+        # Use additional approximation samples to calculate the gram matrices to ensure better OOD predictive behaviour
         gram_x_induce = self.kernel.forward(
-            x1=x,
-            x2=self.x_induce,
+            x1=x, x2=self.x_induce, additional_approximation_samples=x
         ).to_dense()  # r(x, Z) of size (N*, M)
+        gram_induce = self.kernel.forward(
+            x1=self.x_induce, x2=self.x_induce, additional_approximation_samples=x
+        ).to_dense()  # r(Z, Z) of size (M, M)
 
         # G([Z, x]) ~ N(0, r([Z, x], [Z, x]))
         if noise is None:
@@ -227,7 +232,7 @@ class GradientFlowNONBBase(GradientFlowBase, ABC):
         return noise[self.approximation_dimension :, :] + (
             gpytorch.solve(
                 lhs=gram_x_induce,
-                input=self.gram_induce,
+                input=gram_induce,
                 rhs=(particles - noise[: self.approximation_dimension, :]),
             )
         )  # size (N*, P)

@@ -22,7 +22,6 @@ class GradientFlowClassificationNONB(
     def __init__(
         self,
         kernel: GradientFlowKernel,
-        observation_noise: float,
         x_induce: torch.Tensor,
         y_induce: torch.Tensor,
         x_train: torch.Tensor,
@@ -32,7 +31,7 @@ class GradientFlowClassificationNONB(
         GradientFlowNONBBase.__init__(
             self,
             kernel=kernel,
-            observation_noise=observation_noise,
+            observation_noise=None,
             x_induce=x_induce,
             y_induce=y_induce,
             x_train=x_train,
@@ -42,7 +41,6 @@ class GradientFlowClassificationNONB(
         GradientFlowClassificationBase.__init__(
             self,
             kernel=kernel,
-            observation_noise=observation_noise,
             x_induce=x_induce,
             y_induce=y_induce,
             x_train=x_train,

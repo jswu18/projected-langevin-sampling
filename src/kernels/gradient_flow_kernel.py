@@ -16,7 +16,6 @@ class GradientFlowKernel(gpytorch.kernels.Kernel):
         base_kernel: gpytorch.kernels.Kernel,
         approximation_samples: torch.Tensor,
         number_of_classes: int = 1,
-        concatenate_input: bool = True,
         **kwargs,
     ):
         if base_kernel.active_dims is not None:
@@ -26,24 +25,23 @@ class GradientFlowKernel(gpytorch.kernels.Kernel):
         self.number_of_classes = number_of_classes
         self.base_kernel = base_kernel
         self.approximation_samples = approximation_samples
-        self.concatenate_input = concatenate_input
 
     def forward(
         self,
         x1: torch.Tensor,
         x2: torch.Tensor,
+        additional_approximation_samples: torch.Tensor = None,
         last_dim_is_batch: bool = False,
         diag: bool = False,
         **params,
     ) -> torch.Tensor:
-        if self.concatenate_input:
-            approximation_samples = torch.cat(
-                [self.approximation_samples, x1, x2], dim=0
-            ).unique(dim=0)
-            number_of_approximation_samples = approximation_samples.shape[0]
-        else:
-            approximation_samples = self.approximation_samples
-            number_of_approximation_samples = self.approximation_samples.shape[0]
+        approximation_samples_list = [self.approximation_samples]
+        if additional_approximation_samples is not None:
+            approximation_samples_list.append(additional_approximation_samples)
+        approximation_samples = torch.cat(approximation_samples_list, dim=0).unique(
+            dim=0
+        )
+        number_of_approximation_samples = approximation_samples.shape[0]
         gram_x1_sample = self.base_kernel.forward(
             x1=x1,
             x2=approximation_samples,

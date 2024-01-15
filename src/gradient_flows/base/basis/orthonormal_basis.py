@@ -23,7 +23,7 @@ class GradientFlowONBBase(GradientFlowBase, ABC):
     def __init__(
         self,
         kernel: GradientFlowKernel,
-        observation_noise: float,
+        observation_noise: Optional[float],
         x_induce: torch.Tensor,
         y_induce: torch.Tensor,
         x_train: torch.Tensor,
@@ -40,7 +40,8 @@ class GradientFlowONBBase(GradientFlowBase, ABC):
         :param observation_noise: The observation noise.
         :param jitter: A jitter for numerical stability.
         """
-        super().__init__(
+        GradientFlowBase.__init__(
+            self,
             kernel=kernel,
             observation_noise=observation_noise,
             x_induce=x_induce,
@@ -105,16 +106,6 @@ class GradientFlowONBBase(GradientFlowBase, ABC):
         return (
             self.base_gram_induce_train.T @ self.scaled_eigenvectors @ particles
         )  # k(X, Z) @ V_tilde @ U(t) of size (N, P)
-
-    def _calculate_untransformed_train_prediction(self, particles: torch.Tensor):
-        """
-        Calculates the untransformed prediction for each training point.
-        :param particles: Particles of size (M, P).
-        :return: The untransformed prediction of size (N, P).
-        """
-        return gpytorch.solve(
-            self.base_gram_induce, particles
-        )  # k(Z, Z)^{-1} @ U(t) of size (M, P)
 
     def calculate_energy_potential(self, particles: torch.Tensor) -> float:
         """
@@ -185,9 +176,11 @@ class GradientFlowONBBase(GradientFlowBase, ABC):
         :param x: Test points of size (N*, D)
         :return: The predictive noise of size (N*, P)
         """
+        # Use additional approximation samples to ensure better OOD predictive behaviour
         gram_x = self.kernel.forward(
             x1=x,
             x2=x,
+            additional_approximation_samples=x,
         )
         base_gram_zx = self.kernel.base_kernel.forward(
             x1=self.x_induce,

@@ -376,10 +376,15 @@ def animate_1d_pwgf_predictions(
         x=experiment_data.full.x,
         particles=particles,
     ).detach()
+    observation_noise = pwgf.sample_observation_noise(
+        number_of_particles=number_of_particles,
+        seed=seed,
+    ).detach()
     predicted_samples = pwgf.predict_samples(
         x=experiment_data.full.x,
         particles=particles,
-        noise=predictive_noise,
+        predictive_noise=predictive_noise,
+        observation_noise=observation_noise,
     ).detach()
     samples_plotted = [
         ax.plot(
@@ -427,7 +432,8 @@ def animate_1d_pwgf_predictions(
         _predicted_samples = pwgf.predict_samples(
             x=experiment_data.full.x,
             particles=particle_wrapper.particles,
-            noise=predictive_noise,
+            predictive_noise=predictive_noise,
+            observation_noise=observation_noise,
         ).detach()
         for i in range(_predicted_samples.shape[-1]):
             samples_plotted[i].set_data((x, _predicted_samples[:, i].reshape(-1)))

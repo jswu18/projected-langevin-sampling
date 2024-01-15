@@ -20,7 +20,6 @@ class GradientFlowClassificationBase(GradientFlowBase, ABC):
     def __init__(
         self,
         kernel: GradientFlowKernel,
-        observation_noise: float,
         x_induce: torch.Tensor,
         y_induce: torch.Tensor,
         x_train: torch.Tensor,
@@ -34,12 +33,12 @@ class GradientFlowClassificationBase(GradientFlowBase, ABC):
         :param x_train: The training points of size (N, D).
         :param y_train: The training points of size (N,).
         :param kernel: The gradient flow kernel.
-        :param observation_noise: The observation noise.
         :param jitter: A jitter for numerical stability.
         """
-        super().__init__(
+        GradientFlowBase.__init__(
+            self,
             kernel=kernel,
-            observation_noise=observation_noise,
+            observation_noise=None,
             x_induce=x_induce,
             y_induce=y_induce,
             x_train=x_train,
@@ -59,17 +58,23 @@ class GradientFlowClassificationBase(GradientFlowBase, ABC):
         self,
         x: torch.Tensor,
         particles: torch.Tensor,
-        noise: Optional[torch.Tensor] = None,
+        predictive_noise: Optional[torch.Tensor] = None,
+        observation_noise: Optional[torch.Tensor] = None,
     ) -> torch.distributions.Bernoulli:
         """
         Predicts a Bernoulli distribution for the given input.
         :param x: input of size (N*, D)
         :param particles: particles of size (P, N)
-        :param noise: noise of size (N, P)
-        :param jitter: jitter to add to the diagonal of the covariance matrix if it is not positive definite
-        :return: normal distribution of size (N*,)
+        :param predictive_noise: Optional predictive noise of size (N, P)
+        :param observation_noise: Optional observation noise of size (N, P)
+        :return: A Bernoulli distribution of size (N*, ).
         """
-        samples = self.predict_samples(x=x, particles=particles, noise=noise)
+        samples = self.predict_samples(
+            x=x,
+            particles=particles,
+            predictive_noise=predictive_noise,
+            observation_noise=observation_noise,
+        )
         predictions = samples.mean(dim=1)
         # predictions[predictions <= 0.5] = 0
         return torch.distributions.Bernoulli(

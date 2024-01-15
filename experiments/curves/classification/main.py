@@ -183,11 +183,6 @@ def main(
     average_ard_kernel = construct_average_ard_kernel(
         kernels=[model.kernel for model in subsample_gp_models],
     )
-    observation_noise = torch.tensor(
-        np.array(
-            [model.likelihood.noise.detach().numpy() for model in subsample_gp_models]
-        )
-    ).mean()
     induce_data = select_induce_data(
         seed=induce_data_config["seed"],
         induce_data_selector=ConditionalVarianceInduceDataSelector(),
@@ -201,34 +196,28 @@ def main(
         ),
         kernel=average_ard_kernel,
     )
+    gradient_flow_kernel = GradientFlowKernel(
+        base_kernel=average_ard_kernel,
+        approximation_samples=induce_data.x,
+        number_of_classes=likelihood.num_classes,
+    )
     pwgf_dict = {
-        "pwgf-orthonormal-basis": GradientFlowClassificationONB(
-            kernel=GradientFlowKernel(
-                base_kernel=average_ard_kernel,
-                approximation_samples=induce_data.x,
-                number_of_classes=likelihood.num_classes,
-                concatenate_input=True,
-            ),
-            x_induce=induce_data.x,
-            y_induce=induce_data.y,
-            x_train=experiment_data.train.x,
-            y_train=experiment_data.train.y,
-            jitter=pwgf_config["jitter"],
-            observation_noise=observation_noise,
-        ),
+        # "pwgf-orthonormal-basis": GradientFlowClassificationONB(
+        #     kernel=gradient_flow_kernel,
+        #     x_induce=induce_data.x,
+        #     y_induce=induce_data.y,
+        #     x_train=experiment_data.train.x,
+        #     y_train=experiment_data.train.y,
+        #     jitter=pwgf_config["jitter"],
+        #     observation_noise=observation_noise,
+        # ),
         "pwgf-induce-data-basis": GradientFlowClassificationNONB(
-            kernel=GradientFlowKernel(
-                base_kernel=average_ard_kernel,
-                approximation_samples=induce_data.x,
-                number_of_classes=likelihood.num_classes,
-                concatenate_input=False,
-            ),
+            kernel=gradient_flow_kernel,
             x_induce=induce_data.x,
             y_induce=induce_data.y,
             x_train=experiment_data.train.x,
             y_train=experiment_data.train.y,
             jitter=pwgf_config["jitter"],
-            observation_noise=observation_noise,
         ),
     }
     for pwgf_name, pwgf in pwgf_dict.items():

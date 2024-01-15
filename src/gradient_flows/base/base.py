@@ -4,6 +4,7 @@ from typing import Optional
 import torch
 
 from src.kernels.gradient_flow_kernel import GradientFlowKernel
+from src.samplers import sample_multivariate_normal
 
 
 class GradientFlowBase(ABC):
@@ -17,7 +18,7 @@ class GradientFlowBase(ABC):
     def __init__(
         self,
         kernel: GradientFlowKernel,
-        observation_noise: float,
+        observation_noise: Optional[float],
         x_induce: torch.Tensor,
         y_induce: torch.Tensor,
         x_train: torch.Tensor,
@@ -195,12 +196,35 @@ class GradientFlowBase(ABC):
         x: torch.Tensor,
     ):
         """
-        Calculates the predictive noise for a given input.
+        Samples the predictive noise for a given input.
         :param particles: Particles of size (M, P)
         :param x: Test points of size (N*, D)
         :return: The predictive noise of size (N*, P)
         """
         raise NotImplementedError
+
+    def sample_observation_noise(
+        self,
+        number_of_particles: int,
+        seed: Optional[int] = None,
+    ) -> torch.Tensor:
+        """
+        Samples observation noise for a given number of particles.
+        :param number_of_particles: The number of particles to sample noise for.
+        :param seed: An optional seed for reproducibility.
+        :return: A tensor of size (N, P).
+        """
+        if self.observation_noise is None:
+            return torch.zeros(number_of_particles)
+        generator = None
+        if seed is not None:
+            generator = torch.Generator().manual_seed(seed)
+        return torch.normal(
+            mean=0.0,
+            std=self.observation_noise,
+            size=(number_of_particles,),
+            generator=generator,
+        ).flatten()
 
     @abstractmethod
     def predict_untransformed_samples(
@@ -222,21 +246,28 @@ class GradientFlowBase(ABC):
         self,
         particles: torch.Tensor,
         x: torch.Tensor,
-        noise: torch.Tensor = None,
+        observation_noise: torch.Tensor = None,
+        predictive_noise: torch.Tensor = None,
     ) -> torch.Tensor:
         """
         Predicts samples for given test points x and applies the output transformation.
         :param particles: Particles of size (M, P).
         :param x: Test points of size (N*, D).
-        :param noise: A noise tensor of size (N*, P), if None, it is sampled from the predictive noise distribution.
+        :param observation_noise: A noise tensor of size (N*, P), if None, it is sampled from the observation noise distribution.
+        :param predictive_noise: A noise tensor of size (N*, P), if None, it is sampled from the predictive noise distribution.
         :return: Predicted samples of size (N*, P).
         """
+        if observation_noise is None:
+            observation_noise = self.sample_observation_noise(
+                number_of_particles=particles.shape[1]
+            )
         return self.transform(
             self.predict_untransformed_samples(
                 particles=particles,
                 x=x,
-                noise=noise,
+                noise=predictive_noise,
             )
+            + observation_noise[None, :]
         )
 
     @abstractmethod
