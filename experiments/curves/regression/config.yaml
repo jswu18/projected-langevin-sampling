@@ -16,13 +16,16 @@ induce_data:
   induce_data_factor: 1
   induce_data_power: 2
 pwgf:
-  number_of_particles: 50
+  number_of_particles: 100
   simulation_duration: 5.0e-1
   jitter: 0
   seed: 0
   christmas_colours: True
   metric_to_minimise: mae
   initial_particles_noise_only: True
+  observation_noise_upper: 1.0e+4
+  observation_noise_lower: 1.0e-4
+  number_of_observation_noise_searches: 25
 svgp:
   seed: 0
   number_of_epochs: 1000

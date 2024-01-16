@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Tuple, Union
 
 import gpytorch
 import torch
@@ -40,6 +40,10 @@ def load_svgp(
     x_induce: torch.Tensor,
     mean: gpytorch.means.Mean,
     kernel: gpytorch.kernels.Kernel,
+    likelihood: Union[
+        gpytorch.likelihoods.GaussianLikelihood,
+        gpytorch.likelihoods.BernoulliLikelihood,
+    ],
     learn_inducing_locations: bool,
 ) -> Tuple[svGP, torch.Tensor]:
     model = svGP(
@@ -47,7 +51,7 @@ def load_svgp(
         mean=mean,
         kernel=kernel,
         learn_inducing_locations=learn_inducing_locations,
-        likelihood=gpytorch.likelihoods.GaussianLikelihood(),
+        likelihood=likelihood,
     )
     loaded_states = torch.load(model_path)
     model.load_state_dict(loaded_states["model"])

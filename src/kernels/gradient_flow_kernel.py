@@ -1,3 +1,5 @@
+from typing import Optional
+
 import gpytorch
 import torch
 
@@ -18,19 +20,21 @@ class GradientFlowKernel(gpytorch.kernels.Kernel):
         number_of_classes: int = 1,
         **kwargs,
     ):
-        if base_kernel.active_dims is not None:
-            kwargs["active_dims"] = base_kernel.active_dims
         super(GradientFlowKernel, self).__init__(**kwargs)
 
         self.number_of_classes = number_of_classes
         self.base_kernel = base_kernel
         self.approximation_samples = approximation_samples
 
+    @property
+    def batch_shape(self) -> torch.Size:
+        return torch.Size([])
+
     def forward(
         self,
         x1: torch.Tensor,
         x2: torch.Tensor,
-        additional_approximation_samples: torch.Tensor = None,
+        additional_approximation_samples: Optional[torch.Tensor] = None,
         last_dim_is_batch: bool = False,
         diag: bool = False,
         **params,
@@ -58,22 +62,14 @@ class GradientFlowKernel(gpytorch.kernels.Kernel):
         gram_x2_sample = (
             gram_x2_sample if self.number_of_classes == 1 else gram_x2_sample[0, :, :]
         )
-        if diag:
-            return torch.mul(
-                torch.div(1, number_of_approximation_samples),
-                (gram_x1_sample @ gram_x2_sample.T),
-            ).diag()
-        return torch.mul(
+        res = torch.mul(
             torch.div(1, number_of_approximation_samples),
             (gram_x1_sample @ gram_x2_sample.T),
         )
+        if diag:
+            return res.diag()
+        else:
+            return res
 
     def num_outputs_per_input(self, x1: torch.Tensor, x2: torch.Tensor) -> int:
-        return self.base_kernel.num_outputs_per_input(x1, x2)
-
-    def prediction_strategy(
-        self, train_inputs, train_prior_dist, train_labels, likelihood
-    ):
-        return self.base_kernel.prediction_strategy(
-            train_inputs, train_prior_dist, train_labels, likelihood
-        )
+        return 1

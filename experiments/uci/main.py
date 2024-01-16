@@ -19,7 +19,6 @@ from experiments.metrics import calculate_metrics, concatenate_metrics
 from experiments.preprocess import set_up_experiment
 from experiments.runners import (
     learn_subsample_gps,
-    pwgf_observation_noise_search,
     select_induce_data,
     train_projected_wasserstein_gradient_flow,
     train_svgp,
@@ -200,6 +199,11 @@ def main(
                 induce_data=induce_data,
                 simulation_duration=pwgf_config["simulation_duration"],
                 seed=pwgf_config["seed"],
+                observation_noise_upper=pwgf_config["observation_noise_upper"],
+                observation_noise_lower=pwgf_config["observation_noise_lower"],
+                number_of_observation_noise_searches=pwgf_config[
+                    "number_of_observation_noise_searches"
+                ],
                 plot_title=f"{dataset_name}",
                 plot_particles_path=None,
                 animate_1d_path=None,
@@ -235,42 +239,84 @@ def main(
         #         learn_inducing_locations=False,
         #     )
         # else:
-        #     svgp_model, losses = train_svgp(
-        #         experiment_data=experiment_data,
-        #         induce_data=induce_data,
-        #         mean=gpytorch.means.ConstantMean(),
-        #         kernel=pwgf.kernel,
-        #         seed=svgp_config["seed"],
-        #         number_of_epochs=svgp_config["number_of_epochs"],
-        #         batch_size=svgp_config["batch_size"],
-        #         learning_rate_upper=svgp_config["learning_rate_upper"],
-        #         learning_rate_lower=svgp_config["learning_rate_lower"],
-        #         number_of_learning_rate_searches=svgp_config[
-        #             "number_of_learning_rate_searches"
-        #         ],
-        #         is_fixed=True,
-        #         models_path=svgp_iteration_model_path,
-        #         plot_title=f"{dataset_name}",
-        #         plot_1d_path=None,
-        #         animate_1d_path=None,
-        #         plot_loss_path=plots_path,
-        #     )
-        #     torch.save(
-        #         {
-        #             "model": svgp_model.state_dict(),
-        #             "losses": losses,
-        #         },
-        #         svgp_model_path,
-        #     )
-        # set_seed(svgp_config["seed"])
-        # calculate_metrics(
-        #     model=svgp_model,
-        #     model_name="svgp",
-        #     dataset_name=dataset_name,
-        #     experiment_data=experiment_data,
-        #     results_path=results_path,
-        #     plots_path=plots_path,
-        # )
+        svgp_k, losses = train_svgp(
+            model_name="svgp-k-kernel",
+            experiment_data=experiment_data,
+            induce_data=induce_data,
+            mean=gpytorch.means.ConstantMean(),
+            kernel=average_ard_kernel,
+            likelihood=gpytorch.likelihoods.GaussianLikelihood(),
+            seed=svgp_config["seed"],
+            number_of_epochs=svgp_config["number_of_epochs"],
+            batch_size=svgp_config["batch_size"],
+            learning_rate_upper=svgp_config["learning_rate_upper"],
+            learning_rate_lower=svgp_config["learning_rate_lower"],
+            number_of_learning_rate_searches=svgp_config[
+                "number_of_learning_rate_searches"
+            ],
+            is_fixed=True,
+            observation_noise=None,
+            models_path=svgp_iteration_model_path,
+            plot_title=f"{dataset_name}",
+            plot_1d_path=None,
+            animate_1d_path=None,
+            plot_loss_path=plots_path,
+        )
+        torch.save(
+            {
+                "model": svgp_k.state_dict(),
+                "losses": losses,
+            },
+            svgp_model_path,
+        )
+        set_seed(svgp_config["seed"])
+        calculate_metrics(
+            model=svgp_k,
+            model_name="svgp-k-kernel",
+            dataset_name=dataset_name,
+            experiment_data=experiment_data,
+            results_path=results_path,
+            plots_path=plots_path,
+        )
+        svgp_r, losses = train_svgp(
+            model_name="svgp-r-kernel",
+            experiment_data=experiment_data,
+            induce_data=induce_data,
+            mean=gpytorch.means.ConstantMean(),
+            kernel=gradient_flow_kernel,
+            likelihood=gpytorch.likelihoods.GaussianLikelihood(),
+            seed=svgp_config["seed"],
+            number_of_epochs=svgp_config["number_of_epochs"],
+            batch_size=svgp_config["batch_size"],
+            learning_rate_upper=svgp_config["learning_rate_upper"],
+            learning_rate_lower=svgp_config["learning_rate_lower"],
+            number_of_learning_rate_searches=svgp_config[
+                "number_of_learning_rate_searches"
+            ],
+            is_fixed=True,
+            observation_noise=None,
+            models_path=svgp_iteration_model_path,
+            plot_title=f"{dataset_name}",
+            plot_1d_path=None,
+            animate_1d_path=None,
+            plot_loss_path=plots_path,
+        )
+        torch.save(
+            {
+                "model": svgp_r.state_dict(),
+                "losses": losses,
+            },
+            svgp_model_path,
+        )
+        set_seed(svgp_config["seed"])
+        calculate_metrics(
+            model=svgp_r,
+            model_name="svgp-r-kernel",
+            dataset_name=dataset_name,
+            experiment_data=experiment_data,
+            results_path=results_path,
+            plots_path=plots_path,
+        )
 
 
 if __name__ == "__main__":
@@ -296,7 +342,8 @@ if __name__ == "__main__":
             model_names=[
                 "pwgf-orthonormal-basis",
                 "pwgf-induce-data-basis",
-                "fixed-svgp",
+                "svgp-k-kernel",
+                "svgp-r-kernel",
             ],
             datasets=list(DatasetSchema.__members__.keys()),
             metrics=["mae", "mse", "nll"],

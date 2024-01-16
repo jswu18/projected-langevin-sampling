@@ -34,7 +34,7 @@ class Curve(ABC):
 
     # @staticmethod
     # def classification(y_curve: torch.Tensor) -> torch.Tensor:
-    #     probabilities = GradientFlowBinaryClassification.transform(
+    #     probabilities = GradientFlowClassificationBase.transform(
     #         y=y_curve,
     #     )
     #     return torch.Tensor(probabilities > 0.5)

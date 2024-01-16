@@ -57,7 +57,7 @@ def calculate_nll(
     elif isinstance(prediction, torch.distributions.Bernoulli):
         return torch.nn.functional.binary_cross_entropy(
             input=prediction.probs,
-            target=y,
+            target=y.double(),
             reduction="mean",
         ).item()
     else:
@@ -107,7 +107,7 @@ def calculate_metrics(
             )
             nll = calculate_nll(
                 prediction=prediction,
-                y=data.y,
+                y=data.y.double(),
                 y_std=experiment_data.y_std,
             )
             pd.DataFrame([[nll]], columns=[_model_name], index=[dataset_name]).to_csv(

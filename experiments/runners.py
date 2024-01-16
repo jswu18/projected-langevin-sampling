@@ -1,7 +1,7 @@
 import math
 import os
 from copy import deepcopy
-from typing import List, Optional
+from typing import List, Optional, Union
 
 import gpytorch
 import numpy as np
@@ -74,19 +74,24 @@ def _train_svgp(
     induce_data: Data,
     mean: gpytorch.means.Mean,
     kernel: GradientFlowKernel,
+    likelihood: Union[
+        gpytorch.likelihoods.GaussianLikelihood,
+        gpytorch.likelihoods.BernoulliLikelihood,
+    ],
     seed: int,
     number_of_epochs: int,
     batch_size: int,
     learning_rate: float,
     learn_inducing_locations: bool,
     learn_kernel_parameters: bool,
+    likelihood_noise: Optional[float] = None,
 ) -> (ExactGP, List[float]):
     set_seed(seed)
     model = svGP(
         mean=mean,
         kernel=kernel,
         x_induce=induce_data.x,
-        likelihood=gpytorch.likelihoods.GaussianLikelihood(),
+        likelihood=likelihood,
         learn_inducing_locations=learn_inducing_locations,
     )
     model.double()
@@ -101,6 +106,9 @@ def _train_svgp(
         all_params -= {model.kernel.base_kernel.raw_outputscale}
     model.likelihood.double()
     model.likelihood.train()
+    if likelihood_noise is not None:
+        model.likelihood.noise_covar.noise.data.fill_(likelihood_noise)
+        model.likelihood.noise_covar.raw_noise.requires_grad_(False)
     if torch.cuda.is_available():
         model.likelihood = model.likelihood.cuda()
     model.likelihood.train()
@@ -130,7 +138,7 @@ def _train_svgp(
             loss = -mll(output, y_batch)
             loss.backward()
             optimizer.step()
-        output = model(train_data.x)
+        output = model.forward(train_data.x)
         losses.append(-mll(output, train_data.y).item())
     model.eval()
     return model, losses
@@ -205,7 +213,7 @@ def learn_subsample_gps(
     create_directory(model_path)
     create_directory(data_path)
     models = []
-    losses_history = []
+    losses_history = {}
     if subsample_size > len(experiment_data.train.x):
         number_of_iterations = 1
         model_name = "full_exact_gp"
@@ -268,7 +276,7 @@ def learn_subsample_gps(
                         f"gp-subsample-iteration-{i + 1}.png",
                     ),
                 )
-        losses_history.append(losses)
+        losses_history[learning_rate] = losses
         models.append(model)
     if plot_loss_path is not None:
         create_directory(plot_loss_path)
@@ -291,6 +299,9 @@ def train_projected_wasserstein_gradient_flow(
     induce_data: Data,
     simulation_duration: float,
     seed: int,
+    observation_noise_upper: float = 0,
+    observation_noise_lower: float = 0,
+    number_of_observation_noise_searches: int = 0,
     plot_title: str = None,
     plot_particles_path: str = None,
     animate_1d_path: str = None,
@@ -401,6 +412,16 @@ def train_projected_wasserstein_gradient_flow(
                 particles_out = deepcopy(particles.detach())
                 best_lr = learning_rate
     particles = particles_out
+    if number_of_observation_noise_searches:
+        pwgf.observation_noise = pwgf_observation_noise_search(
+            data=experiment_data.train,
+            model=pwgf,
+            particles=particles_out,
+            observation_noise_upper=observation_noise_upper,
+            observation_noise_lower=observation_noise_lower,
+            number_of_searches=number_of_observation_noise_searches,
+            y_std=experiment_data.y_std,
+        )
     if plot_particles_path is not None:
         create_directory(plot_particles_path)
         predicted_distribution = pwgf.predict(
@@ -512,10 +533,15 @@ def pwgf_observation_noise_search(
 
 
 def train_svgp(
+    model_name: str,
     experiment_data: ExperimentData,
     induce_data: Data,
     mean: gpytorch.means.Mean,
-    kernel: GradientFlowKernel,
+    kernel: gpytorch.kernels.Kernel,
+    likelihood: Union[
+        gpytorch.likelihoods.GaussianLikelihood,
+        gpytorch.likelihoods.BernoulliLikelihood,
+    ],
     seed: int,
     number_of_epochs: int,
     batch_size: int,
@@ -524,6 +550,7 @@ def train_svgp(
     number_of_learning_rate_searches: int,
     is_fixed: bool,
     models_path: str,
+    observation_noise: Optional[float] = None,
     plot_title: Optional[str] = None,
     plot_1d_path: Optional[str] = None,
     animate_1d_path: Optional[str] = None,
@@ -531,19 +558,18 @@ def train_svgp(
     christmas_colours: bool = False,
 ) -> (svGP, List[float]):
     create_directory(models_path)
-    model_name = "fixed-svgp" if is_fixed else "svgp"
     best_nll = float("inf")
     best_mse = float("inf")
     best_mae = float("inf")
     best_loss = float("inf")
-    losses_history = []
+    losses_history = {}
     model_out = None
     losses_out = None
     best_learning_rate = None
     for i, log_learning_rate in enumerate(
         torch.linspace(
-            math.log(learning_rate_lower),
-            math.log(learning_rate_upper),
+            math.log10(learning_rate_lower),
+            math.log10(learning_rate_upper),
             number_of_learning_rate_searches,
         )
     ):
@@ -559,6 +585,7 @@ def train_svgp(
                 x_induce=induce_data.x,
                 mean=deepcopy(mean),
                 kernel=deepcopy(kernel),
+                likelihood=deepcopy(likelihood),
                 learn_inducing_locations=False if is_fixed else True,
             )
         else:
@@ -567,12 +594,14 @@ def train_svgp(
                 induce_data=induce_data,
                 mean=deepcopy(mean),
                 kernel=deepcopy(kernel),
+                likelihood=deepcopy(likelihood),
                 seed=seed,
                 number_of_epochs=number_of_epochs,
                 batch_size=batch_size,
                 learning_rate=learning_rate,
                 learn_inducing_locations=False if is_fixed else True,
                 learn_kernel_parameters=False if is_fixed else True,
+                likelihood_noise=observation_noise,
             )
             torch.save(
                 {
@@ -581,9 +610,9 @@ def train_svgp(
                 },
                 model_iteration_path,
             )
-        losses_history.append(losses)
+        losses_history[learning_rate] = losses
         set_seed(seed)
-        prediction = model.forward(experiment_data.train.x)
+        prediction = model.likelihood(model(experiment_data.train.x))
         nll = calculate_nll(
             prediction=prediction,
             y=experiment_data.train.y,
@@ -620,12 +649,25 @@ def train_svgp(
                 f"{model_name}.png",
             ),
         )
+    if plot_loss_path is not None:
+        create_directory(plot_loss_path)
+        plot_losses(
+            losses_history=losses_history,
+            title=f"{plot_title} loss ({model_name})"
+            if plot_title is not None
+            else None,
+            save_path=os.path.join(
+                plot_loss_path,
+                f"{model_name}-losses.png",
+            ),
+        )
     if animate_1d_path is not None:
         animate_1d_gp_predictions(
             experiment_data=experiment_data,
             induce_data=induce_data,
             mean=deepcopy(mean),
             kernel=deepcopy(kernel),
+            likelihood=deepcopy(likelihood),
             seed=seed,
             number_of_epochs=number_of_epochs,
             batch_size=batch_size,
@@ -638,17 +680,5 @@ def train_svgp(
             learn_inducing_locations=False if is_fixed else True,
             learn_kernel_parameters=False if is_fixed else True,
             christmas_colours=christmas_colours,
-        )
-    if plot_loss_path is not None:
-        create_directory(plot_loss_path)
-        plot_losses(
-            losses_history=losses_history,
-            title=f"{plot_title} loss ({model_name})"
-            if plot_title is not None
-            else None,
-            save_path=os.path.join(
-                plot_loss_path,
-                f"{model_name}-losses.png",
-            ),
         )
     return model_out, losses_out

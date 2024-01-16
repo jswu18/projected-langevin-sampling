@@ -202,14 +202,18 @@ def plot_1d_pwgf_prediction(
 
 
 def plot_losses(
-    losses_history: List[List[float]],
+    losses_history: Dict[float, List[float]],
     title: str,
     save_path: str,
 ):
     fig, ax = plt.subplots(figsize=(13, 6.5))
-    for i, losses in enumerate(losses_history):
+    for i, learning_rate in enumerate(losses_history.keys()):
         shade = ((len(losses_history) - i) / len(losses_history)) * 0.8
-        ax.plot(losses, label=f"iteration {i + 1}", color=[shade, shade, shade])
+        ax.plot(
+            losses_history[learning_rate],
+            label=learning_rate,
+            color=[shade, shade, shade],
+        )
     ax.set_title(title)
     ax.set_xlabel("epoch")
     ax.set_ylabel("loss")
@@ -245,13 +249,25 @@ def plot_1d_gp_prediction_and_induce_data(
         )
     ax.autoscale(enable=False)  # turn off autoscale before plotting gp prediction
     prediction = model.likelihood(model(experiment_data.full.x))
-    fig, ax = plot_1d_gp_prediction(
-        fig=fig,
-        ax=ax,
-        x=experiment_data.full.x,
-        mean=prediction.mean.detach(),
-        variance=prediction.variance.detach(),
-    )
+    if isinstance(model.likelihood, gpytorch.likelihoods.GaussianLikelihood):
+        fig, ax = plot_1d_gp_prediction(
+            fig=fig,
+            ax=ax,
+            x=experiment_data.full.x,
+            mean=prediction.mean.detach(),
+            variance=prediction.variance.detach(),
+        )
+    elif isinstance(model.likelihood, gpytorch.likelihoods.BernoulliLikelihood):
+        ax.plot(
+            experiment_data.full.x.reshape(-1),
+            prediction.mean.detach().reshape(-1),
+            label="prediction",
+            zorder=0,
+            color="black",
+        )
+        ax.legend()
+    else:
+        raise NotImplementedError
     ax.set_title(title)
     fig.tight_layout()
     fig.savefig(save_path)
@@ -437,7 +453,9 @@ def animate_1d_pwgf_predictions(
         ).detach()
         for i in range(_predicted_samples.shape[-1]):
             samples_plotted[i].set_data((x, _predicted_samples[:, i].reshape(-1)))
-        ax.set_title(f"{title} (iteration={particle_wrapper.num_updates})")
+        ax.set_title(
+            f"{title} (simulation time={learning_rate*particle_wrapper.num_updates:.2e}, iteration={particle_wrapper.num_updates})"
+        )
         progress_bar.update(n=1)
         return (samples_plotted[0],)
 
@@ -459,6 +477,10 @@ def animate_1d_gp_predictions(
     induce_data: Data,
     mean: gpytorch.means.Mean,
     kernel: gpytorch.kernels.Kernel,
+    likelihood: Union[
+        gpytorch.likelihoods.MultitaskGaussianLikelihood,
+        gpytorch.likelihoods.BernoulliLikelihood,
+    ],
     seed: int,
     number_of_epochs: int,
     batch_size: int,
@@ -485,17 +507,14 @@ def animate_1d_gp_predictions(
             zorder=0,
         )
     plt.xlim(experiment_data.full.x.min(), experiment_data.full.x.max())
-    plt.ylim(
-        experiment_data.full.y.min() - 1,
-        experiment_data.full.y.max() + 1,
-    )
+    ax.autoscale(enable=False)  # turn off autoscale before plotting particles
 
     set_seed(seed)
     model = svGP(
         mean=mean,
         kernel=kernel,
         x_induce=induce_data.x,
-        likelihood=gpytorch.likelihoods.GaussianLikelihood(),
+        likelihood=likelihood,
         learn_inducing_locations=learn_inducing_locations,
     )
     model.double()
@@ -529,21 +548,31 @@ def animate_1d_gp_predictions(
 
     prediction = model.likelihood(model(experiment_data.full.x))
     mean_prediction = prediction.mean.detach()
-    stdev_prediction = torch.sqrt(prediction.variance.detach())
-    fill = ax.fill_between(
-        experiment_data.full.x.reshape(-1),
-        (mean_prediction - 1.96 * stdev_prediction).reshape(-1),
-        (mean_prediction + 1.96 * stdev_prediction).reshape(-1),
-        facecolor=(0.8, 0.8, 0.8),
-        label="error bound (95%)",
-        zorder=0,
-    )
-    mean_line = ax.plot(
-        experiment_data.full.x.reshape(-1),
-        mean_prediction.reshape(-1),
-        label="mean",
-        zorder=0,
-    )[0]
+    if isinstance(model.likelihood, gpytorch.likelihoods.GaussianLikelihood):
+        stdev_prediction = torch.sqrt(prediction.variance.detach())
+        fill = ax.fill_between(
+            experiment_data.full.x.reshape(-1),
+            (mean_prediction - 1.96 * stdev_prediction).reshape(-1),
+            (mean_prediction + 1.96 * stdev_prediction).reshape(-1),
+            facecolor=(0.8, 0.8, 0.8),
+            label="error bound (95%)",
+            zorder=0,
+        )
+        mean_line = ax.plot(
+            experiment_data.full.x.reshape(-1),
+            mean_prediction.reshape(-1),
+            label="mean",
+            zorder=0,
+        )[0]
+    elif isinstance(model.likelihood, gpytorch.likelihoods.BernoulliLikelihood):
+        mean_line = ax.plot(
+            experiment_data.full.x.reshape(-1),
+            mean_prediction.reshape(-1),
+            label="mean",
+            zorder=0,
+        )[0]
+    else:
+        raise NotImplementedError
     plt.legend(loc="lower left")
 
     class Counter:
@@ -571,19 +600,28 @@ def animate_1d_gp_predictions(
             counter.increment()
         _prediction = model.likelihood(model(experiment_data.full.x))
         _mean_prediction = _prediction.mean.detach()
-        _stdev_prediction = torch.sqrt(_prediction.variance.detach())
-        path = fill.get_paths()[0]
-        verts = path.vertices
-        verts[1 : experiment_data.full.x.shape[0] + 1, 1] = (
-            _mean_prediction - 1.96 * _stdev_prediction
-        ).reshape(-1)
-        verts[experiment_data.full.x.shape[0] + 2 : -1, 1] = list(
-            (_mean_prediction + 1.96 * _stdev_prediction).reshape(-1)
-        )[::-1]
-        mean_line.set_data(
-            (experiment_data.full.x.reshape(-1), _mean_prediction.reshape(-1))
+        if isinstance(model.likelihood, gpytorch.likelihoods.GaussianLikelihood):
+            _stdev_prediction = torch.sqrt(_prediction.variance.detach())
+            path = fill.get_paths()[0]
+            verts = path.vertices
+            verts[1 : experiment_data.full.x.shape[0] + 1, 1] = (
+                _mean_prediction - 1.96 * _stdev_prediction
+            ).reshape(-1)
+            verts[experiment_data.full.x.shape[0] + 2 : -1, 1] = list(
+                (_mean_prediction + 1.96 * _stdev_prediction).reshape(-1)
+            )[::-1]
+            mean_line.set_data(
+                (experiment_data.full.x.reshape(-1), _mean_prediction.reshape(-1))
+            )
+        elif isinstance(model.likelihood, gpytorch.likelihoods.BernoulliLikelihood):
+            mean_line.set_data(
+                (experiment_data.full.x.reshape(-1), _mean_prediction.reshape(-1))
+            )
+        else:
+            raise NotImplementedError
+        ax.set_title(
+            f"{title} (simulation time={learning_rate*counter.count:.2e}, iteration={counter.count})"
         )
-        ax.set_title(f"{title} (iteration={counter.count})")
         if christmas_colours:
             fill.set_color(
                 (

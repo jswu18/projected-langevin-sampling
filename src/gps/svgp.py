@@ -1,3 +1,5 @@
+from typing import Union
+
 import gpytorch
 import torch
 from gpytorch.models import ApproximateGP
@@ -9,8 +11,11 @@ class svGP(ApproximateGP):
         mean: gpytorch.means.Mean,
         kernel: gpytorch.kernels.Kernel,
         x_induce: torch.Tensor,
-        likelihood: gpytorch.likelihoods.Likelihood,
-        learn_inducing_locations: bool = True,
+        likelihood: Union[
+            gpytorch.likelihoods.GaussianLikelihood,
+            gpytorch.likelihoods.BernoulliLikelihood,
+        ],
+        learn_inducing_locations: bool = False,
     ):
         variational_distribution = gpytorch.variational.CholeskyVariationalDistribution(
             x_induce.size(0)
@@ -26,7 +31,7 @@ class svGP(ApproximateGP):
         self.kernel = kernel
         self.likelihood = likelihood
 
-    def forward(self, x: torch.Tensor) -> gpytorch.distributions.MultivariateNormal:
+    def forward(self, x: torch.Tensor) -> gpytorch.distributions.Distribution:
         return gpytorch.distributions.MultivariateNormal(
             mean=self.mean(x),
             covariance_matrix=self.kernel(x),

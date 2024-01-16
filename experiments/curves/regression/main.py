@@ -191,6 +191,11 @@ def main(
             induce_data=induce_data,
             simulation_duration=pwgf_config["simulation_duration"],
             seed=pwgf_config["seed"],
+            observation_noise_upper=pwgf_config["observation_noise_upper"],
+            observation_noise_lower=pwgf_config["observation_noise_lower"],
+            number_of_observation_noise_searches=pwgf_config[
+                "number_of_observation_noise_searches"
+            ],
             plot_title=f"{type(curve_function).__name__}",
             plot_particles_path=plot_curve_path,
             animate_1d_path=plot_curve_path,
@@ -211,37 +216,40 @@ def main(
             plots_path=plot_curve_path,
         )
 
-    # fixed_svgp_model, _ = train_svgp(
-    #     experiment_data=experiment_data,
-    #     induce_data=induce_data,
-    #     mean=gpytorch.means.ConstantMean(),
-    #     kernel=pwgf.kernel,
-    #     seed=svgp_config["seed"],
-    #     number_of_epochs=svgp_config["number_of_epochs"],
-    #     batch_size=svgp_config["batch_size"],
-    #     learning_rate_upper=svgp_config["learning_rate_upper"],
-    #     learning_rate_lower=svgp_config["learning_rate_lower"],
-    #     number_of_learning_rate_searches=svgp_config[
-    #         "number_of_learning_rate_searches"
-    #     ],
-    #     is_fixed=True,
-    #     models_path=fixed_svgp_iteration_model_path,
-    #     plot_title=f"{type(curve_function).__name__}",
-    #     plot_1d_path=plot_curve_path,
-    #     animate_1d_path=plot_curve_path,
-    #     plot_loss_path=plot_curve_path,
-    #     christmas_colours=svgp_config["christmas_colours"]
-    #     if "christmas_colours" in pwgf_config
-    #     else False,
-    # )
-    # calculate_metrics(
-    #     model=fixed_svgp_model,
-    #     model_name="fixed-svgp",
-    #     dataset_name=type(curve_function).__name__,
-    #     experiment_data=experiment_data,
-    #     results_path=results_curve_path,
-    #     plots_path=plot_curve_path,
-    # )
+    svgp_model, _ = train_svgp(
+        model_name="svgp",
+        experiment_data=experiment_data,
+        induce_data=induce_data,
+        mean=gpytorch.means.ConstantMean(),
+        kernel=gradient_flow_kernel,
+        likelihood=gpytorch.likelihoods.GaussianLikelihood(),
+        seed=svgp_config["seed"],
+        number_of_epochs=svgp_config["number_of_epochs"],
+        batch_size=svgp_config["batch_size"],
+        learning_rate_upper=svgp_config["learning_rate_upper"],
+        learning_rate_lower=svgp_config["learning_rate_lower"],
+        number_of_learning_rate_searches=svgp_config[
+            "number_of_learning_rate_searches"
+        ],
+        is_fixed=True,
+        observation_noise=None,
+        models_path=fixed_svgp_iteration_model_path,
+        plot_title=f"{type(curve_function).__name__}",
+        plot_1d_path=plot_curve_path,
+        animate_1d_path=plot_curve_path,
+        plot_loss_path=plot_curve_path,
+        christmas_colours=svgp_config["christmas_colours"]
+        if "christmas_colours" in pwgf_config
+        else False,
+    )
+    calculate_metrics(
+        model=svgp_model,
+        model_name="svgp",
+        dataset_name=type(curve_function).__name__,
+        experiment_data=experiment_data,
+        results_path=results_curve_path,
+        plots_path=plot_curve_path,
+    )
 
 
 if __name__ == "__main__":

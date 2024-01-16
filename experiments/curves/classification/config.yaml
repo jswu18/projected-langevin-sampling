@@ -15,7 +15,7 @@ induce_data:
   induce_data_factor: 1
   induce_data_power: 2
 pwgf:
-  number_of_particles: 50
+  number_of_particles: 100
   simulation_duration: 5.0e-1
   jitter: 0
   seed: 0
@@ -24,9 +24,9 @@ pwgf:
   initial_particles_noise_only: True
 svgp:
   seed: 0
-  number_of_epochs: 1000
+  number_of_epochs: 5000
   batch_size: 100
-  learning_rate_upper: 1.0e-1
-  learning_rate_lower: 1.0e-5
-  number_of_learning_rate_searches: 5
+  learning_rate_upper: 1.0e-2
+  learning_rate_lower: 1.0e-4
+  number_of_learning_rate_searches: 3
   christmas_colours: False

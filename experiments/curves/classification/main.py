@@ -150,9 +150,7 @@ def main(
     data_path = f"experiments/curves/classification/outputs/data/{type(curve_function).__name__.lower()}"
     subsample_gp_model_path = os.path.join(models_path, "subsample_gp")
     subsample_gp_data_path = os.path.join(data_path, "subsample_gp")
-    fixed_svgp_iteration_model_path = os.path.join(
-        models_path, "fixed_svgp_model_iterations"
-    )
+    svgp_iteration_model_path = os.path.join(models_path, "svgp_model_iterations")
     likelihood = gpytorch.likelihoods.DirichletClassificationLikelihood(
         experiment_data.train.y, learn_additional_noise=True
     )
@@ -202,15 +200,14 @@ def main(
         number_of_classes=likelihood.num_classes,
     )
     pwgf_dict = {
-        # "pwgf-orthonormal-basis": GradientFlowClassificationONB(
-        #     kernel=gradient_flow_kernel,
-        #     x_induce=induce_data.x,
-        #     y_induce=induce_data.y,
-        #     x_train=experiment_data.train.x,
-        #     y_train=experiment_data.train.y,
-        #     jitter=pwgf_config["jitter"],
-        #     observation_noise=observation_noise,
-        # ),
+        "pwgf-orthonormal-basis": GradientFlowClassificationONB(
+            kernel=gradient_flow_kernel,
+            x_induce=induce_data.x,
+            y_induce=induce_data.y,
+            x_train=experiment_data.train.x,
+            y_train=experiment_data.train.y,
+            jitter=pwgf_config["jitter"],
+        ),
         "pwgf-induce-data-basis": GradientFlowClassificationNONB(
             kernel=gradient_flow_kernel,
             x_induce=induce_data.x,
@@ -239,6 +236,49 @@ def main(
             metric_to_minimise=pwgf_config["metric_to_minimise"],
             initial_particles_noise_only=pwgf_config["initial_particles_noise_only"],
         )
+        calculate_metrics(
+            model=pwgf,
+            particles=particles,
+            model_name=pwgf_name,
+            dataset_name=type(curve_function).__name__,
+            experiment_data=experiment_data,
+            results_path=results_curve_path,
+            plots_path=plot_curve_path,
+        )
+    svgp_model, _ = train_svgp(
+        model_name="svgp",
+        experiment_data=experiment_data,
+        induce_data=induce_data,
+        mean=gpytorch.means.ConstantMean(),
+        kernel=gradient_flow_kernel,
+        likelihood=gpytorch.likelihoods.BernoulliLikelihood(),
+        seed=svgp_config["seed"],
+        number_of_epochs=svgp_config["number_of_epochs"],
+        batch_size=svgp_config["batch_size"],
+        learning_rate_upper=svgp_config["learning_rate_upper"],
+        learning_rate_lower=svgp_config["learning_rate_lower"],
+        number_of_learning_rate_searches=svgp_config[
+            "number_of_learning_rate_searches"
+        ],
+        is_fixed=True,
+        observation_noise=None,
+        models_path=svgp_iteration_model_path,
+        plot_title=f"{type(curve_function).__name__}",
+        plot_1d_path=plot_curve_path,
+        animate_1d_path=plot_curve_path,
+        plot_loss_path=plot_curve_path,
+        christmas_colours=svgp_config["christmas_colours"]
+        if "christmas_colours" in pwgf_config
+        else False,
+    )
+    calculate_metrics(
+        model=svgp_model,
+        model_name="svgp",
+        dataset_name=type(curve_function).__name__,
+        experiment_data=experiment_data,
+        results_path=results_curve_path,
+        plots_path=plot_curve_path,
+    )
 
 
 if __name__ == "__main__":
