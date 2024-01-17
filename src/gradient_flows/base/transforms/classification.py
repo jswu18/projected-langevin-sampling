@@ -45,10 +45,6 @@ class GradientFlowClassificationBase(GradientFlowBase, ABC):
             y_train=y_train,
             jitter=jitter,
         )
-        self.base_gram_induce = self.base_gram_induce[0, :, :]  # k(Z, X) of size (M, M)
-        self.base_gram_induce_train = self.base_gram_induce_train[
-            0, :, :
-        ]  # k(Z, X) of size (M, N)
 
     @staticmethod
     def transform(y):

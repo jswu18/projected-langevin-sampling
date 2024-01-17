@@ -47,13 +47,12 @@ def calculate_mse(
 def calculate_nll(
     prediction: torch.distributions.Distribution,
     y: torch.Tensor,
-    y_std: float,
 ) -> float:
     if isinstance(prediction, gpytorch.distributions.MultivariateNormal):
         return gpytorch.metrics.mean_standardized_log_loss(
             pred_dist=prediction,
             test_y=y,
-        ).item() + math.log(y_std)
+        ).item()
     elif isinstance(prediction, torch.distributions.Bernoulli):
         return torch.nn.functional.binary_cross_entropy(
             input=prediction.probs,
@@ -82,7 +81,7 @@ def calculate_metrics(
         ]:
             set_seed(0)
             if isinstance(_model, svGP) or isinstance(_model, ExactGP):
-                prediction = _model.likelihood(_model.forward(data.x))
+                prediction = _model.likelihood(_model(data.x))
             elif isinstance(_model, GradientFlowBase):
                 prediction = _model(x=data.x, particles=particles)
             else:
@@ -107,8 +106,7 @@ def calculate_metrics(
             )
             nll = calculate_nll(
                 prediction=prediction,
-                y=data.y.double(),
-                y_std=experiment_data.y_std,
+                y=data.y,
             )
             pd.DataFrame([[nll]], columns=[_model_name], index=[dataset_name]).to_csv(
                 os.path.join(results_path, _model_name, f"nll_{data.name}.csv"),

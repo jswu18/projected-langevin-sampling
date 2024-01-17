@@ -6,32 +6,18 @@ import torch
 from experiments.data import Data, ExperimentData
 from src.gps import ExactGP, svGP
 from src.gradient_flows import GradientFlowRegressionONB
+from src.gradient_flows.base.base import GradientFlowBase
 from src.kernels import GradientFlowKernel
 
 
 def load_projected_wasserstein_gradient_flow(
+    pwgf: GradientFlowBase,
     model_path: str,
-    base_kernel: gpytorch.kernels.Kernel,
-    observation_noise: float,
-    experiment_data: ExperimentData,
-    induce_data: Data,
-    jitter: float,
 ) -> (GradientFlowRegressionONB, torch.Tensor):
     model_config = torch.load(model_path)
-    particles = model_config["particles"].to(torch.double)
-    pwgf = GradientFlowRegressionONB(
-        kernel=GradientFlowKernel(
-            base_kernel=base_kernel,
-            approximation_samples=induce_data.x,
-        ),
-        x_induce=induce_data.x,
-        y_induce=induce_data.y,
-        x_train=experiment_data.train.x,
-        y_train=experiment_data.train.y,
-        jitter=jitter,
-        observation_noise=observation_noise,
-    )
-    print(f"Loaded PWGF model and particles from {model_path=}.")
+    particles = model_config["particles"]
+    pwgf.observation_noise = model_config["observation_noise"]
+    print(f"Loaded particles and observation_noise from {model_path=}.")
     return pwgf, particles
 
 
@@ -47,7 +33,7 @@ def load_svgp(
     learn_inducing_locations: bool,
 ) -> Tuple[svGP, torch.Tensor]:
     model = svGP(
-        x_induce=x_induce.to(torch.double),
+        x_induce=x_induce,
         mean=mean,
         kernel=kernel,
         learn_inducing_locations=learn_inducing_locations,
@@ -55,7 +41,6 @@ def load_svgp(
     )
     loaded_states = torch.load(model_path)
     model.load_state_dict(loaded_states["model"])
-    model.double()
     print(f"Loaded svGP model from {model_path=}.")
     return model, loaded_states["losses"]
 
@@ -68,8 +53,8 @@ def load_ard_exact_gp_model(
     kernel: gpytorch.kernels.Kernel,
 ) -> Tuple[ExactGP, torch.Tensor]:
     data = torch.load(data_path)
-    data.x.to(torch.double)
-    data.y.to(torch.double)
+    data.x
+    data.y
     model_state_dict = torch.load(model_path)
     model = ExactGP(
         x=data.x,

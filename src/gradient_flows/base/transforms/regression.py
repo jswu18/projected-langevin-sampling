@@ -59,7 +59,6 @@ class GradientFlowRegressionBase(GradientFlowBase, ABC):
         particles: torch.Tensor,
         predictive_noise: Optional[torch.Tensor] = None,
         observation_noise: Optional[torch.Tensor] = None,
-        jitter: float = 1e-20,
     ) -> gpytorch.distributions.MultivariateNormal:
         """
         Predicts the mean and variance for a given input.
@@ -67,7 +66,6 @@ class GradientFlowRegressionBase(GradientFlowBase, ABC):
         :param particles: particles of size (P, N)
         :param predictive_noise: Optional predictive noise of size (N, P)
         :param observation_noise: Optional observation noise of size (N, P)
-        :param jitter: jitter to add to the diagonal of the covariance matrix if it is not positive definite
         :return: normal distribution of size (N*,)
         """
         samples = self.predict_samples(
@@ -78,7 +76,7 @@ class GradientFlowRegressionBase(GradientFlowBase, ABC):
         )
         return gpytorch.distributions.MultivariateNormal(
             mean=samples.mean(dim=1),
-            covariance_matrix=torch.diag(torch.clip(samples.var(axis=1), jitter, None)),
+            covariance_matrix=torch.diag(samples.var(axis=1)),
         )
 
     def calculate_cost_derivative(self, particles: torch.Tensor) -> torch.Tensor:

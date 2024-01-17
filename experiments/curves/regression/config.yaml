@@ -2,7 +2,7 @@ data:
   number_of_data_points: 1000
   seed: 0
   sigma_true: 0.5
-  number_of_test_intervals: 2
+  number_of_test_intervals: 4
   total_number_of_intervals: 16
 kernel:
   seed: 0
@@ -17,7 +17,11 @@ induce_data:
   induce_data_power: 2
 pwgf:
   number_of_particles: 100
-  simulation_duration: 5.0e-1
+  simulation_duration: 1.0e-1
+  maximum_number_of_steps: 1.0e+6
+  number_of_step_searches: 3
+  step_size_upper: 1.0e-6
+  minimum_change_in_energy_potential: 0.01
   jitter: 0
   seed: 0
   christmas_colours: True
@@ -26,11 +30,12 @@ pwgf:
   observation_noise_upper: 1.0e+4
   observation_noise_lower: 1.0e-4
   number_of_observation_noise_searches: 25
+  early_stopper_patience: 1.0e-4
 svgp:
   seed: 0
   number_of_epochs: 1000
   batch_size: 100
-  learning_rate_upper: 1.0e-1
-  learning_rate_lower: 1.0e-5
-  number_of_learning_rate_searches: 5
+  learning_rate_upper: 1.0e-2
+  learning_rate_lower: 1.0e-4
+  number_of_learning_rate_searches: 3
   christmas_colours: False

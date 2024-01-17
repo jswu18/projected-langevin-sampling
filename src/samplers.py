@@ -33,12 +33,10 @@ def sample_multivariate_normal(
         std=1.0,
         size=(eigenvalues.shape[0], *size),
         generator=generator,
-    ).double()
+    )
     return torch.real(
         mean[:, None]
-        + eigenvectors.double()
-        @ torch.diag(torch.sqrt(eigenvalues)).double()
-        @ normal_sample
+        + eigenvectors @ torch.diag(torch.sqrt(eigenvalues)) @ normal_sample
     ).T
 
 

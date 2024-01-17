@@ -91,17 +91,15 @@ class GradientFlowBase(ABC):
         generator = None
         if seed is not None:
             generator = torch.Generator().manual_seed(seed)
-        return (
-            torch.normal(
-                mean=0.0,
-                std=1.0,
-                size=(
-                    self.approximation_dimension,
-                    number_of_particles,
-                ),
-                generator=generator,
-            )
-        ).double()  # size (M, P)
+        return torch.normal(
+            mean=0.0,
+            std=1.0,
+            size=(
+                self.approximation_dimension,
+                number_of_particles,
+            ),
+            generator=generator,
+        )  # size (M, P)
 
     @abstractmethod
     def initialise_particles(

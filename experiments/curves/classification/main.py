@@ -1,6 +1,7 @@
 import argparse
 import math
 import os
+from copy import deepcopy
 from typing import Any, Dict
 
 import gpytorch
@@ -16,6 +17,7 @@ from experiments.constructors import (
 )
 from experiments.curves.curves import CURVE_FUNCTIONS, Curve
 from experiments.data import Data, ExperimentData
+from experiments.loaders import load_projected_wasserstein_gradient_flow, load_svgp
 from experiments.metrics import calculate_metrics, concatenate_metrics
 from experiments.plotters import plot_1d_experiment_data
 from experiments.preprocess import split_regression_data_intervals
@@ -36,6 +38,7 @@ from src.gradient_flows.base.transforms.classification import (
 )
 from src.induce_data_selectors import ConditionalVarianceInduceDataSelector
 from src.kernels import GradientFlowKernel
+from src.utils import set_seed
 
 parser = argparse.ArgumentParser(
     description="Main script for toy binary classification experiments."
@@ -80,19 +83,19 @@ def get_experiment_data(
     experiment_data = ExperimentData(
         name=type(curve_function).__name__.lower(),
         full=Data(
-            x=x.double(),
+            x=x,
             y=y.type(torch.int),
             y_untransformed=y_untransformed,
             name="full",
         ),
         train=Data(
-            x=x_train.double(),
+            x=x_train,
             y=y_train.type(torch.int),
             y_untransformed=y_train_untransformed,
             name="train",
         ),
         test=Data(
-            x=x_test.double(),
+            x=x_test,
             y=y_test.type(torch.int),
             y_untransformed=y_test_untransformed,
             name="test",
@@ -150,7 +153,6 @@ def main(
     data_path = f"experiments/curves/classification/outputs/data/{type(curve_function).__name__.lower()}"
     subsample_gp_model_path = os.path.join(models_path, "subsample_gp")
     subsample_gp_data_path = os.path.join(data_path, "subsample_gp")
-    svgp_iteration_model_path = os.path.join(models_path, "svgp_model_iterations")
     likelihood = gpytorch.likelihoods.DirichletClassificationLikelihood(
         experiment_data.train.y, learn_additional_noise=True
     )
@@ -197,7 +199,6 @@ def main(
     gradient_flow_kernel = GradientFlowKernel(
         base_kernel=average_ard_kernel,
         approximation_samples=induce_data.x,
-        number_of_classes=likelihood.num_classes,
     )
     pwgf_dict = {
         "pwgf-orthonormal-basis": GradientFlowClassificationONB(
@@ -218,24 +219,48 @@ def main(
         ),
     }
     for pwgf_name, pwgf in pwgf_dict.items():
-        particles = train_projected_wasserstein_gradient_flow(
-            pwgf=pwgf,
-            number_of_particles=pwgf_config["number_of_particles"],
-            particle_name=pwgf_name,
-            experiment_data=experiment_data,
-            induce_data=induce_data,
-            simulation_duration=pwgf_config["simulation_duration"],
-            seed=pwgf_config["seed"],
-            plot_title=f"{type(curve_function).__name__}",
-            plot_particles_path=plot_curve_path,
-            animate_1d_path=plot_curve_path,
-            plot_update_magnitude_path=plot_curve_path,
-            christmas_colours=pwgf_config["christmas_colours"]
-            if "christmas_colours" in pwgf_config
-            else False,
-            metric_to_minimise=pwgf_config["metric_to_minimise"],
-            initial_particles_noise_only=pwgf_config["initial_particles_noise_only"],
-        )
+        pwgf_path = os.path.join(models_path, f"{pwgf_name}.pth")
+        if os.path.exists(pwgf_path):
+            pwgf, particles = load_projected_wasserstein_gradient_flow(
+                pwgf=pwgf,
+                model_path=pwgf_path,
+            )
+        else:
+            particles = train_projected_wasserstein_gradient_flow(
+                pwgf=pwgf,
+                number_of_particles=pwgf_config["number_of_particles"],
+                particle_name=pwgf_name,
+                experiment_data=experiment_data,
+                induce_data=induce_data,
+                simulation_duration=pwgf_config["simulation_duration"],
+                step_size_upper=pwgf_config["step_size_upper"],
+                number_of_step_searches=pwgf_config["number_of_step_searches"],
+                maximum_number_of_steps=pwgf_config["maximum_number_of_steps"],
+                minimum_change_in_energy_potential=pwgf_config[
+                    "minimum_change_in_energy_potential"
+                ],
+                seed=pwgf_config["seed"],
+                plot_title=f"{type(curve_function).__name__}",
+                plot_particles_path=plot_curve_path,
+                animate_1d_path=plot_curve_path,
+                plot_update_magnitude_path=plot_curve_path,
+                christmas_colours=pwgf_config["christmas_colours"]
+                if "christmas_colours" in pwgf_config
+                else False,
+                metric_to_minimise=pwgf_config["metric_to_minimise"],
+                initial_particles_noise_only=pwgf_config[
+                    "initial_particles_noise_only"
+                ],
+                early_stopper_patience=pwgf_config["early_stopper_patience"],
+            )
+            torch.save(
+                {
+                    "particles": particles,
+                    "observation_noise": pwgf.observation_noise,
+                },
+                pwgf_path,
+            )
+        set_seed(pwgf_config["seed"])
         calculate_metrics(
             model=pwgf,
             particles=particles,
@@ -245,43 +270,69 @@ def main(
             results_path=results_curve_path,
             plots_path=plot_curve_path,
         )
-    svgp_model, _ = train_svgp(
-        model_name="svgp",
-        experiment_data=experiment_data,
-        induce_data=induce_data,
-        mean=gpytorch.means.ConstantMean(),
-        kernel=gradient_flow_kernel,
-        likelihood=gpytorch.likelihoods.BernoulliLikelihood(),
-        seed=svgp_config["seed"],
-        number_of_epochs=svgp_config["number_of_epochs"],
-        batch_size=svgp_config["batch_size"],
-        learning_rate_upper=svgp_config["learning_rate_upper"],
-        learning_rate_lower=svgp_config["learning_rate_lower"],
-        number_of_learning_rate_searches=svgp_config[
-            "number_of_learning_rate_searches"
-        ],
-        is_fixed=True,
-        observation_noise=None,
-        models_path=svgp_iteration_model_path,
-        plot_title=f"{type(curve_function).__name__}",
-        plot_1d_path=plot_curve_path,
-        animate_1d_path=plot_curve_path,
-        plot_loss_path=plot_curve_path,
-        christmas_colours=svgp_config["christmas_colours"]
-        if "christmas_colours" in pwgf_config
-        else False,
-    )
-    calculate_metrics(
-        model=svgp_model,
-        model_name="svgp",
-        dataset_name=type(curve_function).__name__,
-        experiment_data=experiment_data,
-        results_path=results_curve_path,
-        plots_path=plot_curve_path,
-    )
+    for kernel_name, kernel in zip(
+        ["k-kernel", "r-kernel"], [average_ard_kernel, gradient_flow_kernel]
+    ):
+        model_name = f"svgp-{kernel_name}"
+        svgp_model_path = os.path.join(models_path, f"{model_name}.pth")
+        if os.path.exists(svgp_model_path):
+            svgp, _ = load_svgp(
+                model_path=svgp_model_path,
+                x_induce=induce_data.x,
+                mean=gpytorch.means.ConstantMean(),
+                kernel=deepcopy(kernel),
+                likelihood=gpytorch.likelihoods.BernoulliLikelihood(),
+                learn_inducing_locations=False,
+            )
+        else:
+            svgp, losses = train_svgp(
+                model_name=model_name,
+                experiment_data=experiment_data,
+                induce_data=induce_data,
+                mean=gpytorch.means.ConstantMean(),
+                kernel=deepcopy(kernel),
+                likelihood=gpytorch.likelihoods.BernoulliLikelihood(),
+                seed=svgp_config["seed"],
+                number_of_epochs=svgp_config["number_of_epochs"],
+                batch_size=svgp_config["batch_size"],
+                learning_rate_upper=svgp_config["learning_rate_upper"],
+                learning_rate_lower=svgp_config["learning_rate_lower"],
+                number_of_learning_rate_searches=svgp_config[
+                    "number_of_learning_rate_searches"
+                ],
+                is_fixed=True,
+                observation_noise=None,
+                models_path=os.path.join(
+                    models_path, f"{model_name}-kernel-iterations"
+                ),
+                plot_title=f"{type(curve_function).__name__}",
+                plot_1d_path=plot_curve_path,
+                animate_1d_path=plot_curve_path,
+                plot_loss_path=plot_curve_path,
+                christmas_colours=svgp_config["christmas_colours"]
+                if "christmas_colours" in pwgf_config
+                else False,
+            )
+            torch.save(
+                {
+                    "model": svgp.state_dict(),
+                    "losses": losses,
+                },
+                svgp_model_path,
+            )
+        set_seed(svgp_config["seed"])
+        calculate_metrics(
+            model=svgp,
+            model_name=model_name,
+            dataset_name=type(curve_function).__name__,
+            experiment_data=experiment_data,
+            results_path=results_curve_path,
+            plots_path=plot_curve_path,
+        )
 
 
 if __name__ == "__main__":
+    torch.set_default_dtype(torch.float64)
     args = parser.parse_args()
     with open(args.config_path, "r") as file:
         loaded_config = yaml.safe_load(file)

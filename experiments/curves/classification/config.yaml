@@ -1,7 +1,7 @@
 data:
   number_of_data_points: 1000
   seed: 0
-  number_of_test_intervals: 2
+  number_of_test_intervals: 4
   total_number_of_intervals: 16
 kernel:
   seed: 0
@@ -17,14 +17,19 @@ induce_data:
 pwgf:
   number_of_particles: 100
   simulation_duration: 5.0e-1
+  maximum_number_of_steps: 1.0e+6
+  number_of_step_searches: 3
+  step_size_upper: 1.0e-5
+  minimum_change_in_energy_potential: 0.01
   jitter: 0
   seed: 0
   christmas_colours: True
   metric_to_minimise: mae
   initial_particles_noise_only: True
+  early_stopper_patience: 1.0e-3
 svgp:
   seed: 0
-  number_of_epochs: 5000
+  number_of_epochs: 1000
   batch_size: 100
   learning_rate_upper: 1.0e-2
   learning_rate_lower: 1.0e-4

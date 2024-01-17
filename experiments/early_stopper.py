@@ -7,7 +7,7 @@ class EarlyStopper:
     Adapted from https://stackoverflow.com/a/73704579
     """
 
-    def __init__(self, patience: float = 1e-3):
+    def __init__(self, patience: float = 1e-4):
         self.patience = patience
         self.simulation_time = 0
         self.min_loss = float("inf")

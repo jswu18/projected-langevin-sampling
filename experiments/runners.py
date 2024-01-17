@@ -50,8 +50,6 @@ def _train_exact_gp(
         likelihood=likelihood,
     )
     likelihood = model.likelihood
-    model.double()
-    likelihood.double()
     model.train()
     likelihood.train()
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
@@ -65,81 +63,6 @@ def _train_exact_gp(
         losses.append(loss.item())
         loss.backward()
         optimizer.step()
-    model.eval()
-    return model, losses
-
-
-def _train_svgp(
-    train_data: Data,
-    induce_data: Data,
-    mean: gpytorch.means.Mean,
-    kernel: GradientFlowKernel,
-    likelihood: Union[
-        gpytorch.likelihoods.GaussianLikelihood,
-        gpytorch.likelihoods.BernoulliLikelihood,
-    ],
-    seed: int,
-    number_of_epochs: int,
-    batch_size: int,
-    learning_rate: float,
-    learn_inducing_locations: bool,
-    learn_kernel_parameters: bool,
-    likelihood_noise: Optional[float] = None,
-) -> (ExactGP, List[float]):
-    set_seed(seed)
-    model = svGP(
-        mean=mean,
-        kernel=kernel,
-        x_induce=induce_data.x,
-        likelihood=likelihood,
-        learn_inducing_locations=learn_inducing_locations,
-    )
-    model.double()
-    model.train()
-    if torch.cuda.is_available():
-        model = model.cuda()
-    model.train()
-    all_params = set(model.parameters())
-
-    if not learn_kernel_parameters:
-        all_params -= {model.kernel.base_kernel.base_kernel.raw_lengthscale}
-        all_params -= {model.kernel.base_kernel.raw_outputscale}
-    model.likelihood.double()
-    model.likelihood.train()
-    if likelihood_noise is not None:
-        model.likelihood.noise_covar.noise.data.fill_(likelihood_noise)
-        model.likelihood.noise_covar.raw_noise.requires_grad_(False)
-    if torch.cuda.is_available():
-        model.likelihood = model.likelihood.cuda()
-    model.likelihood.train()
-
-    optimizer = torch.optim.Adam(
-        [
-            {"params": list(all_params)},
-        ],
-        lr=learning_rate,
-    )
-    mll = gpytorch.mlls.VariationalELBO(
-        model.likelihood, model, num_data=train_data.x.shape[0]
-    )
-
-    train_dataset = TensorDataset(train_data.x, train_data.y)
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-
-    epochs_iter = tqdm(
-        range(number_of_epochs),
-        desc=f"svGP Epoch ({learn_kernel_parameters=}, {learn_inducing_locations=})",
-    )
-    losses = []
-    for _ in epochs_iter:
-        for x_batch, y_batch in train_loader:
-            optimizer.zero_grad()
-            output = model(x_batch)
-            loss = -mll(output, y_batch)
-            loss.backward()
-            optimizer.step()
-        output = model.forward(train_data.x)
-        losses.append(-mll(output, train_data.y).item())
     model.eval()
     return model, losses
 
@@ -164,7 +87,7 @@ def select_induce_data(
         else None
     )
     return Data(
-        x=x_induce.double(),
+        x=x_induce,
         y=y_induce.type(data.y.dtype),
         y_untransformed=y_induce_untransformed.type(data.y_untransformed.dtype)
         if y_induce_untransformed is not None
@@ -190,8 +113,8 @@ def _load_subsample_data(
         return_distance=False,
     )
     return Data(
-        x=data.x[subsample_indices].double(),
-        y=data.y[subsample_indices].double(),
+        x=data.x[subsample_indices],
+        y=data.y[subsample_indices],
     )
 
 
@@ -298,6 +221,11 @@ def train_projected_wasserstein_gradient_flow(
     experiment_data: ExperimentData,
     induce_data: Data,
     simulation_duration: float,
+    maximum_number_of_steps: int,
+    early_stopper_patience: float,
+    number_of_step_searches: int,
+    step_size_upper: float,
+    minimum_change_in_energy_potential: float,
     seed: int,
     observation_noise_upper: float = 0,
     observation_noise_lower: float = 0,
@@ -329,11 +257,7 @@ def train_projected_wasserstein_gradient_flow(
                 x=experiment_data.full.x,
                 particles=particles_out,
             ).detach(),
-            predicted_distribution=predicted_distribution
-            if isinstance(
-                predicted_distribution, gpytorch.distributions.MultivariateNormal
-            )
-            else None,
+            predicted_distribution=predicted_distribution,
             title=f"{plot_title} (initial particles)"
             if plot_title is not None
             else None,
@@ -342,6 +266,24 @@ def train_projected_wasserstein_gradient_flow(
                 f"particles-initial-{particle_name}.png",
             ),
         )
+        if experiment_data.full.y_untransformed is not None:
+            plot_1d_pwgf_prediction(
+                experiment_data=experiment_data,
+                induce_data=induce_data,
+                x=experiment_data.full.x,
+                predicted_samples=pwgf.predict_untransformed_samples(
+                    x=experiment_data.full.x,
+                    particles=particles_out,
+                ).detach(),
+                title=f"{plot_title} (initial untransformed particles)"
+                if plot_title is not None
+                else None,
+                save_path=os.path.join(
+                    plot_particles_path,
+                    f"untransformed-particles-initial-{particle_name}.png",
+                ),
+                is_sample_untransformed=True,
+            )
     best_energy_potential, best_mae, best_mse, best_nll = (
         float("inf"),
         float("inf"),
@@ -350,9 +292,16 @@ def train_projected_wasserstein_gradient_flow(
     )
     best_lr = None
     energy_potentials_history = {}
-    for learning_rate in tqdm(
-        np.logspace(-3, np.log10(simulation_duration / 1e6), 5),
-        desc=f"WGF LR Search {particle_name}",
+    learning_rates = np.logspace(
+        np.log10(step_size_upper),
+        np.log10(simulation_duration / maximum_number_of_steps),
+        number_of_step_searches,
+    )
+    for i, learning_rate in enumerate(
+        tqdm(
+            learning_rates,
+            desc=f"WGF LR Search {particle_name}",
+        )
     ):
         number_of_epochs = int(simulation_duration / learning_rate)
         particles = pwgf.initialise_particles(
@@ -361,9 +310,10 @@ def train_projected_wasserstein_gradient_flow(
             noise_only=initial_particles_noise_only,
         )
         energy_potentials = []
-        early_stopper = EarlyStopper()
+        early_stopper = EarlyStopper(patience=early_stopper_patience)
         set_seed(seed)
-        for i in range(number_of_epochs):
+        prev_energy_potential = None
+        for _ in range(number_of_epochs):
             particle_update = pwgf.calculate_particle_update(
                 particles=particles,
                 learning_rate=learning_rate,
@@ -383,25 +333,27 @@ def train_projected_wasserstein_gradient_flow(
             )
             nll = calculate_nll(
                 prediction=prediction,
-                y=experiment_data.train.y.double(),
-                y_std=experiment_data.y_std,
+                y=experiment_data.train.y,
             )
             mse = calculate_mse(
                 prediction=prediction,
-                y=experiment_data.train.y.double(),
+                y=experiment_data.train.y,
             )
             mae = calculate_mae(
                 prediction=prediction,
-                y=experiment_data.train.y.double(),
+                y=experiment_data.train.y,
             )
-            # if metric_to_minimise not in ["nll", "mse", "mae"]:
-            #     raise ValueError(f"Unknown metric to minimise: {metric_to_minimise}")
-            # elif (
-            #     (metric_to_minimise == "nll" and nll < best_nll)
-            #     or (metric_to_minimise == "mse" and mse < best_mse)
-            #     or (metric_to_minimise == "mae" and mae < best_mae)
-            # ):
-            if energy_potentials[-1] < best_energy_potential:
+            if metric_to_minimise not in ["nll", "mse", "mae", "loss"]:
+                raise ValueError(f"Unknown metric to minimise: {metric_to_minimise}")
+            elif (
+                (metric_to_minimise == "nll" and nll < best_nll)
+                or (metric_to_minimise == "mse" and mse < best_mse)
+                or (metric_to_minimise == "mae" and mae < best_mae)
+                or (
+                    metric_to_minimise == "loss"
+                    and energy_potentials[-1] < best_energy_potential
+                )
+            ):
                 best_nll, best_mae, best_mse, best_lr = (
                     nll,
                     mae,
@@ -411,6 +363,17 @@ def train_projected_wasserstein_gradient_flow(
                 best_energy_potential = energy_potentials[-1]
                 particles_out = deepcopy(particles.detach())
                 best_lr = learning_rate
+            if (
+                i > 0
+                and learning_rates[i - 1] in energy_potentials_history
+                and abs(
+                    energy_potentials_history[learning_rates[i - 1]][-1]
+                    - energy_potentials[-1]
+                )
+                / energy_potentials_history[learning_rates[i - 1]][-1]
+                < minimum_change_in_energy_potential
+            ):
+                break
     particles = particles_out
     if number_of_observation_noise_searches:
         pwgf.observation_noise = pwgf_observation_noise_search(
@@ -436,11 +399,7 @@ def train_projected_wasserstein_gradient_flow(
                 x=experiment_data.full.x,
                 particles=particles,
             ).detach(),
-            predicted_distribution=predicted_distribution
-            if isinstance(
-                predicted_distribution, gpytorch.distributions.MultivariateNormal
-            )
-            else None,
+            predicted_distribution=predicted_distribution,
             title=f"{plot_title} (learned particles)"
             if plot_title is not None
             else None,
@@ -449,6 +408,24 @@ def train_projected_wasserstein_gradient_flow(
                 f"particles-learned-{particle_name}.png",
             ),
         )
+        if experiment_data.full.y_untransformed is not None:
+            plot_1d_pwgf_prediction(
+                experiment_data=experiment_data,
+                induce_data=induce_data,
+                x=experiment_data.full.x,
+                predicted_samples=pwgf.predict_untransformed_samples(
+                    x=experiment_data.full.x,
+                    particles=particles,
+                ).detach(),
+                title=f"{plot_title} (learned untransformed particles)"
+                if plot_title is not None
+                else None,
+                save_path=os.path.join(
+                    plot_particles_path,
+                    f"untransformed-particles-learned-{particle_name}.png",
+                ),
+                is_sample_untransformed=True,
+            )
     if energy_potentials_history and plot_update_magnitude_path is not None:
         create_directory(plot_update_magnitude_path)
         plot_energy_potentials(
@@ -506,7 +483,6 @@ def pwgf_observation_noise_search(
                 particles=particles,
             ),
             y=data.y,
-            y_std=y_std,
         )
         model.observation_noise = torch.tensor(bisection_search.upper)
         set_seed(0)
@@ -516,7 +492,6 @@ def pwgf_observation_noise_search(
                 particles=particles,
             ),
             y=data.y,
-            y_std=y_std,
         )
         searches_iter.set_postfix(
             lower_nll=lower_nll,
@@ -530,6 +505,75 @@ def pwgf_observation_noise_search(
         else:
             bisection_search.update_lower()
     return bisection_search.current
+
+
+def _train_svgp(
+    train_data: Data,
+    induce_data: Data,
+    mean: gpytorch.means.Mean,
+    kernel: gpytorch.kernels.Kernel,
+    likelihood: Union[
+        gpytorch.likelihoods.GaussianLikelihood,
+        gpytorch.likelihoods.BernoulliLikelihood,
+    ],
+    seed: int,
+    number_of_epochs: int,
+    batch_size: int,
+    learning_rate: float,
+    learn_inducing_locations: bool,
+    learn_kernel_parameters: bool,
+    likelihood_noise: Optional[float] = None,
+) -> (ExactGP, List[float]):
+    set_seed(seed)
+    model = svGP(
+        mean=mean,
+        kernel=kernel,
+        x_induce=induce_data.x,
+        likelihood=likelihood,
+        learn_inducing_locations=learn_inducing_locations,
+    )
+    all_params = set(model.parameters())
+    if not learn_kernel_parameters:
+        if isinstance(model.kernel, GradientFlowKernel):
+            all_params -= {model.kernel.base_kernel.base_kernel.raw_lengthscale}
+            all_params -= {model.kernel.base_kernel.raw_outputscale}
+        else:
+            all_params -= {model.kernel.base_kernel.raw_lengthscale}
+            all_params -= {model.kernel.raw_outputscale}
+    if likelihood_noise is not None:
+        model.likelihood.noise_covar.noise.data.fill_(likelihood_noise)
+    model.train()
+    model.likelihood.train()
+
+    optimizer = torch.optim.Adam(
+        [
+            {"params": list(all_params)},
+        ],
+        lr=learning_rate,
+    )
+    mll = gpytorch.mlls.VariationalELBO(
+        model.likelihood, model, num_data=train_data.x.shape[0]
+    )
+
+    train_dataset = TensorDataset(train_data.x, train_data.y)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+
+    epochs_iter = tqdm(
+        range(number_of_epochs),
+        desc=f"svGP Epoch ({learn_kernel_parameters=}, {learn_inducing_locations=})",
+    )
+    losses = []
+    for _ in epochs_iter:
+        for x_batch, y_batch in train_loader:
+            optimizer.zero_grad()
+            output = model(x_batch)
+            loss = -mll(output, y_batch)
+            loss.backward()
+            optimizer.step()
+        output = model(train_data.x)
+        losses.append(-mll(output, train_data.y).item())
+    model.eval()
+    return model, losses
 
 
 def train_svgp(
@@ -566,8 +610,8 @@ def train_svgp(
     model_out = None
     losses_out = None
     best_learning_rate = None
-    for i, log_learning_rate in enumerate(
-        torch.linspace(
+    for i, learning_rate in enumerate(
+        np.logspace(
             math.log10(learning_rate_lower),
             math.log10(learning_rate_upper),
             number_of_learning_rate_searches,
@@ -577,7 +621,6 @@ def train_svgp(
             models_path,
             f"svgp_{i+1}_of_{number_of_learning_rate_searches}.pth",
         )
-        learning_rate = math.exp(log_learning_rate)
         set_seed(seed)
         if os.path.exists(model_iteration_path):
             model, losses = load_svgp(
@@ -616,7 +659,6 @@ def train_svgp(
         nll = calculate_nll(
             prediction=prediction,
             y=experiment_data.train.y,
-            y_std=experiment_data.y_std,
         )
         mae = calculate_mae(
             prediction=prediction,

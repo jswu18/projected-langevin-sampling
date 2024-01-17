@@ -60,8 +60,8 @@ def get_experiment_data(
     input_column_names = [c.replace(" ", "") for c in input_column_names]
     output_column_name = dataset_metadata.output_column_name.lower().replace(" ", "")
 
-    x = torch.tensor(df[input_column_names].to_numpy()).double().detach()
-    y = torch.tensor(df[output_column_name].to_numpy()).double().detach()
+    x = torch.tensor(df[input_column_names].to_numpy()).detach().double()
+    y = torch.tensor(df[output_column_name].to_numpy()).detach().double()
 
     experiment_data = set_up_experiment(
         name=dataset_name,
@@ -92,7 +92,6 @@ def main(
         models_path = f"experiments/uci/outputs/{data_seed}/models/{dataset_name}"
         subsample_gp_model_path = os.path.join(models_path, "subsample_gp")
         subsample_gp_data_path = os.path.join(data_path, "subsample_gp")
-        svgp_iteration_model_path = os.path.join(models_path, "svgp_model_iterations")
         os.makedirs(data_path, exist_ok=True)
         os.makedirs(plots_path, exist_ok=True)
         os.makedirs(results_path, exist_ok=True)
@@ -100,8 +99,6 @@ def main(
 
         experiment_data_path = os.path.join(data_path, "experiment_data.pth")
         induce_data_path = os.path.join(data_path, "inducing_points.pth")
-        pwgf_path = os.path.join(models_path, "pwgf_model.pth")
-        svgp_model_path = os.path.join(models_path, "svgp_model.pth")
 
         if os.path.exists(experiment_data_path):
             experiment_data = ExperimentData.load(experiment_data_path)
@@ -156,16 +153,6 @@ def main(
             likelihoods=[model.likelihood for model in subsample_gp_models]
         )
 
-        # if os.path.exists(pwgf_path):
-        #     pwgf, particles = load_projected_wasserstein_gradient_flow(
-        #         model_path=pwgf_path,
-        #         base_kernel=deepcopy(average_ard_kernel),
-        #         observation_noise=float(likelihood.noise),
-        #         experiment_data=experiment_data,
-        #         induce_data=induce_data,
-        #         jitter=pwgf_config["jitter"],
-        #     )
-        # else:
         gradient_flow_kernel = GradientFlowKernel(
             base_kernel=average_ard_kernel,
             approximation_samples=induce_data.x,
@@ -191,35 +178,49 @@ def main(
             ),
         }
         for pwgf_name, pwgf in pwgf_dict.items():
-            particles = train_projected_wasserstein_gradient_flow(
-                pwgf=pwgf,
-                number_of_particles=pwgf_config["number_of_particles"],
-                particle_name=pwgf_name,
-                experiment_data=experiment_data,
-                induce_data=induce_data,
-                simulation_duration=pwgf_config["simulation_duration"],
-                seed=pwgf_config["seed"],
-                observation_noise_upper=pwgf_config["observation_noise_upper"],
-                observation_noise_lower=pwgf_config["observation_noise_lower"],
-                number_of_observation_noise_searches=pwgf_config[
-                    "number_of_observation_noise_searches"
-                ],
-                plot_title=f"{dataset_name}",
-                plot_particles_path=None,
-                animate_1d_path=None,
-                plot_update_magnitude_path=plots_path,
-                metric_to_minimise=pwgf_config["metric_to_minimise"],
-                initial_particles_noise_only=pwgf_config[
-                    "initial_particles_noise_only"
-                ],
-            )
-            torch.save(
-                {
-                    "particles": particles,
-                    "observation_noise": pwgf.observation_noise,
-                },
-                pwgf_path,
-            )
+            pwgf_path = os.path.join(models_path, f"{pwgf_name}.pth")
+            if os.path.exists(pwgf_path):
+                pwgf, particles = load_projected_wasserstein_gradient_flow(
+                    pwgf=pwgf,
+                    model_path=pwgf_path,
+                )
+            else:
+                particles = train_projected_wasserstein_gradient_flow(
+                    pwgf=pwgf,
+                    number_of_particles=pwgf_config["number_of_particles"],
+                    particle_name=pwgf_name,
+                    experiment_data=experiment_data,
+                    induce_data=induce_data,
+                    simulation_duration=pwgf_config["simulation_duration"],
+                    maximum_number_of_steps=pwgf_config["maximum_number_of_steps"],
+                    step_size_upper=pwgf_config["step_size_upper"],
+                    number_of_step_searches=pwgf_config["number_of_step_searches"],
+                    minimum_change_in_energy_potential=pwgf_config[
+                        "minimum_change_in_energy_potential"
+                    ],
+                    seed=pwgf_config["seed"],
+                    observation_noise_upper=pwgf_config["observation_noise_upper"],
+                    observation_noise_lower=pwgf_config["observation_noise_lower"],
+                    number_of_observation_noise_searches=pwgf_config[
+                        "number_of_observation_noise_searches"
+                    ],
+                    plot_title=f"{dataset_name}",
+                    plot_particles_path=None,
+                    animate_1d_path=None,
+                    plot_update_magnitude_path=plots_path,
+                    metric_to_minimise=pwgf_config["metric_to_minimise"],
+                    initial_particles_noise_only=pwgf_config[
+                        "initial_particles_noise_only"
+                    ],
+                    early_stopper_patience=pwgf_config["early_stopper_patience"],
+                )
+                torch.save(
+                    {
+                        "particles": particles,
+                        "observation_noise": pwgf.observation_noise,
+                    },
+                    pwgf_path,
+                )
             set_seed(pwgf_config["seed"])
             calculate_metrics(
                 model=pwgf,
@@ -230,96 +231,66 @@ def main(
                 results_path=results_path,
                 plots_path=plots_path,
             )
-        # if os.path.exists(svgp_model_path):
-        #     svgp_model, _ = load_svgp(
-        #         model_path=svgp_model_path,
-        #         x_induce=induce_data.x,
-        #         mean=gpytorch.means.ConstantMean(),
-        #         kernel=pwgf.kernel,
-        #         learn_inducing_locations=False,
-        #     )
-        # else:
-        svgp_k, losses = train_svgp(
-            model_name="svgp-k-kernel",
-            experiment_data=experiment_data,
-            induce_data=induce_data,
-            mean=gpytorch.means.ConstantMean(),
-            kernel=average_ard_kernel,
-            likelihood=gpytorch.likelihoods.GaussianLikelihood(),
-            seed=svgp_config["seed"],
-            number_of_epochs=svgp_config["number_of_epochs"],
-            batch_size=svgp_config["batch_size"],
-            learning_rate_upper=svgp_config["learning_rate_upper"],
-            learning_rate_lower=svgp_config["learning_rate_lower"],
-            number_of_learning_rate_searches=svgp_config[
-                "number_of_learning_rate_searches"
-            ],
-            is_fixed=True,
-            observation_noise=None,
-            models_path=svgp_iteration_model_path,
-            plot_title=f"{dataset_name}",
-            plot_1d_path=None,
-            animate_1d_path=None,
-            plot_loss_path=plots_path,
-        )
-        torch.save(
-            {
-                "model": svgp_k.state_dict(),
-                "losses": losses,
-            },
-            svgp_model_path,
-        )
-        set_seed(svgp_config["seed"])
-        calculate_metrics(
-            model=svgp_k,
-            model_name="svgp-k-kernel",
-            dataset_name=dataset_name,
-            experiment_data=experiment_data,
-            results_path=results_path,
-            plots_path=plots_path,
-        )
-        svgp_r, losses = train_svgp(
-            model_name="svgp-r-kernel",
-            experiment_data=experiment_data,
-            induce_data=induce_data,
-            mean=gpytorch.means.ConstantMean(),
-            kernel=gradient_flow_kernel,
-            likelihood=gpytorch.likelihoods.GaussianLikelihood(),
-            seed=svgp_config["seed"],
-            number_of_epochs=svgp_config["number_of_epochs"],
-            batch_size=svgp_config["batch_size"],
-            learning_rate_upper=svgp_config["learning_rate_upper"],
-            learning_rate_lower=svgp_config["learning_rate_lower"],
-            number_of_learning_rate_searches=svgp_config[
-                "number_of_learning_rate_searches"
-            ],
-            is_fixed=True,
-            observation_noise=None,
-            models_path=svgp_iteration_model_path,
-            plot_title=f"{dataset_name}",
-            plot_1d_path=None,
-            animate_1d_path=None,
-            plot_loss_path=plots_path,
-        )
-        torch.save(
-            {
-                "model": svgp_r.state_dict(),
-                "losses": losses,
-            },
-            svgp_model_path,
-        )
-        set_seed(svgp_config["seed"])
-        calculate_metrics(
-            model=svgp_r,
-            model_name="svgp-r-kernel",
-            dataset_name=dataset_name,
-            experiment_data=experiment_data,
-            results_path=results_path,
-            plots_path=plots_path,
-        )
+        for kernel_name, kernel in zip(
+            ["k-kernel", "r-kernel"], [average_ard_kernel, gradient_flow_kernel]
+        ):
+            model_name = f"svgp-{kernel_name}"
+            svgp_model_path = os.path.join(models_path, f"{model_name}.pth")
+            if os.path.exists(svgp_model_path):
+                svgp, _ = load_svgp(
+                    model_path=svgp_model_path,
+                    x_induce=induce_data.x,
+                    mean=gpytorch.means.ConstantMean(),
+                    kernel=deepcopy(kernel),
+                    likelihood=gpytorch.likelihoods.GaussianLikelihood(),
+                    learn_inducing_locations=False,
+                )
+            else:
+                svgp, losses = train_svgp(
+                    model_name=model_name,
+                    experiment_data=experiment_data,
+                    induce_data=induce_data,
+                    mean=gpytorch.means.ConstantMean(),
+                    kernel=deepcopy(kernel),
+                    likelihood=gpytorch.likelihoods.GaussianLikelihood(),
+                    seed=svgp_config["seed"],
+                    number_of_epochs=svgp_config["number_of_epochs"],
+                    batch_size=svgp_config["batch_size"],
+                    learning_rate_upper=svgp_config["learning_rate_upper"],
+                    learning_rate_lower=svgp_config["learning_rate_lower"],
+                    number_of_learning_rate_searches=svgp_config[
+                        "number_of_learning_rate_searches"
+                    ],
+                    is_fixed=True,
+                    observation_noise=float(likelihood.noise),
+                    models_path=os.path.join(
+                        models_path, f"{model_name}-kernel-iterations"
+                    ),
+                    plot_title=f"{dataset_name}",
+                    plot_1d_path=None,
+                    animate_1d_path=None,
+                    plot_loss_path=plots_path,
+                )
+                torch.save(
+                    {
+                        "model": svgp.state_dict(),
+                        "losses": losses,
+                    },
+                    os.path.join(models_path, f"{model_name}.pth"),
+                )
+            set_seed(svgp_config["seed"])
+            calculate_metrics(
+                model=svgp,
+                model_name=model_name,
+                dataset_name=dataset_name,
+                experiment_data=experiment_data,
+                results_path=results_path,
+                plots_path=plots_path,
+            )
 
 
 if __name__ == "__main__":
+    torch.set_default_dtype(torch.float64)
     args = parser.parse_args()
     with open(args.config_path, "r") as file:
         loaded_config = yaml.safe_load(file)

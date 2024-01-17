@@ -1,4 +1,4 @@
-from typing import Dict, List, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 import gpytorch
 import matplotlib.animation as animation
@@ -29,19 +29,20 @@ def plot_1d_gp_prediction(
     ax: plt.Axes,
     x: torch.Tensor,
     mean: torch.Tensor,
-    variance: torch.Tensor,
+    variance: Optional[torch.Tensor] = None,
     save_path: str = None,
     title: str = None,
 ) -> Tuple[plt.Figure, plt.Axes]:
-    stdev = torch.sqrt(variance)
-    ax.fill_between(
-        x.reshape(-1),
-        (mean - 1.96 * stdev).reshape(-1),
-        (mean + 1.96 * stdev).reshape(-1),
-        facecolor=(0.85, 0.85, 0.85),
-        label="error bound (95%)",
-        zorder=0,
-    )
+    if variance is not None:
+        stdev = torch.sqrt(variance)
+        ax.fill_between(
+            x.reshape(-1),
+            (mean - 1.96 * stdev).reshape(-1),
+            (mean + 1.96 * stdev).reshape(-1),
+            facecolor=(0.85, 0.85, 0.85),
+            label="error bound (95%)",
+            zorder=0,
+        )
     ax.plot(x.reshape(-1), mean.reshape(-1), label="mean", zorder=0, color="black")
     ax.set_xlabel("x")
     ax.set_ylabel("y")
@@ -94,6 +95,7 @@ def plot_1d_experiment_data(
     experiment_data: ExperimentData,
     save_path: str = None,
     title: str = None,
+    is_sample_untransformed: bool = False,
 ) -> Tuple[plt.Figure, plt.Axes]:
     for data in [
         experiment_data.train,
@@ -104,12 +106,18 @@ def plot_1d_experiment_data(
             fig, ax = plot_1d_data(
                 fig=fig,
                 ax=ax,
-                data=data,
+                data=data
+                if not is_sample_untransformed
+                else Data(
+                    x=data.x,
+                    y=data.y_untransformed,
+                    name=data.name,
+                ),
                 save_path=None,
                 title=None,
                 alpha=0.3,
             )
-    if experiment_data.full.y_untransformed is not None:
+    if not is_sample_untransformed and experiment_data.full.y_untransformed is not None:
         ax.plot(
             experiment_data.full.x,
             experiment_data.full.y_untransformed.reshape(experiment_data.full.x.shape),
@@ -158,14 +166,16 @@ def plot_1d_pwgf_prediction(
     x: torch.Tensor,
     predicted_samples: torch.Tensor,
     save_path: str,
-    predicted_distribution: gpytorch.distributions.MultivariateNormal = None,
+    predicted_distribution: Optional[torch.distributions.Distribution] = None,
     title: str = None,
+    is_sample_untransformed: bool = False,
 ):
     fig, ax = plt.subplots(figsize=(13, 6.5))
     fig, ax = plot_1d_experiment_data(
         fig=fig,
         ax=ax,
         experiment_data=experiment_data,
+        is_sample_untransformed=is_sample_untransformed,
     )
     for i in range(induce_data.x.shape[0]):
         plt.axvline(
@@ -175,15 +185,30 @@ def plot_1d_pwgf_prediction(
             label="induce" if i == 0 else None,
             zorder=0,
         )
-    ax.autoscale(enable=False)  # turn off autoscale before plotting particles
-    if predicted_distribution is not None:
-        fig, ax = plot_1d_gp_prediction(
-            fig=fig,
-            ax=ax,
-            x=experiment_data.full.x,
-            mean=predicted_distribution.mean.detach(),
-            variance=predicted_distribution.variance.detach(),
-        )
+    if not is_sample_untransformed:
+        ax.autoscale(enable=False)  # turn off autoscale before plotting particles
+    if predicted_distribution:
+        if isinstance(
+            predicted_distribution, gpytorch.distributions.MultivariateNormal
+        ):
+            fig, ax = plot_1d_gp_prediction(
+                fig=fig,
+                ax=ax,
+                x=experiment_data.full.x,
+                mean=predicted_distribution.mean.detach(),
+                variance=predicted_distribution.variance.detach(),
+            )
+        elif isinstance(predicted_distribution, torch.distributions.Bernoulli):
+            fig, ax = plot_1d_gp_prediction(
+                fig=fig,
+                ax=ax,
+                x=experiment_data.full.x,
+                mean=predicted_distribution.probs.detach(),
+                variance=None,
+            )
+        else:
+            raise TypeError
+
     for i in range(predicted_samples.shape[1]):
         fig, ax = plot_1d_particle(
             fig=fig,
@@ -517,7 +542,6 @@ def animate_1d_gp_predictions(
         likelihood=likelihood,
         learn_inducing_locations=learn_inducing_locations,
     )
-    model.double()
     model.train()
     if torch.cuda.is_available():
         model = model.cuda()
@@ -527,7 +551,6 @@ def animate_1d_gp_predictions(
     if not learn_kernel_parameters:
         all_params -= {model.kernel.base_kernel.base_kernel.raw_lengthscale}
         all_params -= {model.kernel.base_kernel.raw_outputscale}
-    model.likelihood.double()
     model.likelihood.train()
     if torch.cuda.is_available():
         model.likelihood = model.likelihood.cuda()
@@ -570,6 +593,7 @@ def animate_1d_gp_predictions(
             mean_prediction.reshape(-1),
             label="mean",
             zorder=0,
+            color="black",
         )[0]
     else:
         raise NotImplementedError
