@@ -9,7 +9,7 @@ from src.projected_langevin_sampling.base.transform.regression import PLSRegress
 
 class PLSRegressionIPB(PLSInducingPointBasis, PLSRegression):
     """
-    Gradient Flow regression with particles on a function space approximated by a set of M inducing points.
+    Projected Langevin sampling regression with particles on a function space approximated by a set of M inducing points.
 
     N is the number of training points.
     M is the dimensionality of the function space approximation.

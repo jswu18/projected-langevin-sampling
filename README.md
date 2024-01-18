@@ -1,4 +1,4 @@
-# Projected Wasserstein Gradient Flows in Function Spaces
+# Projected Langevin Sampling for Function Space Gradient Flows
 
 ## Environment Installation
 

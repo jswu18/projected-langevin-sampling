@@ -9,7 +9,7 @@ from src.projected_langevin_sampling.base.transform.classification import (
 
 class PLSClassificationONB(PLSOrthonormalBasis, PLSClassification):
     """
-    Gradient Flow classification with particles on a function space approximated by an orthonormal basis.
+    Projected Langevin sampling classification with particles on a function space approximated by an orthonormal basis.
 
     N is the number of training points.
     M is the dimensionality of the function space approximation.

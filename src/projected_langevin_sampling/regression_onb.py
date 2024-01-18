@@ -7,7 +7,7 @@ from src.projected_langevin_sampling.base.transform.regression import PLSRegress
 
 class PLSRegressionONB(PLSOrthonormalBasis, PLSRegression):
     """
-    Gradient Flow regression with particles on a function space approximated by an orthonormal basis.
+    Projected Langevin sampling regression with particles on a function space approximated by an orthonormal basis.
 
     N is the number of training points.
     M is the dimensionality of the function space approximation.

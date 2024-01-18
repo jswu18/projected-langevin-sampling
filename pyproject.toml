@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "function-space-gradient-flow"
 version = "0.0.0"
-description = "Implementation of Projected Wasserstein Gradient Flows in Function Spaces"
+description = "Implementation of Projected Langevin Sampling for Function Space Gradient Flows"
 authors = [
     "James Wu <jswu18@gmail.com>"
 ]
