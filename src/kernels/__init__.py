@@ -1,5 +1,5 @@
-from src.kernels.gradient_flow_kernel import GradientFlowKernel
+from src.kernels.projected_langevin_sampling import PLSKernel
 
 __all__ = [
-    "GradientFlowKernel",
+    "PLSKernel",
 ]

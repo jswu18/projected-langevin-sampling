@@ -2,7 +2,7 @@ import pytest
 import torch
 
 from mockers.kernel import MockKernel
-from src.kernels import GradientFlowKernel
+from src.kernels import PLSKernel
 
 
 @pytest.mark.parametrize(
@@ -39,13 +39,13 @@ from src.kernels import GradientFlowKernel
         ],
     ],
 )
-def test_gradient_flow_kernel(
+def test_pls_kernel(
     x1: torch.Tensor,
     x2: torch.Tensor,
     z: torch.Tensor,
     gram: torch.Tensor,
 ):
-    kernel = GradientFlowKernel(
+    kernel = PLSKernel(
         base_kernel=MockKernel(),
         approximation_samples=z,
     )

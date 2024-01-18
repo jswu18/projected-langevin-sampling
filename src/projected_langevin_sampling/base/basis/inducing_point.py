@@ -2,17 +2,18 @@ import math
 from abc import ABC
 from typing import Optional
 
+import gpytorch
 import torch
 
-from src.gradient_flows.base.base import GradientFlowBase
-from src.kernels import GradientFlowKernel
+from src.kernels import PLSKernel
+from src.projected_langevin_sampling.base.base import PLSBase
 from src.samplers import sample_multivariate_normal
 
 
-class GradientFlowONBBase(GradientFlowBase, ABC):
+class PLSInducingPointBasis(PLSBase, ABC):
     """
-    The base class for gradient flows with particles on a function space approximated by an orthonormal basis (ONB)
-    constructed from a set of M inducing points through the eigendecomposition of the kernel matrix.
+    A Non-orthonormal basis (IP) approximation.
+    The base class for projected Langevin sampling with particles on a function space approximated by a set of M inducing points.
 
     N is the number of training points.
     M is the dimensionality of the function space approximation.
@@ -22,7 +23,7 @@ class GradientFlowONBBase(GradientFlowBase, ABC):
 
     def __init__(
         self,
-        kernel: GradientFlowKernel,
+        kernel: PLSKernel,
         observation_noise: Optional[float],
         x_induce: torch.Tensor,
         y_induce: torch.Tensor,
@@ -31,16 +32,16 @@ class GradientFlowONBBase(GradientFlowBase, ABC):
         jitter: float = 0.0,
     ):
         """
-        Constructor for the data approximation base class of gradient flows.
+        Constructor for the data approximation base class of projected Langevin sampling.
         :param x_induce: The inducing points of size (M, D).
         :param y_induce: The inducing points of size (M,).
         :param x_train: The training points of size (N, D).
         :param y_train: The training points of size (N,).
-        :param kernel: The gradient flow kernel.
+        :param kernel: The projected Langevin sampling kernel.
         :param observation_noise: The observation noise.
         :param jitter: A jitter for numerical stability.
         """
-        GradientFlowBase.__init__(
+        PLSBase.__init__(
             self,
             kernel=kernel,
             observation_noise=observation_noise,
@@ -50,31 +51,14 @@ class GradientFlowONBBase(GradientFlowBase, ABC):
             y_train=y_train,
             jitter=jitter,
         )
-        self.eigenvalues, self.eigenvectors = torch.linalg.eigh(
-            self.base_gram_induce.evaluate()
-        )
-
-        # Remove negative eigenvalues
-        positive_eigenvalue_idx = torch.where(self.eigenvalues > 0)[0]
-        self.eigenvalues = self.eigenvalues[positive_eigenvalue_idx].real
-        self.eigenvectors = self.eigenvectors[:, positive_eigenvalue_idx].real
-
-        # Scale eigenvectors
-        self.scaled_eigenvectors = torch.multiply(
-            torch.divide(
-                torch.ones(self.eigenvalues.shape),
-                torch.sqrt(self.approximation_dimension * self.eigenvalues),
-            )[None, :],
-            self.eigenvectors,
-        )
 
     @property
     def approximation_dimension(self):
         """
-        The dimensionality of the function space approximation M (number of non-zero eigenvalues).
+        The dimensionality of the function space approximation M (number of inducing points).
         :return: The dimensionality of the function space approximation.
         """
-        return self.eigenvalues.shape[0]
+        return self.x_induce.shape[0]
 
     def initialise_particles(
         self,
@@ -83,17 +67,16 @@ class GradientFlowONBBase(GradientFlowBase, ABC):
         seed: Optional[int] = None,
     ) -> torch.Tensor:
         """
-        Initialise the particles with noise only.
+        Initialise the particles with either noise only or noise and an initialisation from the inducing points.
         :param number_of_particles: The number of particles.
-        :param noise_only: For ONB base, this is always True.
+        :param noise_only: Whether to initialise the particles to the noise only. Defaults to True.
         :param seed: An optional seed for reproducibility.
         :return: The initialised particles.
         """
-        if not noise_only:
-            raise ValueError("For ONB base, noise_only must be True.")
-        return self._initialise_particles_noise(
+        noise = self._initialise_particles_noise(
             number_of_particles=number_of_particles, seed=seed
         )
+        return noise if noise_only else (self.y_induce[:, None] + noise)  # size (M, P)
 
     def _calculate_untransformed_train_predictions(
         self, particles: torch.Tensor
@@ -103,9 +86,11 @@ class GradientFlowONBBase(GradientFlowBase, ABC):
         :param particles: The particles of size (M, P).
         :return: The untransformed predictions of size (N, P).
         """
-        return (
-            self.base_gram_induce_train.T @ self.scaled_eigenvectors @ particles
-        )  # k(X, Z) @ V_tilde @ U(t) of size (N, P)
+        return gpytorch.solve(
+            lhs=self.base_gram_induce_train.to_dense().T,
+            input=self.base_gram_induce,
+            rhs=particles,
+        )  #  k(X, Z) @ k(Z, Z)^{-1} @ U(t) of size (N, P)
 
     def calculate_energy_potential(self, particles: torch.Tensor) -> float:
         """
@@ -115,52 +100,52 @@ class GradientFlowONBBase(GradientFlowBase, ABC):
         """
         cost = self.calculate_cost(particles=particles)  # size (P, )
 
-        particle_energy_potential = cost + 1 / 2 * torch.multiply(
-            particles,
-            torch.diag(
-                torch.divide(torch.ones(self.eigenvalues.shape), self.eigenvalues)
-            )
-            @ particles,
-        ).sum(
-            dim=0
+        inverse_base_gram_induce_particles = gpytorch.solve(
+            self.base_gram_induce, particles
+        )  # k(Z, Z)^{-1} @ U(t) of size (M, P)
+
+        # cost + M/2 * (k(Z, Z)^{-1} @ particle)^T (k(Z, Z)^{-1} @ particle)
+        particle_energy_potential = (
+            cost
+            + self.approximation_dimension
+            / 2
+            * torch.square(inverse_base_gram_induce_particles).sum(dim=0)
         )  # size (P,)
         return particle_energy_potential.mean().item()
 
     def _calculate_particle_update(
         self,
         particles: torch.Tensor,
-        learning_rate: torch.Tensor,
+        step_size: float,
     ) -> torch.Tensor:
         """
-        Calculates the update for each particle following the Wasserstein gradient flow.
+        Calculates the update for each particle following the Wasserstein projected Langevin sampling.
         :param particles: Particles of size (M, P).
-        :param learning_rate: A learning rate or step size for the gradient flow update in the form of a scalar.
+        :param step_size: A step size for the projected Langevin sampling update in the form of a scalar.
         :return: The update to be applied to the particles of size (M, P).
         """
+        inverse_base_gram_particle_vector = gpytorch.solve(
+            self.base_gram_induce, particles
+        )  # k(Z, Z)^{-1} @ U(t) of size (M, P)
         noise_vector = sample_multivariate_normal(
             mean=torch.zeros(particles.shape[0]),
-            cov=torch.eye(particles.shape[0]),
+            cov=self.base_gram_induce,
             size=(particles.shape[1],),
         ).T  # e ~ N(0, k(Z, Z)) of size (M, P)
         cost_derivative = self.calculate_cost_derivative(
             particles=particles
         )  # size (N, P)
 
-        # - eta *  V_tilde @ k(Z, X) @ d_2 c(Y, k(X, Z) @ V_tilde @ U(t))
-        # - eta * Lambda^{-1} @ U(t)
+        # - eta * k(Z, X) @ d_2 c(Y, k(X, Z) @ k(Z, Z)^{-1} @ U(t))
+        # - eta * M * k(Z, Z)^{-1} @ U(t)
         # + sqrt(2 * eta) * e
         # size (M, P)
         particle_update = (
-            -learning_rate
-            * self.scaled_eigenvectors.T
-            @ self.base_gram_induce_train
-            @ cost_derivative
-            - learning_rate
-            * torch.diag(
-                torch.divide(torch.ones(self.eigenvalues.shape), self.eigenvalues)
-            )
-            @ particles
-            + math.sqrt(2.0 * learning_rate) * noise_vector
+            -step_size * self.base_gram_induce_train @ cost_derivative
+            - step_size
+            * self.approximation_dimension
+            * inverse_base_gram_particle_vector
+            + math.sqrt(2.0 * step_size) * noise_vector
         ).detach()
         return particle_update.to_dense().detach()  # size (M, P)
 
@@ -171,38 +156,36 @@ class GradientFlowONBBase(GradientFlowBase, ABC):
     ):
         """
         Calculates the predictive noise for a given input.
-
+        G([Z, x]) ~ N(0, r([Z, x], [Z, x]))
         :param particles: Particles of size (M, P)
         :param x: Test points of size (N*, D)
         :return: The predictive noise of size (N*, P)
         """
-        # Use additional approximation samples to ensure better OOD predictive behaviour
+        # zx = torch.concatenate((self.x_induce, x), dim=0)  # (M+N*, D)
+        # noise_covariance = self.kernel.forward(
+        #     x1=zx,
+        #     x2=zx,
+        # )  # (M+N*, M+N*)
         gram_x = self.kernel.forward(
             x1=x,
             x2=x,
-            additional_approximation_samples=x,
         )
-        base_gram_zx = self.kernel.base_kernel.forward(
-            x1=self.x_induce,
-            x2=x,
-        )
-        if base_gram_zx.ndim == 3:
-            base_gram_zx = base_gram_zx[0, :, :]
-        off_diagonal_block = (
-            base_gram_zx.T @ self.scaled_eigenvectors @ torch.diag(self.eigenvalues)
+        gram_xz = self.kernel.forward(
+            x1=x,
+            x2=self.x_induce,
         )
         noise_covariance = torch.concatenate(
             [
                 torch.concatenate(
                     [
-                        torch.diag(self.eigenvalues),
-                        off_diagonal_block.T,
+                        self.gram_induce,
+                        gram_xz.T,
                     ],
                     dim=1,
                 ),
                 torch.concatenate(
                     [
-                        off_diagonal_block,
+                        gram_xz,
                         gram_x,
                     ],
                     dim=1,
@@ -229,22 +212,27 @@ class GradientFlowONBBase(GradientFlowBase, ABC):
         :param noise: A noise tensor of size (N*, P), if None, it is sampled from the predictive noise distribution.
         :return: Predicted samples of size (N*, P).
         """
-        base_gram_x_induce = self.kernel.base_kernel.forward(
-            x1=x,
-            x2=self.x_induce,
-        ).to_dense()
-        if base_gram_x_induce.ndim == 3:
-            base_gram_x_induce = base_gram_x_induce[0, :, :]
 
-        # G([Z, x]) ~ N(0, R)
+        # Use additional approximation samples to calculate the gram matrices to ensure better OOD predictive behaviour
+        gram_x_induce = self.kernel.forward(
+            x1=x, x2=self.x_induce, additional_approximation_samples=x
+        ).to_dense()  # r(x, Z) of size (N*, M)
+        gram_induce = self.kernel.forward(
+            x1=self.x_induce, x2=self.x_induce, additional_approximation_samples=x
+        ).to_dense()  # r(Z, Z) of size (M, M)
+
+        # G([Z, x]) ~ N(0, r([Z, x], [Z, x]))
         if noise is None:
             noise = self.sample_predictive_noise(
                 particles=particles,
                 x=x,
             )
 
+        # G(x) + r(x, Z) @ r(Z, Z)^{-1} @ (U(t)-G(Z))
         return noise[self.approximation_dimension :, :] + (
-            base_gram_x_induce
-            @ self.scaled_eigenvectors
-            @ (particles - noise[: self.approximation_dimension, :])
-        )
+            gpytorch.solve(
+                lhs=gram_x_induce,
+                input=gram_induce,
+                rhs=(particles - noise[: self.approximation_dimension, :]),
+            )
+        )  # size (N*, P)

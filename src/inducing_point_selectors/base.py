@@ -5,7 +5,7 @@ import gpytorch
 import torch
 
 
-class InduceDataSelector(ABC):
+class InducingPointSelector(ABC):
     @abstractmethod
     def compute_induce_data(
         self,

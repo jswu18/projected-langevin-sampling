@@ -1,13 +1,13 @@
 import torch
 
-from src.gradient_flows.base.basis.non_orthonormal_basis import GradientFlowNONBBase
-from src.gradient_flows.base.transforms.regression import GradientFlowRegressionBase
-from src.kernels import GradientFlowKernel
+from src.kernels import PLSKernel
+from src.projected_langevin_sampling.base.basis.orthonormal import PLSOrthonormalBasis
+from src.projected_langevin_sampling.base.transform.regression import PLSRegression
 
 
-class GradientFlowRegressionNONB(GradientFlowNONBBase, GradientFlowRegressionBase):
+class PLSRegressionONB(PLSOrthonormalBasis, PLSRegression):
     """
-    Gradient Flow regression with particles on a function space approximated by a set of M inducing points.
+    Gradient Flow regression with particles on a function space approximated by an orthonormal basis.
 
     N is the number of training points.
     M is the dimensionality of the function space approximation.
@@ -17,7 +17,7 @@ class GradientFlowRegressionNONB(GradientFlowNONBBase, GradientFlowRegressionBas
 
     def __init__(
         self,
-        kernel: GradientFlowKernel,
+        kernel: PLSKernel,
         observation_noise: float,
         x_induce: torch.Tensor,
         y_induce: torch.Tensor,
@@ -25,7 +25,7 @@ class GradientFlowRegressionNONB(GradientFlowNONBBase, GradientFlowRegressionBas
         y_train: torch.Tensor,
         jitter: float = 0.0,
     ):
-        GradientFlowNONBBase.__init__(
+        PLSOrthonormalBasis.__init__(
             self,
             kernel=kernel,
             observation_noise=observation_noise,
@@ -35,7 +35,7 @@ class GradientFlowRegressionNONB(GradientFlowNONBBase, GradientFlowRegressionBas
             y_train=y_train,
             jitter=jitter,
         )
-        GradientFlowRegressionBase.__init__(
+        PLSRegression.__init__(
             self,
             kernel=kernel,
             observation_noise=observation_noise,

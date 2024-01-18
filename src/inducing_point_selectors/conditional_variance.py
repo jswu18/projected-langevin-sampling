@@ -5,10 +5,10 @@ import gpytorch
 import numpy as np
 import torch
 
-from src.induce_data_selectors.base import InduceDataSelector
+from src.inducing_point_selectors.base import InducingPointSelector
 
 
-class ConditionalVarianceInduceDataSelector(InduceDataSelector):
+class ConditionalVarianceInducingPointSelector(InducingPointSelector):
     """
     Adapted from https://github.com/markvdw/RobustGP/blob/master/robustgp/init_methods/methods.py
     """

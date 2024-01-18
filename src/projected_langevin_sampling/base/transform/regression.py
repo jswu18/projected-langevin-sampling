@@ -1,15 +1,16 @@
 from abc import ABC
 from typing import Optional
 
+import gpytorch
 import torch
 
-from src.gradient_flows.base.base import GradientFlowBase
-from src.kernels.gradient_flow_kernel import GradientFlowKernel
+from src.kernels.projected_langevin_sampling import PLSKernel
+from src.projected_langevin_sampling.base.base import PLSBase
 
 
-class GradientFlowClassificationBase(GradientFlowBase, ABC):
+class PLSRegression(PLSBase, ABC):
     """
-    The base class for binary classification gradient flows.
+    The base class for regression projected Langevin sampling.
 
     N is the number of training points.
     M is the dimensionality of the function space approximation.
@@ -19,7 +20,8 @@ class GradientFlowClassificationBase(GradientFlowBase, ABC):
 
     def __init__(
         self,
-        kernel: GradientFlowKernel,
+        kernel: PLSKernel,
+        observation_noise: float,
         x_induce: torch.Tensor,
         y_induce: torch.Tensor,
         x_train: torch.Tensor,
@@ -27,18 +29,19 @@ class GradientFlowClassificationBase(GradientFlowBase, ABC):
         jitter: float = 0.0,
     ):
         """
-        Constructor for the data approximation base class of gradient flows.
+        Constructor for the data approximation base class of projected Langevin sampling.
         :param x_induce: The inducing points of size (M, D).
         :param y_induce: The inducing points of size (M,).
         :param x_train: The training points of size (N, D).
         :param y_train: The training points of size (N,).
-        :param kernel: The gradient flow kernel.
+        :param kernel: The projected Langevin sampling kernel.
+        :param observation_noise: The observation noise.
         :param jitter: A jitter for numerical stability.
         """
-        GradientFlowBase.__init__(
+        PLSBase.__init__(
             self,
             kernel=kernel,
-            observation_noise=None,
+            observation_noise=observation_noise,
             x_induce=x_induce,
             y_induce=y_induce,
             x_train=x_train,
@@ -47,8 +50,8 @@ class GradientFlowClassificationBase(GradientFlowBase, ABC):
         )
 
     @staticmethod
-    def transform(y):
-        return torch.div(1, 1 + torch.exp(-y))
+    def transform(y: torch.Tensor) -> torch.Tensor:
+        return y
 
     def predict(
         self,
@@ -56,14 +59,14 @@ class GradientFlowClassificationBase(GradientFlowBase, ABC):
         particles: torch.Tensor,
         predictive_noise: Optional[torch.Tensor] = None,
         observation_noise: Optional[torch.Tensor] = None,
-    ) -> torch.distributions.Bernoulli:
+    ) -> gpytorch.distributions.MultivariateNormal:
         """
-        Predicts a Bernoulli distribution for the given input.
+        Predicts the mean and variance for a given input.
         :param x: input of size (N*, D)
         :param particles: particles of size (P, N)
-        :param predictive_noise: Optional predictive noise of size (N*, P)
-        :param observation_noise: Optional observation noise of size (N*, P)
-        :return: A Bernoulli distribution of size (N*, ).
+        :param predictive_noise: Optional predictive noise of size (N, P)
+        :param observation_noise: Optional observation noise of size (N, P)
+        :return: normal distribution of size (N*,)
         """
         samples = self.predict_samples(
             x=x,
@@ -71,10 +74,9 @@ class GradientFlowClassificationBase(GradientFlowBase, ABC):
             predictive_noise=predictive_noise,
             observation_noise=observation_noise,
         )
-        predictions = samples.mean(dim=1)
-        # predictions[predictions <= 0.5] = 0
-        return torch.distributions.Bernoulli(
-            probs=predictions,
+        return gpytorch.distributions.MultivariateNormal(
+            mean=samples.mean(dim=1),
+            covariance_matrix=torch.diag(samples.var(axis=1)),
         )
 
     def calculate_cost_derivative(self, particles: torch.Tensor) -> torch.Tensor:
@@ -83,12 +85,9 @@ class GradientFlowClassificationBase(GradientFlowBase, ABC):
         :return: A tensor of size (N, P).
         """
         prediction = self.transform(
-            self._calculate_untransformed_train_predictions(particles)
-        )  # of size (N, P)
-
-        return -torch.mul(self.y_train[:, None], 1 - prediction) + torch.mul(
-            1 - self.y_train[:, None], prediction
-        )
+            self._calculate_untransformed_train_predictions(particles=particles)
+        )  # (N, P)
+        return (1 / self.observation_noise) * (prediction - self.y_train[:, None])
 
     def calculate_cost(self, particles: torch.Tensor) -> torch.Tensor:
         """
@@ -96,9 +95,10 @@ class GradientFlowClassificationBase(GradientFlowBase, ABC):
         :return: A tensor of size (P, ).
         """
         prediction = self.transform(
-            self._calculate_untransformed_train_predictions(particles)
-        )  # of size (N, P)
-        return (
-            -self.y_train[:, None] * torch.log(prediction)
-            - (1 - self.y_train[:, None]) * torch.log(1 - prediction)
+            self._calculate_untransformed_train_predictions(particles=particles)
+        )  # (N, P)
+
+        # (1/sigma^2) * (k(X, Z) @ k(Z, Z)^{-1} @ U(t) - Y) of size (N, P)
+        return (1 / (2 * self.observation_noise)) * torch.square(
+            prediction - self.y_train[:, None]
         ).sum(dim=0)

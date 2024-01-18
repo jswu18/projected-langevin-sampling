@@ -5,20 +5,20 @@ import torch
 
 from experiments.data import Data, ExperimentData
 from src.gps import ExactGP, svGP
-from src.gradient_flows import GradientFlowRegressionONB
-from src.gradient_flows.base.base import GradientFlowBase
-from src.kernels import GradientFlowKernel
+from src.kernels import PLSKernel
+from src.projected_langevin_sampling import PLSRegressionONB
+from src.projected_langevin_sampling.base.base import PLSBase
 
 
-def load_projected_wasserstein_gradient_flow(
-    pwgf: GradientFlowBase,
+def load_pls(
+    pls: PLSBase,
     model_path: str,
-) -> (GradientFlowRegressionONB, torch.Tensor):
+) -> (PLSRegressionONB, torch.Tensor):
     model_config = torch.load(model_path)
     particles = model_config["particles"]
-    pwgf.observation_noise = model_config["observation_noise"]
+    pls.observation_noise = model_config["observation_noise"]
     print(f"Loaded particles and observation_noise from {model_path=}.")
-    return pwgf, particles
+    return pls, particles
 
 
 def load_svgp(

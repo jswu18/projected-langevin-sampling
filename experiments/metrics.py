@@ -10,7 +10,7 @@ from experiments.data import ExperimentData
 from experiments.plotters import plot_true_versus_predicted
 from experiments.utils import create_directory
 from src.gps import ExactGP, svGP
-from src.gradient_flows.base.base import GradientFlowBase
+from src.projected_langevin_sampling.base.base import PLSBase
 from src.utils import set_seed
 
 
@@ -64,7 +64,7 @@ def calculate_nll(
 
 
 def calculate_metrics(
-    model: Union[ExactGP, svGP, GradientFlowBase],
+    model: Union[ExactGP, svGP, PLSBase],
     experiment_data: ExperimentData,
     model_name: str,
     dataset_name: str,
@@ -82,7 +82,7 @@ def calculate_metrics(
             set_seed(0)
             if isinstance(_model, svGP) or isinstance(_model, ExactGP):
                 prediction = _model.likelihood(_model(data.x))
-            elif isinstance(_model, GradientFlowBase):
+            elif isinstance(_model, PLSBase):
                 prediction = _model(x=data.x, particles=particles)
             else:
                 raise ValueError(f"Model type {type(_model)} not supported")

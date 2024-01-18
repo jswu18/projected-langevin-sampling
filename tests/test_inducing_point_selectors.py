@@ -2,9 +2,9 @@ import pytest
 import torch
 
 from mockers.kernel import MockKernel
-from src.induce_data_selectors import (
-    ConditionalVarianceInduceDataSelector,
-    RandomInduceDataSelector,
+from src.inducing_point_selectors import (
+    ConditionalVarianceInducingPointSelector,
+    RandomInducingPointSelector,
 )
 from src.utils import set_seed
 
@@ -57,7 +57,7 @@ def test_random_induce_data_selector(
 ):
     kernel = MockKernel()
     set_seed(seed=seed)
-    selector = RandomInduceDataSelector()
+    selector = RandomInducingPointSelector()
     z_computed, _ = selector.compute_induce_data(x=x, m=m, kernel=kernel)
     assert torch.allclose(z_computed, z)
 
@@ -115,6 +115,6 @@ def test_conditional_variance_induce_data_selector(
 ):
     kernel = MockKernel()
     set_seed(seed=seed)
-    selector = ConditionalVarianceInduceDataSelector(threshold=threshold)
+    selector = ConditionalVarianceInducingPointSelector(threshold=threshold)
     z_computed, _ = selector.compute_induce_data(x=x, m=m, kernel=kernel)
     assert torch.allclose(z_computed, z)

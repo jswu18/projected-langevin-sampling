@@ -10,7 +10,8 @@ from tqdm import tqdm
 
 from experiments.data import Data, ExperimentData
 from src.gps import ExactGP, svGP
-from src.gradient_flows.base.base import GradientFlowBase
+from src.kernels import PLSKernel
+from src.projected_langevin_sampling.base.base import PLSBase
 from src.utils import set_seed
 
 _DATA_COLORS = {
@@ -160,9 +161,9 @@ def plot_1d_particle(
     return fig, ax
 
 
-def plot_1d_pwgf_prediction(
+def plot_1d_pls_prediction(
     experiment_data: ExperimentData,
-    induce_data: Data,
+    inducing_points: Data,
     x: torch.Tensor,
     predicted_samples: torch.Tensor,
     save_path: str,
@@ -177,9 +178,9 @@ def plot_1d_pwgf_prediction(
         experiment_data=experiment_data,
         is_sample_untransformed=is_sample_untransformed,
     )
-    for i in range(induce_data.x.shape[0]):
+    for i in range(inducing_points.x.shape[0]):
         plt.axvline(
-            x=induce_data.x[i],
+            x=inducing_points.x[i],
             color="tab:blue",
             alpha=0.2,
             label="induce" if i == 0 else None,
@@ -251,12 +252,12 @@ def plot_losses(
     plt.close(fig)
 
 
-def plot_1d_gp_prediction_and_induce_data(
+def plot_1d_gp_prediction_and_inducing_points(
     model: Union[ExactGP, svGP],
     experiment_data: ExperimentData,
     title: str,
     save_path: str,
-    induce_data: Data = None,
+    inducing_points: Data = None,
 ):
     fig, ax = plt.subplots(figsize=(13, 6.5))
     fig, ax = plot_1d_experiment_data(
@@ -264,9 +265,9 @@ def plot_1d_gp_prediction_and_induce_data(
         ax=ax,
         experiment_data=experiment_data,
     )
-    for i in range(induce_data.x.shape[0]):
+    for i in range(inducing_points.x.shape[0]):
         plt.axvline(
-            x=induce_data.x[i],
+            x=inducing_points.x[i],
             color="tab:blue",
             alpha=0.2,
             label="induce" if i == 0 else None,
@@ -305,14 +306,14 @@ def plot_energy_potentials(
     save_path: str,
 ):
     fig, ax = plt.subplots(figsize=(13, 6.5))
-    for i, learning_rate in enumerate(
+    for i, step_size in enumerate(
         sorted(energy_potentials_history.keys(), reverse=True)
     ):
         shade = 0.1 + (i / (max(len(energy_potentials_history) - 1, 1))) * 0.8
         ax.plot(
-            learning_rate * np.arange(len(energy_potentials_history[learning_rate])),
-            np.log(energy_potentials_history[learning_rate]),
-            label=learning_rate,
+            step_size * np.arange(len(energy_potentials_history[step_size])),
+            np.log(energy_potentials_history[step_size]),
+            label=step_size,
             color=[shade, shade, shade],
         )
     ax.set_title(title)
@@ -376,15 +377,15 @@ def plot_true_versus_predicted(
     plt.close(fig)
 
 
-def animate_1d_pwgf_predictions(
-    pwgf: GradientFlowBase,
+def animate_1d_pls_predictions(
+    pls: PLSBase,
     number_of_particles: int,
     initial_particles_noise_only: bool,
     seed: int,
-    learning_rate: float,
+    step_size: float,
     number_of_epochs: int,
     experiment_data: ExperimentData,
-    induce_data: Data,
+    inducing_points: Data,
     x: torch.Tensor,
     title: str,
     save_path: str,
@@ -397,9 +398,9 @@ def animate_1d_pwgf_predictions(
         ax=ax,
         experiment_data=experiment_data,
     )
-    for i in range(induce_data.x.shape[0]):
+    for i in range(inducing_points.x.shape[0]):
         plt.axvline(
-            x=induce_data.x[i],
+            x=inducing_points.x[i],
             color="tab:blue",
             alpha=0.2,
             label="induce" if i == 0 else None,
@@ -408,20 +409,20 @@ def animate_1d_pwgf_predictions(
     plt.xlim(x.min(), x.max())
     ax.autoscale(enable=False)  # turn off autoscale before plotting particles
 
-    particles = pwgf.initialise_particles(
+    particles = pls.initialise_particles(
         number_of_particles=number_of_particles,
         seed=seed,
         noise_only=initial_particles_noise_only,
     )
-    predictive_noise = pwgf.sample_predictive_noise(
+    predictive_noise = pls.sample_predictive_noise(
         x=experiment_data.full.x,
         particles=particles,
     ).detach()
-    observation_noise = pwgf.sample_observation_noise(
+    observation_noise = pls.sample_observation_noise(
         number_of_particles=number_of_particles,
         seed=seed,
     ).detach()
-    predicted_samples = pwgf.predict_samples(
+    predicted_samples = pls.predict_samples(
         x=experiment_data.full.x,
         particles=particles,
         predictive_noise=predictive_noise,
@@ -460,17 +461,17 @@ def animate_1d_pwgf_predictions(
     number_of_frames = 1 + number_of_epochs // (
         (number_of_epochs // (animation_duration * fps)) + 1
     )
-    progress_bar = tqdm(total=number_of_frames + 1, desc="WGF Particles GIF")
+    progress_bar = tqdm(total=number_of_frames + 1, desc="PLS Particles GIF")
 
     def animate(iteration: int):
         for _ in range((number_of_epochs // (animation_duration * fps)) + 1):
             particle_wrapper.update(
-                pwgf.calculate_particle_update(
+                pls.calculate_particle_update(
                     particles=particle_wrapper.particles,
-                    learning_rate=learning_rate,
+                    step_size=step_size,
                 )
             )
-        _predicted_samples = pwgf.predict_samples(
+        _predicted_samples = pls.predict_samples(
             x=experiment_data.full.x,
             particles=particle_wrapper.particles,
             predictive_noise=predictive_noise,
@@ -479,7 +480,7 @@ def animate_1d_pwgf_predictions(
         for i in range(_predicted_samples.shape[-1]):
             samples_plotted[i].set_data((x, _predicted_samples[:, i].reshape(-1)))
         ax.set_title(
-            f"{title} (simulation time={learning_rate*particle_wrapper.num_updates:.2e}, iteration={particle_wrapper.num_updates})"
+            f"{title} (simulation time={step_size * particle_wrapper.num_updates:.2e}, iteration={particle_wrapper.num_updates})"
         )
         progress_bar.update(n=1)
         return (samples_plotted[0],)
@@ -499,7 +500,7 @@ def animate_1d_pwgf_predictions(
 
 def animate_1d_gp_predictions(
     experiment_data: ExperimentData,
-    induce_data: Data,
+    inducing_points: Data,
     mean: gpytorch.means.Mean,
     kernel: gpytorch.kernels.Kernel,
     likelihood: Union[
@@ -523,9 +524,9 @@ def animate_1d_gp_predictions(
         ax=ax,
         experiment_data=experiment_data,
     )
-    for i in range(induce_data.x.shape[0]):
+    for i in range(inducing_points.x.shape[0]):
         plt.axvline(
-            x=induce_data.x[i],
+            x=inducing_points.x[i],
             color="tab:blue",
             alpha=0.2,
             label="induce" if i == 0 else None,
@@ -538,7 +539,7 @@ def animate_1d_gp_predictions(
     model = svGP(
         mean=mean,
         kernel=kernel,
-        x_induce=induce_data.x,
+        x_induce=inducing_points.x,
         likelihood=likelihood,
         learn_inducing_locations=learn_inducing_locations,
     )
@@ -549,8 +550,12 @@ def animate_1d_gp_predictions(
     all_params = set(model.parameters())
 
     if not learn_kernel_parameters:
-        all_params -= {model.kernel.base_kernel.base_kernel.raw_lengthscale}
-        all_params -= {model.kernel.base_kernel.raw_outputscale}
+        if isinstance(model.kernel, PLSKernel):
+            all_params -= {model.kernel.base_kernel.base_kernel.raw_lengthscale}
+            all_params -= {model.kernel.base_kernel.raw_outputscale}
+        else:
+            all_params -= {model.kernel.base_kernel.raw_lengthscale}
+            all_params -= {model.kernel.raw_outputscale}
     model.likelihood.train()
     if torch.cuda.is_available():
         model.likelihood = model.likelihood.cuda()

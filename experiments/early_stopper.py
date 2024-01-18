@@ -12,11 +12,11 @@ class EarlyStopper:
         self.simulation_time = 0
         self.min_loss = float("inf")
 
-    def should_stop(self, loss: float, learning_rate: float) -> bool:
+    def should_stop(self, loss: float, step_size: float) -> bool:
         if not np.isfinite(loss):
             return True
         elif loss >= self.min_loss:
-            self.simulation_time += learning_rate
+            self.simulation_time += step_size
             return self.simulation_time >= self.patience
         else:
             self.min_loss = loss

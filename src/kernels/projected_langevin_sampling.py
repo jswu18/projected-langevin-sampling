@@ -4,9 +4,9 @@ import gpytorch
 import torch
 
 
-class GradientFlowKernel(gpytorch.kernels.Kernel):
+class PLSKernel(gpytorch.kernels.Kernel):
     """
-    Decorates a base kernel with a gradient flow kernel such that
+    Decorates a base kernel with a projected Langevin sampling kernel such that
     K(x1, x2) = 1 / N * sum_{i=1}^N K_b(x1, z_i) * K_b(x2, z_i)
     where K_b is the base kernel and z_i are the approximation samples.
     """
@@ -19,7 +19,7 @@ class GradientFlowKernel(gpytorch.kernels.Kernel):
         approximation_samples: torch.Tensor,
         **kwargs,
     ):
-        super(GradientFlowKernel, self).__init__(**kwargs)
+        super(PLSKernel, self).__init__(**kwargs)
 
         self.base_kernel = base_kernel
         self.approximation_samples = approximation_samples

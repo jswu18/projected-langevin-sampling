@@ -7,11 +7,11 @@ kernel:
   number_of_iterations: 10
   number_of_epochs: 50000
   subsample_size: 10000
-induce_data:
+inducing_points:
   seed: 0
-  induce_data_factor: 1
-  induce_data_power: 2
-pwgf:
+  inducing_points_factor: 1
+  inducing_points_power: 2
+pls:
   number_of_particles: 100
   simulation_duration: 5.0e-1
   maximum_number_of_steps: 1.0e+7

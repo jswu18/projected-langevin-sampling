@@ -15,21 +15,21 @@ from experiments.constructors import (
 )
 from experiments.curves.curves import CURVE_FUNCTIONS, Curve
 from experiments.data import Data, ExperimentData
-from experiments.loaders import load_projected_wasserstein_gradient_flow, load_svgp
+from experiments.loaders import load_pls, load_svgp
 from experiments.metrics import calculate_metrics, concatenate_metrics
 from experiments.plotters import plot_1d_experiment_data
 from experiments.preprocess import split_regression_data_intervals
 from experiments.runners import (
     learn_subsample_gps,
-    pwgf_observation_noise_search,
-    select_induce_data,
-    train_projected_wasserstein_gradient_flow,
+    pls_observation_noise_search,
+    select_inducing_points,
+    train_pls,
     train_svgp,
 )
 from experiments.utils import create_directory
-from src.gradient_flows import GradientFlowRegressionNONB, GradientFlowRegressionONB
-from src.induce_data_selectors import ConditionalVarianceInduceDataSelector
-from src.kernels.gradient_flow_kernel import GradientFlowKernel
+from src.inducing_point_selectors import ConditionalVarianceInducingPointSelector
+from src.kernels.projected_langevin_sampling import PLSKernel
+from src.projected_langevin_sampling import PLSRegressionIPB, PLSRegressionONB
 from src.utils import set_seed
 
 parser = argparse.ArgumentParser(
@@ -99,8 +99,8 @@ def main(
     curve_function: Curve,
     data_config: Dict[str, Any],
     kernel_config: Dict[str, Any],
-    induce_data_config: Dict[str, Any],
-    pwgf_config: Dict[str, Any],
+    inducing_points_config: Dict[str, Any],
+    pls_config: Dict[str, Any],
     svgp_config: Dict[str, Any],
 ) -> None:
     experiment_data = get_experiment_data(
@@ -145,110 +145,106 @@ def main(
     likelihood = construct_average_gaussian_likelihood(
         likelihoods=[model.likelihood for model in subsample_gp_models]
     )
-    induce_data = select_induce_data(
-        seed=induce_data_config["seed"],
-        induce_data_selector=ConditionalVarianceInduceDataSelector(),
+    inducing_points = select_inducing_points(
+        seed=inducing_points_config["seed"],
+        inducing_point_selector=ConditionalVarianceInducingPointSelector(),
         data=experiment_data.train,
         number_induce_points=int(
-            induce_data_config["induce_data_factor"]
+            inducing_points_config["inducing_points_factor"]
             * math.pow(
                 experiment_data.train.x.shape[0],
-                1 / induce_data_config["induce_data_power"],
+                1 / inducing_points_config["inducing_points_power"],
             )
         ),
         kernel=average_ard_kernel,
     )
-    gradient_flow_kernel = GradientFlowKernel(
+    pls_kernel = PLSKernel(
         base_kernel=average_ard_kernel,
-        approximation_samples=induce_data.x,
+        approximation_samples=inducing_points.x,
     )
-    pwgf_dict = {
-        "pwgf-orthonormal-basis": GradientFlowRegressionONB(
-            kernel=gradient_flow_kernel,
-            x_induce=induce_data.x,
-            y_induce=induce_data.y,
+    pls_dict = {
+        "pls-onb": PLSRegressionONB(
+            kernel=pls_kernel,
+            x_induce=inducing_points.x,
+            y_induce=inducing_points.y,
             x_train=experiment_data.train.x,
             y_train=experiment_data.train.y,
-            jitter=pwgf_config["jitter"],
+            jitter=pls_config["jitter"],
             observation_noise=float(likelihood.noise),
         ),
-        "pwgf-induce-data-basis": GradientFlowRegressionNONB(
-            kernel=gradient_flow_kernel,
-            x_induce=induce_data.x,
-            y_induce=induce_data.y,
+        "pls-ipb": PLSRegressionIPB(
+            kernel=pls_kernel,
+            x_induce=inducing_points.x,
+            y_induce=inducing_points.y,
             x_train=experiment_data.train.x,
             y_train=experiment_data.train.y,
-            jitter=pwgf_config["jitter"],
+            jitter=pls_config["jitter"],
             observation_noise=float(likelihood.noise),
         ),
     }
-    for pwgf_name, pwgf in pwgf_dict.items():
-        pwgf_path = os.path.join(models_path, f"{pwgf_name}.pth")
-        if os.path.exists(pwgf_path):
-            pwgf, particles = load_projected_wasserstein_gradient_flow(
-                pwgf=pwgf,
-                model_path=pwgf_path,
+    for pls_name, pls in pls_dict.items():
+        pls_path = os.path.join(models_path, f"{pls_name}.pth")
+        if os.path.exists(pls_path):
+            pls, particles = load_pls(
+                pls=pls,
+                model_path=pls_path,
             )
         else:
-            particles = train_projected_wasserstein_gradient_flow(
-                pwgf=pwgf,
-                number_of_particles=pwgf_config["number_of_particles"],
-                particle_name=pwgf_name,
+            particles = train_pls(
+                pls=pls,
+                number_of_particles=pls_config["number_of_particles"],
+                particle_name=pls_name,
                 experiment_data=experiment_data,
-                induce_data=induce_data,
-                simulation_duration=pwgf_config["simulation_duration"],
-                step_size_upper=pwgf_config["step_size_upper"],
-                number_of_step_searches=pwgf_config["number_of_step_searches"],
-                maximum_number_of_steps=pwgf_config["maximum_number_of_steps"],
-                minimum_change_in_energy_potential=pwgf_config[
+                inducing_points=inducing_points,
+                simulation_duration=pls_config["simulation_duration"],
+                step_size_upper=pls_config["step_size_upper"],
+                number_of_step_searches=pls_config["number_of_step_searches"],
+                maximum_number_of_steps=pls_config["maximum_number_of_steps"],
+                minimum_change_in_energy_potential=pls_config[
                     "minimum_change_in_energy_potential"
                 ],
-                seed=pwgf_config["seed"],
-                observation_noise_upper=pwgf_config["observation_noise_upper"],
-                observation_noise_lower=pwgf_config["observation_noise_lower"],
-                number_of_observation_noise_searches=pwgf_config[
+                seed=pls_config["seed"],
+                observation_noise_upper=pls_config["observation_noise_upper"],
+                observation_noise_lower=pls_config["observation_noise_lower"],
+                number_of_observation_noise_searches=pls_config[
                     "number_of_observation_noise_searches"
                 ],
                 plot_title=f"{type(curve_function).__name__}",
                 plot_particles_path=plot_curve_path,
                 animate_1d_path=plot_curve_path,
                 plot_update_magnitude_path=plot_curve_path,
-                christmas_colours=pwgf_config["christmas_colours"]
-                if "christmas_colours" in pwgf_config
+                christmas_colours=pls_config["christmas_colours"]
+                if "christmas_colours" in pls_config
                 else False,
-                metric_to_minimise=pwgf_config["metric_to_minimise"],
-                initial_particles_noise_only=pwgf_config[
-                    "initial_particles_noise_only"
-                ],
-                early_stopper_patience=pwgf_config["early_stopper_patience"],
+                metric_to_minimise=pls_config["metric_to_minimise"],
+                initial_particles_noise_only=pls_config["initial_particles_noise_only"],
+                early_stopper_patience=pls_config["early_stopper_patience"],
             )
             torch.save(
                 {
                     "particles": particles,
-                    "observation_noise": pwgf.observation_noise,
+                    "observation_noise": pls.observation_noise,
                 },
-                pwgf_path,
+                pls_path,
             )
-        set_seed(pwgf_config["seed"])
+        set_seed(pls_config["seed"])
         calculate_metrics(
-            model=pwgf,
+            model=pls,
             particles=particles,
-            model_name=pwgf_name,
+            model_name=pls_name,
             dataset_name=type(curve_function).__name__,
             experiment_data=experiment_data,
             results_path=results_curve_path,
             plots_path=plot_curve_path,
         )
 
-    for kernel_name, kernel in zip(
-        ["k-kernel", "r-kernel"], [average_ard_kernel, gradient_flow_kernel]
-    ):
+    for kernel_name, kernel in zip(["k", "r"], [average_ard_kernel, pls_kernel]):
         model_name = f"svgp-{kernel_name}"
         svgp_model_path = os.path.join(models_path, f"{model_name}.pth")
         if os.path.exists(svgp_model_path):
             svgp, _ = load_svgp(
                 model_path=svgp_model_path,
-                x_induce=induce_data.x,
+                x_induce=inducing_points.x,
                 mean=gpytorch.means.ConstantMean(),
                 kernel=deepcopy(kernel),
                 likelihood=gpytorch.likelihoods.GaussianLikelihood(),
@@ -258,7 +254,7 @@ def main(
             svgp, losses = train_svgp(
                 model_name=model_name,
                 experiment_data=experiment_data,
-                induce_data=induce_data,
+                inducing_points=inducing_points,
                 mean=gpytorch.means.ConstantMean(),
                 kernel=deepcopy(kernel),
                 likelihood=gpytorch.likelihoods.GaussianLikelihood(),
@@ -280,7 +276,7 @@ def main(
                 animate_1d_path=plot_curve_path,
                 plot_loss_path=plot_curve_path,
                 christmas_colours=svgp_config["christmas_colours"]
-                if "christmas_colours" in pwgf_config
+                if "christmas_colours" in pls_config
                 else False,
             )
             torch.save(
@@ -311,14 +307,14 @@ if __name__ == "__main__":
             curve_function=curve_function_,
             data_config=loaded_config["data"],
             kernel_config=loaded_config["kernel"],
-            induce_data_config=loaded_config["induce_data"],
-            pwgf_config=loaded_config["pwgf"],
+            inducing_points_config=loaded_config["inducing_points"],
+            pls_config=loaded_config["pls"],
             svgp_config=loaded_config["svgp"],
         )
     concatenate_metrics(
         results_path="experiments/curves/regression/outputs/results",
         data_types=["train", "test"],
-        model_names=["pwgf-orthonormal-basis", "pwgf-induce-data-basis", "fixed-svgp"],
+        model_names=["pls-onb", "pls-ipb", "fixed-svgp"],
         datasets=[
             type(curve_function_).__name__.lower()
             for curve_function_ in CURVE_FUNCTIONS

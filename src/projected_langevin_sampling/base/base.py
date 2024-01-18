@@ -3,11 +3,11 @@ from typing import Optional
 
 import torch
 
-from src.kernels.gradient_flow_kernel import GradientFlowKernel
+from src.kernels.projected_langevin_sampling import PLSKernel
 from src.samplers import sample_multivariate_normal
 
 
-class GradientFlowBase(ABC):
+class PLSBase(ABC):
     """
     N is the number of training points.
     M is the dimensionality of the function space approximation.
@@ -17,7 +17,7 @@ class GradientFlowBase(ABC):
 
     def __init__(
         self,
-        kernel: GradientFlowKernel,
+        kernel: PLSKernel,
         observation_noise: Optional[float],
         x_induce: torch.Tensor,
         y_induce: torch.Tensor,
@@ -26,8 +26,8 @@ class GradientFlowBase(ABC):
         jitter: float = 0.0,
     ):
         """
-        Constructor for the base class of gradient flows.
-        :param kernel: The gradient flow kernel.
+        Constructor for the base class of projected Langevin sampling.
+        :param kernel: The projected Langevin sampling kernel.
         :param observation_noise: The observation noise.
         :param x_induce: The inducing points of size (M, D).
         :param y_induce: The inducing points of size (M,).
@@ -109,7 +109,7 @@ class GradientFlowBase(ABC):
         seed: Optional[int] = None,
     ) -> torch.Tensor:
         """
-        Initialises the particles for the gradient flow.
+        Initialises the particles for the projected Langevin sampling.
         :param number_of_particles: The number of particles to initialise.
         :param noise_only: Whether to initialise the particles to the noise only. Defaults to True.
         :param seed: An optional seed for reproducibility.
@@ -157,13 +157,13 @@ class GradientFlowBase(ABC):
     def _calculate_particle_update(
         self,
         particles: torch.Tensor,
-        learning_rate: float,
+        step_size: float,
     ) -> torch.Tensor:
         """
-        Calculates the update for each particle following the Wasserstein gradient flow.
+        Calculates the update for each particle following the Wasserstein projected Langevin sampling.
         To be implemented by the child class.
         :param particles: Particles of size (M, P).
-        :param learning_rate: A learning rate or step size for the gradient flow update in the form of a scalar.
+        :param step_size: A step size for the projected Langevin sampling update in the form of a scalar.
         :return: The update to be applied to the particles of size (M, P).
         """
         raise NotImplementedError
@@ -171,12 +171,12 @@ class GradientFlowBase(ABC):
     def calculate_particle_update(
         self,
         particles: torch.Tensor,
-        learning_rate: float,
+        step_size: float,
     ) -> torch.Tensor:
         """
-        Calculates the update for each particle following the Wasserstein gradient flow.
+        Calculates the update for each particle following the Wasserstein projected Langevin sampling.
         :param particles: Particles of size (M, P).
-        :param learning_rate: A learning rate or step size for the gradient flow update in the form of a scalar.
+        :param step_size: A step size for the projected Langevin sampling update in the form of a scalar.
         :return: The update to be applied to the particles of size (M, P).
         """
         assert (
@@ -184,7 +184,7 @@ class GradientFlowBase(ABC):
         ), f"Particles have shape {particles.shape} but requires ({self.approximation_dimension}, P) dimension."
         return self._calculate_particle_update(
             particles=particles,
-            learning_rate=learning_rate,
+            step_size=step_size,
         )
 
     @abstractmethod

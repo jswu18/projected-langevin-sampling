@@ -3,10 +3,10 @@ from typing import Tuple
 import gpytorch
 import torch
 
-from src.induce_data_selectors.base import InduceDataSelector
+from src.inducing_point_selectors.base import InducingPointSelector
 
 
-class RandomInduceDataSelector(InduceDataSelector):
+class RandomInducingPointSelector(InducingPointSelector):
     def compute_induce_data(
         self,
         x: torch.Tensor,

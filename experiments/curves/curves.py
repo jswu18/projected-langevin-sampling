@@ -2,8 +2,8 @@ from abc import ABC, abstractmethod
 
 import torch
 
-from src.gradient_flows.base.transforms.classification import (
-    GradientFlowClassificationBase,
+from src.projected_langevin_sampling.base.transform.classification import (
+    PLSClassification,
 )
 
 
@@ -34,7 +34,7 @@ class Curve(ABC):
 
     # @staticmethod
     # def classification(y_curve: torch.Tensor) -> torch.Tensor:
-    #     probabilities = GradientFlowClassificationBase.transform(
+    #     probabilities = PLSClassification.transform(
     #         y=y_curve,
     #     )
     #     return torch.Tensor(probabilities > 0.5)
@@ -45,7 +45,7 @@ class Curve(ABC):
             generator = torch.Generator().manual_seed(seed)
         else:
             generator = None
-        probabilities = GradientFlowClassificationBase.transform(
+        probabilities = PLSClassification.transform(
             y=y_curve,
         )
         return torch.bernoulli(probabilities, generator=generator).type(torch.bool)

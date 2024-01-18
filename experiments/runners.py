@@ -16,18 +16,18 @@ from experiments.loaders import load_ard_exact_gp_model, load_svgp
 from experiments.metrics import calculate_mae, calculate_mse, calculate_nll
 from experiments.plotters import (
     animate_1d_gp_predictions,
-    animate_1d_pwgf_predictions,
-    plot_1d_gp_prediction_and_induce_data,
-    plot_1d_pwgf_prediction,
+    animate_1d_pls_predictions,
+    plot_1d_gp_prediction_and_inducing_points,
+    plot_1d_pls_prediction,
     plot_energy_potentials,
     plot_losses,
 )
 from experiments.utils import create_directory
 from src.bisection_search import LogBisectionSearch
 from src.gps import ExactGP, svGP
-from src.gradient_flows.base.base import GradientFlowBase
-from src.induce_data_selectors import InduceDataSelector
-from src.kernels import GradientFlowKernel
+from src.inducing_point_selectors import InducingPointSelector
+from src.kernels import PLSKernel
+from src.projected_langevin_sampling.base.base import PLSBase
 from src.samplers import sample_point
 from src.utils import set_seed
 
@@ -67,15 +67,15 @@ def _train_exact_gp(
     return model, losses
 
 
-def select_induce_data(
+def select_inducing_points(
     seed: int,
-    induce_data_selector: InduceDataSelector,
+    inducing_point_selector: InducingPointSelector,
     data: Data,
     number_induce_points: int,
     kernel: gpytorch.kernels.Kernel,
 ) -> Data:
     set_seed(seed)
-    x_induce, induce_indices = induce_data_selector(
+    x_induce, induce_indices = inducing_point_selector(
         x=torch.atleast_2d(data.x).reshape(data.x.shape[0], -1),
         m=number_induce_points,
         kernel=kernel,
@@ -190,7 +190,7 @@ def learn_subsample_gps(
             )
             if plot_1d_subsample_path is not None:
                 create_directory(plot_1d_subsample_path)
-                plot_1d_gp_prediction_and_induce_data(
+                plot_1d_gp_prediction_and_inducing_points(
                     model=model,
                     experiment_data=experiment_data,
                     title=f"Subsample GP (iteration {i + 1}, {subsample_size=})",
@@ -214,12 +214,12 @@ def learn_subsample_gps(
     return models
 
 
-def train_projected_wasserstein_gradient_flow(
-    pwgf: GradientFlowBase,
+def train_pls(
+    pls: PLSBase,
     number_of_particles: int,
     particle_name: str,
     experiment_data: ExperimentData,
-    induce_data: Data,
+    inducing_points: Data,
     simulation_duration: float,
     maximum_number_of_steps: int,
     early_stopper_patience: float,
@@ -238,22 +238,22 @@ def train_projected_wasserstein_gradient_flow(
     metric_to_minimise: str = "nll",
     initial_particles_noise_only: bool = False,
 ) -> torch.Tensor:
-    particles_out = pwgf.initialise_particles(
+    particles_out = pls.initialise_particles(
         number_of_particles=number_of_particles,
         seed=seed,
         noise_only=initial_particles_noise_only,
     )
     if plot_particles_path is not None:
         create_directory(plot_particles_path)
-        predicted_distribution = pwgf.predict(
+        predicted_distribution = pls.predict(
             x=experiment_data.full.x,
             particles=particles_out,
         )
-        plot_1d_pwgf_prediction(
+        plot_1d_pls_prediction(
             experiment_data=experiment_data,
-            induce_data=induce_data,
+            inducing_points=inducing_points,
             x=experiment_data.full.x,
-            predicted_samples=pwgf.predict_samples(
+            predicted_samples=pls.predict_samples(
                 x=experiment_data.full.x,
                 particles=particles_out,
             ).detach(),
@@ -267,11 +267,11 @@ def train_projected_wasserstein_gradient_flow(
             ),
         )
         if experiment_data.full.y_untransformed is not None:
-            plot_1d_pwgf_prediction(
+            plot_1d_pls_prediction(
                 experiment_data=experiment_data,
-                induce_data=induce_data,
+                inducing_points=inducing_points,
                 x=experiment_data.full.x,
-                predicted_samples=pwgf.predict_untransformed_samples(
+                predicted_samples=pls.predict_untransformed_samples(
                     x=experiment_data.full.x,
                     particles=particles_out,
                 ).detach(),
@@ -292,19 +292,19 @@ def train_projected_wasserstein_gradient_flow(
     )
     best_lr = None
     energy_potentials_history = {}
-    learning_rates = np.logspace(
+    step_sizes = np.logspace(
         np.log10(step_size_upper),
         np.log10(simulation_duration / maximum_number_of_steps),
         number_of_step_searches,
     )
-    for i, learning_rate in enumerate(
+    for i, step_size in enumerate(
         tqdm(
-            learning_rates,
-            desc=f"WGF LR Search {particle_name}",
+            step_sizes,
+            desc=f"PLS Step Size Search {particle_name}",
         )
     ):
-        number_of_epochs = int(simulation_duration / learning_rate)
-        particles = pwgf.initialise_particles(
+        number_of_epochs = int(simulation_duration / step_size)
+        particles = pls.initialise_particles(
             number_of_particles=number_of_particles,
             seed=seed,
             noise_only=initial_particles_noise_only,
@@ -314,20 +314,18 @@ def train_projected_wasserstein_gradient_flow(
         set_seed(seed)
         prev_energy_potential = None
         for _ in range(number_of_epochs):
-            particle_update = pwgf.calculate_particle_update(
+            particle_update = pls.calculate_particle_update(
                 particles=particles,
-                learning_rate=learning_rate,
+                step_size=step_size,
             )
             particles += particle_update
-            energy_potential = pwgf.calculate_energy_potential(particles=particles)
-            if early_stopper.should_stop(
-                loss=energy_potential, learning_rate=learning_rate
-            ):
+            energy_potential = pls.calculate_energy_potential(particles=particles)
+            if early_stopper.should_stop(loss=energy_potential, step_size=step_size):
                 break
             energy_potentials.append(energy_potential)
         if energy_potentials and np.isfinite(particles).all():
-            energy_potentials_history[learning_rate] = energy_potentials
-            prediction = pwgf.predict(
+            energy_potentials_history[step_size] = energy_potentials
+            prediction = pls.predict(
                 x=experiment_data.train.x,
                 particles=particles,
             )
@@ -358,27 +356,27 @@ def train_projected_wasserstein_gradient_flow(
                     nll,
                     mae,
                     mse,
-                    learning_rate,
+                    step_size,
                 )
                 best_energy_potential = energy_potentials[-1]
                 particles_out = deepcopy(particles.detach())
-                best_lr = learning_rate
+                best_lr = step_size
             if (
                 i > 0
-                and learning_rates[i - 1] in energy_potentials_history
+                and step_sizes[i - 1] in energy_potentials_history
                 and abs(
-                    energy_potentials_history[learning_rates[i - 1]][-1]
+                    energy_potentials_history[step_sizes[i - 1]][-1]
                     - energy_potentials[-1]
                 )
-                / energy_potentials_history[learning_rates[i - 1]][-1]
+                / energy_potentials_history[step_sizes[i - 1]][-1]
                 < minimum_change_in_energy_potential
             ):
                 break
     particles = particles_out
     if number_of_observation_noise_searches:
-        pwgf.observation_noise = pwgf_observation_noise_search(
+        pls.observation_noise = pls_observation_noise_search(
             data=experiment_data.train,
-            model=pwgf,
+            model=pls,
             particles=particles_out,
             observation_noise_upper=observation_noise_upper,
             observation_noise_lower=observation_noise_lower,
@@ -387,15 +385,15 @@ def train_projected_wasserstein_gradient_flow(
         )
     if plot_particles_path is not None:
         create_directory(plot_particles_path)
-        predicted_distribution = pwgf.predict(
+        predicted_distribution = pls.predict(
             x=experiment_data.full.x,
             particles=particles_out,
         )
-        plot_1d_pwgf_prediction(
+        plot_1d_pls_prediction(
             experiment_data=experiment_data,
-            induce_data=induce_data,
+            inducing_points=inducing_points,
             x=experiment_data.full.x,
-            predicted_samples=pwgf.predict_samples(
+            predicted_samples=pls.predict_samples(
                 x=experiment_data.full.x,
                 particles=particles,
             ).detach(),
@@ -409,11 +407,11 @@ def train_projected_wasserstein_gradient_flow(
             ),
         )
         if experiment_data.full.y_untransformed is not None:
-            plot_1d_pwgf_prediction(
+            plot_1d_pls_prediction(
                 experiment_data=experiment_data,
-                induce_data=induce_data,
+                inducing_points=inducing_points,
                 x=experiment_data.full.x,
-                predicted_samples=pwgf.predict_untransformed_samples(
+                predicted_samples=pls.predict_untransformed_samples(
                     x=experiment_data.full.x,
                     particles=particles,
                 ).detach(),
@@ -439,15 +437,15 @@ def train_projected_wasserstein_gradient_flow(
             ),
         )
     if best_lr and animate_1d_path is not None:
-        animate_1d_pwgf_predictions(
-            pwgf=pwgf,
+        animate_1d_pls_predictions(
+            pls=pls,
             seed=seed,
             number_of_particles=number_of_particles,
             initial_particles_noise_only=initial_particles_noise_only,
-            learning_rate=best_lr,
+            step_size=best_lr,
             number_of_epochs=int(simulation_duration / best_lr),
             experiment_data=experiment_data,
-            induce_data=induce_data,
+            inducing_points=inducing_points,
             x=experiment_data.full.x,
             title=plot_title,
             save_path=os.path.join(
@@ -459,9 +457,9 @@ def train_projected_wasserstein_gradient_flow(
     return particles
 
 
-def pwgf_observation_noise_search(
+def pls_observation_noise_search(
     data: Data,
-    model: GradientFlowBase,
+    model: PLSBase,
     particles: torch.Tensor,
     observation_noise_upper: float,
     observation_noise_lower: float,
@@ -473,7 +471,7 @@ def pwgf_observation_noise_search(
         upper=observation_noise_upper,
         soft_update=True,
     )
-    searches_iter = tqdm(range(number_of_searches), desc="PWGF Noise Search")
+    searches_iter = tqdm(range(number_of_searches), desc="PLS Noise Search")
     for _ in searches_iter:
         model.observation_noise = torch.tensor(bisection_search.lower)
         set_seed(0)
@@ -509,7 +507,7 @@ def pwgf_observation_noise_search(
 
 def _train_svgp(
     train_data: Data,
-    induce_data: Data,
+    inducing_points: Data,
     mean: gpytorch.means.Mean,
     kernel: gpytorch.kernels.Kernel,
     likelihood: Union[
@@ -528,13 +526,13 @@ def _train_svgp(
     model = svGP(
         mean=mean,
         kernel=kernel,
-        x_induce=induce_data.x,
+        x_induce=inducing_points.x,
         likelihood=likelihood,
         learn_inducing_locations=learn_inducing_locations,
     )
     all_params = set(model.parameters())
     if not learn_kernel_parameters:
-        if isinstance(model.kernel, GradientFlowKernel):
+        if isinstance(model.kernel, PLSKernel):
             all_params -= {model.kernel.base_kernel.base_kernel.raw_lengthscale}
             all_params -= {model.kernel.base_kernel.raw_outputscale}
         else:
@@ -579,7 +577,7 @@ def _train_svgp(
 def train_svgp(
     model_name: str,
     experiment_data: ExperimentData,
-    induce_data: Data,
+    inducing_points: Data,
     mean: gpytorch.means.Mean,
     kernel: gpytorch.kernels.Kernel,
     likelihood: Union[
@@ -625,7 +623,7 @@ def train_svgp(
         if os.path.exists(model_iteration_path):
             model, losses = load_svgp(
                 model_path=model_iteration_path,
-                x_induce=induce_data.x,
+                x_induce=inducing_points.x,
                 mean=deepcopy(mean),
                 kernel=deepcopy(kernel),
                 likelihood=deepcopy(likelihood),
@@ -634,7 +632,7 @@ def train_svgp(
         else:
             model, losses = _train_svgp(
                 train_data=experiment_data.train,
-                induce_data=induce_data,
+                inducing_points=inducing_points,
                 mean=deepcopy(mean),
                 kernel=deepcopy(kernel),
                 likelihood=deepcopy(likelihood),
@@ -679,10 +677,10 @@ def train_svgp(
             losses_out = losses
     if plot_1d_path is not None:
         create_directory(plot_1d_path)
-        plot_1d_gp_prediction_and_induce_data(
+        plot_1d_gp_prediction_and_inducing_points(
             model=model_out,
             experiment_data=experiment_data,
-            induce_data=induce_data
+            inducing_points=inducing_points
             if is_fixed
             else None,  # induce data can't be visualised if it's learned by the model
             title=f"{plot_title} ({model_name})" if plot_title is not None else None,
@@ -706,7 +704,7 @@ def train_svgp(
     if animate_1d_path is not None:
         animate_1d_gp_predictions(
             experiment_data=experiment_data,
-            induce_data=induce_data,
+            inducing_points=inducing_points,
             mean=deepcopy(mean),
             kernel=deepcopy(kernel),
             likelihood=deepcopy(likelihood),

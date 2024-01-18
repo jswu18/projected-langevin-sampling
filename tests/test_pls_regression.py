@@ -1,8 +1,8 @@
 import pytest
 import torch
 
-from mockers.kernel import MockGradientFlowKernel, MockKernel
-from src.gradient_flows import GradientFlowRegression
+from mockers.kernel import MockKernel, MockPLSKernel
+from src.projected_langevin_sampling import GradientFlowRegression
 from src.utils import set_seed
 
 
@@ -49,11 +49,11 @@ def test_initialise_particles(
     seed: int,
     particles: torch.Tensor,
 ):
-    kernel = MockGradientFlowKernel(
+    kernel = MockPLSKernel(
         base_kernel=MockKernel(),
         approximation_samples=x_train,
     )
-    pwgf = GradientFlowRegression(
+    pls = GradientFlowRegression(
         kernel=kernel,
         x_induce=x_induce,
         y_induce=y_induce,
@@ -63,13 +63,13 @@ def test_initialise_particles(
         observation_noise=1.0,
     )
     assert torch.allclose(
-        pwgf.initialise_particles(number_of_particles=number_of_particles, seed=seed),
+        pls.initialise_particles(number_of_particles=number_of_particles, seed=seed),
         particles,
     )
 
 
 @pytest.mark.parametrize(
-    "x_induce,y_induce,x_train,y_train,jitter,seed,particles,learning_rate,observation_noise,update",
+    "x_induce,y_induce,x_train,y_train,jitter,seed,particles,step_size,observation_noise,update",
     [
         [
             torch.tensor(
@@ -120,11 +120,11 @@ def test_calculate_update(
     observation_noise: float,
     update: torch.Tensor,
 ):
-    kernel = MockGradientFlowKernel(
+    kernel = MockPLSKernel(
         base_kernel=MockKernel(),
         approximation_samples=x_train,
     )
-    pwgf = GradientFlowRegression(
+    pls = GradientFlowRegression(
         kernel=kernel,
         x_induce=x_induce,
         y_induce=y_induce,
@@ -134,7 +134,7 @@ def test_calculate_update(
         observation_noise=observation_noise,
     )
     set_seed(seed)
-    calculated_update = pwgf.calculate_particle_update(
+    calculated_update = pls.calculate_particle_update(
         particles=particles,
         learning_rate=torch.tensor(learning_rate),
     ).detach()
@@ -188,11 +188,11 @@ def test_sample_predictive_noise(
     observation_noise: float,
     predict_noise: torch.Tensor,
 ):
-    kernel = MockGradientFlowKernel(
+    kernel = MockPLSKernel(
         base_kernel=MockKernel(),
         approximation_samples=x_train,
     )
-    pwgf = GradientFlowRegression(
+    pls = GradientFlowRegression(
         kernel=kernel,
         x_induce=x_induce,
         y_induce=y_induce,
@@ -202,8 +202,8 @@ def test_sample_predictive_noise(
         observation_noise=observation_noise,
     )
     set_seed(seed)
-    particles = pwgf.initialise_particles(number_of_particles=1, seed=seed)
-    sampled_predict_noise = pwgf.sample_predictive_noise(
+    particles = pls.initialise_particles(number_of_particles=1, seed=seed)
+    sampled_predict_noise = pls.sample_predictive_noise(
         particles=particles,
         x=x,
     ).detach()
@@ -255,7 +255,7 @@ def test_sample_predictive_noise(
         ],
     ],
 )
-def test_predict_pwgf(
+def test_predict_pls(
     x: torch.Tensor,
     x_induce: torch.Tensor,
     y_induce: torch.Tensor,
@@ -267,11 +267,11 @@ def test_predict_pwgf(
     observation_noise: float,
     prediction: torch.Tensor,
 ):
-    kernel = MockGradientFlowKernel(
+    kernel = MockPLSKernel(
         base_kernel=MockKernel(),
         approximation_samples=x_train,
     )
-    pwgf = GradientFlowRegression(
+    pls = GradientFlowRegression(
         kernel=kernel,
         x_induce=x_induce,
         y_induce=y_induce,
@@ -281,7 +281,7 @@ def test_predict_pwgf(
         observation_noise=observation_noise,
     )
     set_seed(seed)
-    predicted_samples = pwgf.predict_samples(
+    predicted_samples = pls.predict_samples(
         particles=particles,
         x=x,
     ).detach()
