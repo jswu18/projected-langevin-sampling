@@ -40,7 +40,7 @@ def plot_1d_gp_prediction(
             x.reshape(-1),
             (mean - 1.96 * stdev).reshape(-1),
             (mean + 1.96 * stdev).reshape(-1),
-            facecolor=(0.85, 0.85, 0.85),
+            facecolor=(0.9, 0.9, 0.9),
             label="error bound (95%)",
             zorder=0,
         )

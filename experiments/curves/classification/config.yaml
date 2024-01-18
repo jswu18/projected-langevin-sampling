@@ -15,7 +15,7 @@ inducing_points:
   inducing_points_factor: 1
   inducing_points_power: 2
 pls:
-  number_of_particles: 25
+  number_of_particles: 50
   simulation_duration: 5.0e-1
   maximum_number_of_steps: 1.0e+6
   number_of_step_searches: 3

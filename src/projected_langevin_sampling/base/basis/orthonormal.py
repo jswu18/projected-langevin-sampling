@@ -15,7 +15,8 @@ class PLSOrthonormalBasis(PLSBase, ABC):
     constructed from a set of M inducing points through the eigendecomposition of the kernel matrix.
 
     N is the number of training points.
-    M is the dimensionality of the function space approximation.
+    M is the number of inducing points.
+    K is the dimensionality of the function space approximation.
     P is the number of particles.
     D is the dimensionality of the data.
     """
@@ -50,20 +51,21 @@ class PLSOrthonormalBasis(PLSBase, ABC):
             y_train=y_train,
             jitter=jitter,
         )
+
         self.eigenvalues, self.eigenvectors = torch.linalg.eigh(
-            self.base_gram_induce.evaluate()
+            (1 / self.x_induce.shape[0]) * self.base_gram_induce.evaluate()
         )
 
         # Remove negative eigenvalues
         positive_eigenvalue_idx = torch.where(self.eigenvalues > 0)[0]
-        self.eigenvalues = self.eigenvalues[positive_eigenvalue_idx].real
-        self.eigenvectors = self.eigenvectors[:, positive_eigenvalue_idx].real
+        self.eigenvalues = self.eigenvalues[positive_eigenvalue_idx].real  # (K,)
+        self.eigenvectors = self.eigenvectors[:, positive_eigenvalue_idx].real  # (M, K)
+        # K is the number of eigenvalues to keep
 
-        # Scale eigenvectors
+        # Scale eigenvectors (M, K)
         self.scaled_eigenvectors = torch.multiply(
-            torch.divide(
-                torch.ones(self.eigenvalues.shape),
-                torch.sqrt(self.approximation_dimension * self.eigenvalues),
+            torch.reciprocal(
+                torch.sqrt(self.approximation_dimension * self.eigenvalues)
             )[None, :],
             self.eigenvectors,
         )
@@ -71,7 +73,7 @@ class PLSOrthonormalBasis(PLSBase, ABC):
     @property
     def approximation_dimension(self):
         """
-        The dimensionality of the function space approximation M (number of non-zero eigenvalues).
+        The dimensionality of the function space approximation K (number of non-zero eigenvalues).
         :return: The dimensionality of the function space approximation.
         """
         return self.eigenvalues.shape[0]
@@ -93,14 +95,14 @@ class PLSOrthonormalBasis(PLSBase, ABC):
             raise ValueError("For ONB base, noise_only must be True.")
         return self._initialise_particles_noise(
             number_of_particles=number_of_particles, seed=seed
-        )
+        )  # size (K, P)
 
     def _calculate_untransformed_train_predictions(
         self, particles: torch.Tensor
     ) -> torch.Tensor:
         """
         Calculates the untransformed predictions of the particles on the training data used for cost calculations.
-        :param particles: The particles of size (M, P).
+        :param particles: The particles of size (K, P).
         :return: The untransformed predictions of size (N, P).
         """
         return (
@@ -117,10 +119,7 @@ class PLSOrthonormalBasis(PLSBase, ABC):
 
         particle_energy_potential = cost + 1 / 2 * torch.multiply(
             particles,
-            torch.diag(
-                torch.divide(torch.ones(self.eigenvalues.shape), self.eigenvalues)
-            )
-            @ particles,
+            torch.diag(torch.reciprocal(self.eigenvalues)) @ particles,
         ).sum(
             dim=0
         )  # size (P,)
@@ -149,17 +148,13 @@ class PLSOrthonormalBasis(PLSBase, ABC):
         # - eta *  V_tilde @ k(Z, X) @ d_2 c(Y, k(X, Z) @ V_tilde @ U(t))
         # - eta * Lambda^{-1} @ U(t)
         # + sqrt(2 * eta) * e
-        # size (M, P)
+        # size (K, P)
         particle_update = (
             -step_size
             * self.scaled_eigenvectors.T
             @ self.base_gram_induce_train
             @ cost_derivative
-            - step_size
-            * torch.diag(
-                torch.divide(torch.ones(self.eigenvalues.shape), self.eigenvalues)
-            )
-            @ particles
+            - step_size * torch.diag(torch.reciprocal(self.eigenvalues)) @ particles
             + math.sqrt(2.0 * step_size) * noise_vector
         ).detach()
         return particle_update.to_dense().detach()  # size (M, P)
@@ -182,14 +177,12 @@ class PLSOrthonormalBasis(PLSBase, ABC):
             x2=x,
             additional_approximation_samples=x,
         )
-        base_gram_zx = self.kernel.base_kernel.forward(
-            x1=self.x_induce,
-            x2=x,
+        base_gram_x_induce = self.kernel.base_kernel(
+            x1=x,
+            x2=self.x_induce,
         )
-        if base_gram_zx.ndim == 3:
-            base_gram_zx = base_gram_zx[0, :, :]
         off_diagonal_block = (
-            base_gram_zx.T @ self.scaled_eigenvectors @ torch.diag(self.eigenvalues)
+            base_gram_x_induce @ self.scaled_eigenvectors @ torch.diag(self.eigenvalues)
         )
         noise_covariance = torch.concatenate(
             [
@@ -229,13 +222,10 @@ class PLSOrthonormalBasis(PLSBase, ABC):
         :param noise: A noise tensor of size (N*, P), if None, it is sampled from the predictive noise distribution.
         :return: Predicted samples of size (N*, P).
         """
-        base_gram_x_induce = self.kernel.base_kernel.forward(
+        base_gram_x_induce = self.kernel.base_kernel(
             x1=x,
             x2=self.x_induce,
         ).to_dense()
-        if base_gram_x_induce.ndim == 3:
-            base_gram_x_induce = base_gram_x_induce[0, :, :]
-
         # G([Z, x]) ~ N(0, R)
         if noise is None:
             noise = self.sample_predictive_noise(
