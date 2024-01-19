@@ -3,7 +3,7 @@ from typing import Optional, Tuple
 import torch
 from sklearn.model_selection import train_test_split
 
-from experiments.data import Data, ExperimentData
+from experiments.data import Data, ExperimentData, ProblemType
 
 
 def _split_regression_data_intervals(
@@ -152,6 +152,7 @@ def split_regression_data(
 
 def set_up_experiment(
     name: str,
+    problem_type: ProblemType,
     seed: int,
     x: torch.Tensor,
     y: torch.Tensor,
@@ -180,6 +181,7 @@ def set_up_experiment(
         y_std = 1.0
     experiment_data = ExperimentData(
         name=name,
+        problem_type=problem_type,
         full=Data(x=torch.tensor(x), y=torch.tensor(y), name="full"),
         train=Data(x=torch.tensor(x_train), y=torch.tensor(y_train), name="train"),
         test=Data(x=torch.tensor(x_test), y=torch.tensor(y_test), name="test"),

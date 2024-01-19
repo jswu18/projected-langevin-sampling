@@ -6,13 +6,12 @@ from typing import Any, Dict
 
 import gpytorch
 import matplotlib.pyplot as plt
-import numpy as np
 import torch
 import yaml
 
 from experiments.constructors import construct_average_ard_kernel
 from experiments.curves.curves import CURVE_FUNCTIONS, Curve
-from experiments.data import Data, ExperimentData
+from experiments.data import Data, ExperimentData, ProblemType
 from experiments.loaders import load_pls, load_svgp
 from experiments.metrics import calculate_metrics
 from experiments.plotters import plot_1d_experiment_data
@@ -49,9 +48,6 @@ def get_experiment_data(
     y_curve = curve_function.calculate_curve(
         x=x,
     ).reshape(-1)
-    # y = curve_function.classification(
-    #     y_curve=y_curve,
-    # )
     y = curve_function.classification(
         y_curve=y_curve,
         seed=seed,
@@ -74,6 +70,7 @@ def get_experiment_data(
     )
     experiment_data = ExperimentData(
         name=type(curve_function).__name__.lower(),
+        problem_type=ProblemType.CLASSIFICATION,
         full=Data(
             x=x,
             y=y.type(torch.int),

@@ -1,5 +1,5 @@
 data:
-  train_data_percentage: 0.9
+  train_data_percentage: 0.8
 kernel:
   seed: 0
   learning_rate: 0.01

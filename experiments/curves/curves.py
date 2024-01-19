@@ -32,13 +32,6 @@ class Curve(ABC):
             * torch.normal(mean=0.0, std=1.0, generator=generator, size=x.shape)
         ).reshape(-1)
 
-    # @staticmethod
-    # def classification(y_curve: torch.Tensor) -> torch.Tensor:
-    #     probabilities = PLSClassification.transform(
-    #         y=y_curve,
-    #     )
-    #     return torch.Tensor(probabilities > 0.5)
-
     @staticmethod
     def classification(y_curve: torch.Tensor, seed: int = None) -> torch.Tensor:
         if seed is not None:

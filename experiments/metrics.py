@@ -4,9 +4,10 @@ from typing import List, Optional, Union
 
 import gpytorch
 import pandas as pd
+import sklearn
 import torch
 
-from experiments.data import ExperimentData
+from experiments.data import ExperimentData, ProblemType
 from experiments.plotters import plot_true_versus_predicted
 from experiments.utils import create_directory
 from src.gps import ExactGP, svGP
@@ -75,6 +76,7 @@ def calculate_metrics(
     for _model, _model_name in [
         (model, model_name),
     ]:
+        create_directory(os.path.join(results_path, _model_name))
         for data in [
             experiment_data.train,
             experiment_data.test,
@@ -90,7 +92,6 @@ def calculate_metrics(
                 y=data.y,
                 prediction=prediction,
             )
-            create_directory(os.path.join(results_path, _model_name))
             pd.DataFrame([[mae]], columns=[_model_name], index=[dataset_name]).to_csv(
                 os.path.join(results_path, _model_name, f"mae_{data.name}.csv"),
                 index_label="dataset",
@@ -99,7 +100,6 @@ def calculate_metrics(
                 y=data.y,
                 prediction=prediction,
             )
-            create_directory(os.path.join(results_path, _model_name))
             pd.DataFrame([[mse]], columns=[_model_name], index=[dataset_name]).to_csv(
                 os.path.join(results_path, _model_name, f"mse_{data.name}.csv"),
                 index_label="dataset",
@@ -112,6 +112,32 @@ def calculate_metrics(
                 os.path.join(results_path, _model_name, f"nll_{data.name}.csv"),
                 index_label="dataset",
             )
+            if experiment_data.problem_type == ProblemType.CLASSIFICATION:
+                acc = sklearn.metrics.accuracy_score(
+                    y_true=data.y.detach().numpy(),
+                    y_pred=prediction.probs.round().detach().numpy(),
+                )
+                pd.DataFrame(
+                    [[acc]],
+                    columns=[_model_name],
+                    index=[dataset_name],
+                ).to_csv(
+                    os.path.join(results_path, _model_name, f"acc_{data.name}.csv"),
+                    index_label="dataset",
+                )
+                auc = sklearn.metrics.roc_auc_score(
+                    y_true=data.y.detach().numpy(),
+                    y_score=prediction.probs.detach().numpy(),
+                )
+                pd.DataFrame(
+                    [[auc]],
+                    columns=[_model_name],
+                    index=[dataset_name],
+                ).to_csv(
+                    os.path.join(results_path, _model_name, f"auc_{data.name}.csv"),
+                    index_label="dataset",
+                )
+
             create_directory(os.path.join(plots_path, _model_name))
             plot_true_versus_predicted(
                 y_true=data.y,

@@ -561,7 +561,7 @@ def animate_1d_gp_predictions(
         model.likelihood = model.likelihood.cuda()
     model.likelihood.train()
 
-    optimizer = torch.optim.Adam(
+    optimizer = torch.optim.SGD(
         [
             {"params": list(all_params)},
         ],

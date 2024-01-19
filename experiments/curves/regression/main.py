@@ -14,14 +14,13 @@ from experiments.constructors import (
     construct_average_gaussian_likelihood,
 )
 from experiments.curves.curves import CURVE_FUNCTIONS, Curve
-from experiments.data import Data, ExperimentData
+from experiments.data import Data, ExperimentData, ProblemType
 from experiments.loaders import load_pls, load_svgp
 from experiments.metrics import calculate_metrics, concatenate_metrics
 from experiments.plotters import plot_1d_experiment_data
 from experiments.preprocess import split_regression_data_intervals
 from experiments.runners import (
     learn_subsample_gps,
-    pls_observation_noise_search,
     select_inducing_points,
     train_pls,
     train_svgp,
@@ -68,6 +67,7 @@ def get_experiment_data(
     )
     experiment_data = ExperimentData(
         name=type(curve_function).__name__.lower(),
+        problem_type=ProblemType.REGRESSION,
         full=Data(x=x, y=y, name="full"),
         train=Data(x=x_train, y=y_train, name="train"),
         test=Data(x=x_test, y=y_test, name="test"),

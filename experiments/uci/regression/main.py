@@ -13,7 +13,7 @@ from experiments.constructors import (
     construct_average_ard_kernel,
     construct_average_gaussian_likelihood,
 )
-from experiments.data import ExperimentData
+from experiments.data import ExperimentData, ProblemType
 from experiments.loaders import load_pls, load_svgp
 from experiments.metrics import calculate_metrics, concatenate_metrics
 from experiments.preprocess import set_up_experiment
@@ -64,6 +64,7 @@ def get_experiment_data(
 
     experiment_data = set_up_experiment(
         name=dataset_name,
+        problem_type=ProblemType.REGRESSION,
         seed=seed,
         x=x,
         y=y,
@@ -108,7 +109,9 @@ def main(
         inducing_points_path = os.path.join(data_path, "inducing_points.pth")
 
         if os.path.exists(experiment_data_path):
-            experiment_data = ExperimentData.load(experiment_data_path)
+            experiment_data = ExperimentData.load(
+                path=experiment_data_path, problem_type=ProblemType.REGRESSION
+            )
             print(f"Loaded experiment data from {experiment_data_path=}")
         else:
             experiment_data = get_experiment_data(

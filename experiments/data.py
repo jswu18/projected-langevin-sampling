@@ -1,7 +1,13 @@
+import enum
 from dataclasses import dataclass
 from typing import Optional
 
 import torch
+
+
+class ProblemType(str, enum.Enum):
+    REGRESSION = "regression"
+    CLASSIFICATION = "classification"
 
 
 @dataclass
@@ -15,6 +21,7 @@ class Data:
 @dataclass
 class ExperimentData:
     name: str
+    problem_type: ProblemType
     full: Data
     train: Optional[Data] = None
     test: Optional[Data] = None
@@ -26,9 +33,10 @@ class ExperimentData:
         torch.save(self, path)
 
     @staticmethod
-    def load(path: str):
+    def load(path: str, problem_type: ProblemType):
         experiment_data = torch.load(path)
         experiment_data.full.name = "full"
+        experiment_data.problem_type = problem_type
         if experiment_data.train is not None:
             experiment_data.train.name = "train"
         if experiment_data.test is not None:

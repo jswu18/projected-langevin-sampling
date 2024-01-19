@@ -543,7 +543,7 @@ def _train_svgp(
     model.train()
     model.likelihood.train()
 
-    optimizer = torch.optim.Adam(
+    optimizer = torch.optim.SGD(
         [
             {"params": list(all_params)},
         ],
