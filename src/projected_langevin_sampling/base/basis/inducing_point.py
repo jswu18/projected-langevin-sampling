@@ -169,10 +169,12 @@ class PLSInducingPointBasis(PLSBase, ABC):
         gram_x = self.kernel.forward(
             x1=x,
             x2=x,
+            additional_approximation_samples=x,
         )
         gram_induce_x = self.kernel.forward(
             x1=self.x_induce,
             x2=x,
+            additional_approximation_samples=x,
         )
         noise_covariance = torch.concatenate(
             [

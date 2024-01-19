@@ -10,20 +10,15 @@ import numpy as np
 import torch
 import yaml
 
-from experiments.constructors import (
-    construct_average_ard_kernel,
-    construct_average_dirichlet_likelihood,
-    construct_average_gaussian_likelihood,
-)
+from experiments.constructors import construct_average_ard_kernel
 from experiments.curves.curves import CURVE_FUNCTIONS, Curve
 from experiments.data import Data, ExperimentData
 from experiments.loaders import load_pls, load_svgp
-from experiments.metrics import calculate_metrics, concatenate_metrics
+from experiments.metrics import calculate_metrics
 from experiments.plotters import plot_1d_experiment_data
 from experiments.preprocess import split_regression_data_intervals
 from experiments.runners import (
     learn_subsample_gps,
-    pls_observation_noise_search,
     select_inducing_points,
     train_pls,
     train_svgp,

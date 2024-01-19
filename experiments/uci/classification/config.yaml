@@ -1,0 +1,35 @@
+data:
+  train_data_percentage: 0.9
+kernel:
+  seed: 0
+  learning_rate: 0.01
+  batch_size: 100
+  number_of_iterations: 10
+  number_of_epochs: 50000
+  subsample_size: 10000
+inducing_points:
+  seed: 0
+  inducing_points_factor: 1
+  inducing_points_power: 2
+pls:
+  number_of_particles: 100
+  simulation_duration: 5.0e-1
+  maximum_number_of_steps: 1.0e+7
+  number_of_step_searches: 5
+  step_size_upper: 1.0e-3
+  minimum_change_in_energy_potential: 0.01
+  jitter: 0
+  seed: 0
+  metric_to_minimise: loss
+  initial_particles_noise_only: True
+  observation_noise_upper: 1.0e+4
+  observation_noise_lower: 1.0e-4
+  number_of_observation_noise_searches: 25
+  early_stopper_patience: 1.0e-3
+svgp:
+  seed: 0
+  number_of_epochs: 1000
+  batch_size: 100
+  learning_rate_upper: 1.0e-1
+  learning_rate_lower: 1.0e-3
+  number_of_learning_rate_searches: 3

@@ -22,7 +22,7 @@ __pycache__
 /**/**/*png
 
 # Experiment UCI datasets
-/**/uci/datasets
+/experiments/uci/datasets
 
 # Experiment outputs
 /**/**/**/outputs

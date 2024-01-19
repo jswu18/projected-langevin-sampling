@@ -9,10 +9,7 @@ import pandas as pd
 import torch
 import yaml
 
-from experiments.constructors import (
-    construct_average_ard_kernel,
-    construct_average_gaussian_likelihood,
-)
+from experiments.constructors import construct_average_ard_kernel
 from experiments.data import ExperimentData
 from experiments.loaders import load_pls, load_svgp
 from experiments.metrics import calculate_metrics, concatenate_metrics
@@ -23,15 +20,17 @@ from experiments.runners import (
     train_pls,
     train_svgp,
 )
-from experiments.uci.constants import DATASET_SCHEMA_MAPPING
-from experiments.uci.schemas import DatasetSchema
+from experiments.uci.constants import (
+    DATASET_SCHEMA_MAPPING,
+    ClassificationDatasetSchema,
+)
 from src.inducing_point_selectors import ConditionalVarianceInducingPointSelector
 from src.kernels import PLSKernel
-from src.projected_langevin_sampling import PLSRegressionIPB, PLSRegressionONB
+from src.projected_langevin_sampling import PLSClassificationIPB, PLSClassificationONB
 from src.utils import set_seed
 
 parser = argparse.ArgumentParser(
-    description="Main script for UCI regression data experiments."
+    description="Main script for UCI classification data experiments."
 )
 parser.add_argument(
     "--config_path", type=str, required=True, help="Path to config for experiment."
@@ -59,9 +58,18 @@ def get_experiment_data(
     input_column_names = [c.lower() for c in dataset_metadata.input_column_names]
     input_column_names = [c.replace(" ", "") for c in input_column_names]
     output_column_name = dataset_metadata.output_column_name.lower().replace(" ", "")
+    for column in input_column_names:
+        if isinstance(df[column].dtypes, object) and len(df[column].unique()) == 2:
+            df[column] = pd.get_dummies(df[column]).to_numpy()[:, 0].astype(float)
+        df = df[pd.to_numeric(df[column], errors="coerce").notnull()]
+        df[column] = pd.to_numeric(df[column]).astype(float)
 
     x = torch.tensor(df[input_column_names].to_numpy()).detach().double()
-    y = torch.tensor(df[output_column_name].to_numpy()).detach().double()
+    y = (
+        torch.tensor(pd.get_dummies(df[output_column_name]).to_numpy()[:, 0])
+        .detach()
+        .type(torch.int32)
+    )
 
     experiment_data = set_up_experiment(
         name=dataset_name,
@@ -69,7 +77,7 @@ def get_experiment_data(
         x=x,
         y=y,
         train_data_percentage=train_data_percentage,
-        normalise=True,
+        normalise=False,
     )
     return experiment_data
 
@@ -82,14 +90,22 @@ def main(
     pls_config: Dict[str, Any],
     svgp_config: Dict[str, Any],
 ) -> None:
-    for dataset_schema in DatasetSchema:
+    for dataset_schema in ClassificationDatasetSchema:
         dataset_name = str(dataset_schema.name)
         print(f"Running experiment for {dataset_name=} and {data_seed=}.")
 
-        data_path = f"experiments/uci/outputs/{data_seed}/data/{dataset_name}"
-        plots_path = f"experiments/uci/outputs/{data_seed}/plots/{dataset_name}"
-        results_path = f"experiments/uci/outputs/{data_seed}/results/{dataset_name}"
-        models_path = f"experiments/uci/outputs/{data_seed}/models/{dataset_name}"
+        data_path = (
+            f"experiments/uci/classification/outputs/{data_seed}/data/{dataset_name}"
+        )
+        plots_path = (
+            f"experiments/uci/classification/outputs/{data_seed}/plots/{dataset_name}"
+        )
+        results_path = (
+            f"experiments/uci/classification/outputs/{data_seed}/results/{dataset_name}"
+        )
+        models_path = (
+            f"experiments/uci/classification/outputs/{data_seed}/models/{dataset_name}"
+        )
         subsample_gp_model_path = os.path.join(models_path, "subsample_gp")
         subsample_gp_data_path = os.path.join(data_path, "subsample_gp")
         os.makedirs(data_path, exist_ok=True)
@@ -111,26 +127,35 @@ def main(
             )
             experiment_data.save(experiment_data_path)
 
+        likelihood = gpytorch.likelihoods.DirichletClassificationLikelihood(
+            experiment_data.train.y, learn_additional_noise=True
+        )
+        y_train_labels = experiment_data.train.y
+        experiment_data.train.y = likelihood.transformed_targets
         subsample_gp_models = learn_subsample_gps(
             experiment_data=experiment_data,
             kernel=gpytorch.kernels.ScaleKernel(
                 gpytorch.kernels.RBFKernel(
-                    ard_num_dims=experiment_data.train.x.shape[1]
-                )
+                    ard_num_dims=experiment_data.train.x.shape[1],
+                    batch_shape=torch.Size((likelihood.num_classes,)),
+                ),
+                batch_shape=torch.Size((likelihood.num_classes,)),
             ),
+            likelihood=likelihood,
             subsample_size=kernel_config["subsample_size"],
             seed=kernel_config["seed"],
             number_of_epochs=kernel_config["number_of_epochs"],
             learning_rate=kernel_config["learning_rate"],
             number_of_iterations=kernel_config["number_of_iterations"],
-            plot_1d_subsample_path=None,
-            plot_loss_path=plots_path,
             model_path=subsample_gp_model_path,
             data_path=subsample_gp_data_path,
-            likelihood=gpytorch.likelihoods.GaussianLikelihood(),
+            plot_1d_subsample_path=None,
+            plot_loss_path=plots_path,
+            number_of_classes=likelihood.num_classes,
         )
+        experiment_data.train.y = y_train_labels
         average_ard_kernel = construct_average_ard_kernel(
-            kernels=[model.kernel for model in subsample_gp_models]
+            kernels=[model.kernel for model in subsample_gp_models],
         )
         if os.path.exists(inducing_points_path):
             inducing_points = torch.load(inducing_points_path)
@@ -149,88 +174,79 @@ def main(
                 kernel=average_ard_kernel,
             )
             torch.save(inducing_points, inducing_points_path)
-        likelihood = construct_average_gaussian_likelihood(
-            likelihoods=[model.likelihood for model in subsample_gp_models]
-        )
-
         pls_kernel = PLSKernel(
             base_kernel=average_ard_kernel,
             approximation_samples=inducing_points.x,
         )
-        pls_dict = {
-            "pls-onb": PLSRegressionONB(
-                kernel=pls_kernel,
-                x_induce=inducing_points.x,
-                y_induce=inducing_points.y,
-                x_train=experiment_data.train.x,
-                y_train=experiment_data.train.y,
-                jitter=pls_config["jitter"],
-                observation_noise=float(likelihood.noise),
-            ),
-            "pls-ipb": PLSRegressionIPB(
-                kernel=pls_kernel,
-                x_induce=inducing_points.x,
-                y_induce=inducing_points.y,
-                x_train=experiment_data.train.x,
-                y_train=experiment_data.train.y,
-                jitter=pls_config["jitter"],
-                observation_noise=float(likelihood.noise),
-            ),
-        }
-        for pls_name, pls in pls_dict.items():
-            pls_path = os.path.join(models_path, f"{pls_name}.pth")
-            if os.path.exists(pls_path):
-                pls, particles = load_pls(
-                    pls=pls,
-                    model_path=pls_path,
-                )
-            else:
-                particles = train_pls(
-                    pls=pls,
-                    number_of_particles=pls_config["number_of_particles"],
-                    particle_name=pls_name,
-                    experiment_data=experiment_data,
-                    inducing_points=inducing_points,
-                    simulation_duration=pls_config["simulation_duration"],
-                    maximum_number_of_steps=pls_config["maximum_number_of_steps"],
-                    step_size_upper=pls_config["step_size_upper"],
-                    number_of_step_searches=pls_config["number_of_step_searches"],
-                    minimum_change_in_energy_potential=pls_config[
-                        "minimum_change_in_energy_potential"
-                    ],
-                    seed=pls_config["seed"],
-                    observation_noise_upper=pls_config["observation_noise_upper"],
-                    observation_noise_lower=pls_config["observation_noise_lower"],
-                    number_of_observation_noise_searches=pls_config[
-                        "number_of_observation_noise_searches"
-                    ],
-                    plot_title=f"{dataset_name}",
-                    plot_particles_path=None,
-                    animate_1d_path=None,
-                    plot_update_magnitude_path=plots_path,
-                    metric_to_minimise=pls_config["metric_to_minimise"],
-                    initial_particles_noise_only=pls_config[
-                        "initial_particles_noise_only"
-                    ],
-                    early_stopper_patience=pls_config["early_stopper_patience"],
-                )
-                torch.save(
-                    {
-                        "particles": particles,
-                        "observation_noise": pls.observation_noise,
-                    },
-                    pls_path,
-                )
-            set_seed(pls_config["seed"])
-            calculate_metrics(
-                model=pls,
-                particles=particles,
-                model_name=pls_name,
-                dataset_name=dataset_name,
-                experiment_data=experiment_data,
-                results_path=results_path,
-                plots_path=plots_path,
-            )
+        # pls_dict = {
+        #     "pls-onb": PLSClassificationONB(
+        #         kernel=pls_kernel,
+        #         x_induce=inducing_points.x,
+        #         y_induce=inducing_points.y,
+        #         x_train=experiment_data.train.x,
+        #         y_train=experiment_data.train.y,
+        #         jitter=pls_config["jitter"],
+        #     ),
+        #     "pls-ipb": PLSClassificationIPB(
+        #         kernel=pls_kernel,
+        #         x_induce=inducing_points.x,
+        #         y_induce=inducing_points.y,
+        #         x_train=experiment_data.train.x,
+        #         y_train=experiment_data.train.y,
+        #         jitter=pls_config["jitter"],
+        #     ),
+        # }
+        # for pls_name, pls in pls_dict.items():
+        #     pls_path = os.path.join(models_path, f"{pls_name}.pth")
+        #     # if os.path.exists(pls_path):
+        #     #     pls, particles = load_pls(
+        #     #         pls=pls,
+        #     #         model_path=pls_path,
+        #     #     )
+        #     # else:
+        #     particles = train_pls(
+        #         pls=pls,
+        #         number_of_particles=pls_config["number_of_particles"],
+        #         particle_name=pls_name,
+        #         experiment_data=experiment_data,
+        #         inducing_points=inducing_points,
+        #         simulation_duration=pls_config["simulation_duration"],
+        #         maximum_number_of_steps=pls_config["maximum_number_of_steps"],
+        #         step_size_upper=pls_config["step_size_upper"],
+        #         number_of_step_searches=pls_config["number_of_step_searches"],
+        #         minimum_change_in_energy_potential=pls_config[
+        #             "minimum_change_in_energy_potential"
+        #         ],
+        #         seed=pls_config["seed"],
+        #         observation_noise_upper=pls_config["observation_noise_upper"],
+        #         observation_noise_lower=pls_config["observation_noise_lower"],
+        #         plot_title=f"{dataset_name}",
+        #         plot_particles_path=None,
+        #         animate_1d_path=None,
+        #         plot_update_magnitude_path=plots_path,
+        #         metric_to_minimise=pls_config["metric_to_minimise"],
+        #         initial_particles_noise_only=pls_config[
+        #             "initial_particles_noise_only"
+        #         ],
+        #         early_stopper_patience=pls_config["early_stopper_patience"],
+        #     )
+        #     torch.save(
+        #         {
+        #             "particles": particles,
+        #             "observation_noise": pls.observation_noise,
+        #         },
+        #         pls_path,
+        #     )
+        #     set_seed(pls_config["seed"])
+        #     calculate_metrics(
+        #         model=pls,
+        #         particles=particles,
+        #         model_name=pls_name,
+        #         dataset_name=dataset_name,
+        #         experiment_data=experiment_data,
+        #         results_path=results_path,
+        #         plots_path=plots_path,
+        #     )
         for kernel_name, kernel in zip(["k", "r"], [average_ard_kernel, pls_kernel]):
             model_name = f"svgp-{kernel_name}"
             svgp_model_path = os.path.join(models_path, f"{model_name}.pth")
@@ -240,7 +256,7 @@ def main(
                     x_induce=inducing_points.x,
                     mean=gpytorch.means.ConstantMean(),
                     kernel=deepcopy(kernel),
-                    likelihood=gpytorch.likelihoods.GaussianLikelihood(),
+                    likelihood=gpytorch.likelihoods.BernoulliLikelihood(),
                     learn_inducing_locations=False,
                 )
             else:
@@ -250,7 +266,7 @@ def main(
                     inducing_points=inducing_points,
                     mean=gpytorch.means.ConstantMean(),
                     kernel=deepcopy(kernel),
-                    likelihood=gpytorch.likelihoods.GaussianLikelihood(),
+                    likelihood=gpytorch.likelihoods.BernoulliLikelihood(),
                     seed=svgp_config["seed"],
                     number_of_epochs=svgp_config["number_of_epochs"],
                     batch_size=svgp_config["batch_size"],
@@ -260,7 +276,7 @@ def main(
                         "number_of_learning_rate_searches"
                     ],
                     is_fixed=True,
-                    observation_noise=float(likelihood.noise),
+                    observation_noise=None,
                     models_path=os.path.join(
                         models_path, f"{model_name}-kernel-iterations"
                     ),
@@ -306,7 +322,7 @@ if __name__ == "__main__":
             svgp_config=loaded_config["svgp"],
         )
         concatenate_metrics(
-            results_path=f"experiments/uci/outputs/{data_seed}/results",
+            results_path=f"experiments/uci/classification/outputs/{data_seed}/results",
             data_types=["train", "test"],
             model_names=[
                 "pls-onb",
@@ -314,6 +330,6 @@ if __name__ == "__main__":
                 "svgp-k",
                 "svgp-r",
             ],
-            datasets=list(DatasetSchema.__members__.keys()),
+            datasets=list(ClassificationDatasetSchema.__members__.keys()),
             metrics=["mae", "mse", "nll"],
         )
