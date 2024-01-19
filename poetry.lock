@@ -30,6 +30,21 @@ astroid = ["astroid (>=1,<2)", "astroid (>=2,<4)"]
 test = ["astroid (>=1,<2)", "astroid (>=2,<4)", "pytest"]
 
 [[package]]
+name = "autograd"
+version = "1.6.2"
+description = "Efficiently computes derivatives of numpy code."
+optional = false
+python-versions = "*"
+files = [
+    {file = "autograd-1.6.2-py3-none-any.whl", hash = "sha256:208dde2a938e63b4f8f5049b1985505139e529068b0d26f8cd7771fd3eb145d5"},
+    {file = "autograd-1.6.2.tar.gz", hash = "sha256:8731e08a0c4e389d8695a40072ada4512641c113b6cace8f4cfbe8eb7e9aedeb"},
+]
+
+[package.dependencies]
+future = ">=0.15.2"
+numpy = ">=1.12"
+
+[[package]]
 name = "black"
 version = "23.12.1"
 description = "The uncompromising code formatter."
@@ -492,6 +507,16 @@ ssh = ["paramiko"]
 tqdm = ["tqdm"]
 
 [[package]]
+name = "future"
+version = "0.18.3"
+description = "Clean single-source support for Python 3 and 2"
+optional = false
+python-versions = ">=2.6, !=3.0.*, !=3.1.*, !=3.2.*"
+files = [
+    {file = "future-0.18.3.tar.gz", hash = "sha256:34a17436ed1e96697a86f9de3d15a3b0be01d8bc8de9c1dffd59fb8234ed5307"},
+]
+
+[[package]]
 name = "gpytorch"
 version = "1.11"
 description = "An implementation of Gaussian Processes in Pytorch"
@@ -710,6 +735,27 @@ traitlets = ">=5.3"
 [package.extras]
 docs = ["myst-parser", "pydata-sphinx-theme", "sphinx-autodoc-typehints", "sphinxcontrib-github-alt", "sphinxcontrib-spelling", "traitlets"]
 test = ["ipykernel", "pre-commit", "pytest", "pytest-cov", "pytest-timeout"]
+
+[[package]]
+name = "kgof"
+version = "0.1.0"
+description = ""
+optional = false
+python-versions = ">= 2.7"
+files = []
+develop = false
+
+[package.dependencies]
+autograd = "*"
+matplotlib = "*"
+numpy = "*"
+scipy = "*"
+
+[package.source]
+type = "git"
+url = "https://github.com/wittawatj/kernel-gof.git"
+reference = "HEAD"
+resolved_reference = "039a95ed9d8062e283da6bd051b7161a190b4876"
 
 [[package]]
 name = "kiwisolver"
@@ -2153,4 +2199,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = "~3.11"
-content-hash = "53450e19541fb76063cd58eb9da81172b20427bf11194446fd5b2ffe025cdac8"
+content-hash = "cb2170f18f1bc54306bf1e8073c490f71b6d552a13b2a059d02e1323ae324fe0"
