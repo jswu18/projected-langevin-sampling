@@ -1,6 +1,7 @@
 import argparse
 import math
 import os
+import pickle
 from copy import deepcopy
 from typing import Any, Dict
 
@@ -44,8 +45,8 @@ def get_experiment_data(
     number_of_test_intervals: int,
     total_number_of_intervals: int,
 ) -> ExperimentData:
-    x = torch.linspace(-2, 2, number_of_data_points).reshape(-1, 1)
-    y_curve = curve_function.calculate_curve(
+    x = torch.linspace(-3, 3, number_of_data_points).reshape(-1, 1)
+    y_curve = 2 * curve_function.calculate_curve(
         x=x,
     ).reshape(-1)
     y = curve_function.classification(
@@ -229,7 +230,7 @@ def main(
                     "minimum_change_in_energy_potential"
                 ],
                 seed=pls_config["seed"],
-                plot_title=f"{type(curve_function).__name__}",
+                plot_title=f"$p(y=sigmoid({curve_function.__name__.replace('$', '').split('=')[1]}))$",
                 plot_particles_path=plot_curve_path,
                 animate_1d_path=plot_curve_path,
                 plot_update_magnitude_path=plot_curve_path,
@@ -290,7 +291,7 @@ def main(
                 models_path=os.path.join(
                     models_path, f"{model_name}-kernel-iterations"
                 ),
-                plot_title=f"{type(curve_function).__name__}",
+                plot_title=f"$p(y=sigmoid({curve_function.__name__.replace('$', '').split('=')[1]}))$",
                 plot_1d_path=plot_curve_path,
                 animate_1d_path=plot_curve_path,
                 plot_loss_path=plot_curve_path,

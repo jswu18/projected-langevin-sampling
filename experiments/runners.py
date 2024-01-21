@@ -17,8 +17,10 @@ from experiments.metrics import calculate_mae, calculate_mse, calculate_nll
 from experiments.plotters import (
     animate_1d_gp_predictions,
     animate_1d_pls_predictions,
+    animate_1d_pls_untransformed_predictions,
     plot_1d_gp_prediction_and_inducing_points,
     plot_1d_pls_prediction,
+    plot_1d_pls_prediction_histogram,
     plot_energy_potentials,
     plot_losses,
 )
@@ -233,6 +235,7 @@ def train_pls(
     plot_title: str = None,
     plot_particles_path: str = None,
     animate_1d_path: str = None,
+    animate_1d_untransformed_path: str = None,
     plot_update_magnitude_path: str = None,
     christmas_colours: bool = False,
     metric_to_minimise: str = "nll",
@@ -424,6 +427,20 @@ def train_pls(
                 ),
                 is_sample_untransformed=True,
             )
+            plot_1d_pls_prediction_histogram(
+                experiment_data=experiment_data,
+                predicted_samples=pls.predict_untransformed_samples(
+                    x=experiment_data.full.x,
+                    particles=particles,
+                ).detach(),
+                title=f"{plot_title} (learned untransformed particles histogram)"
+                if plot_title is not None
+                else None,
+                save_path=os.path.join(
+                    plot_particles_path,
+                    f"particles-learned-histogram-{particle_name}.png",
+                ),
+            )
     if energy_potentials_history and plot_update_magnitude_path is not None:
         create_directory(plot_update_magnitude_path)
         plot_energy_potentials(
@@ -449,8 +466,26 @@ def train_pls(
             x=experiment_data.full.x,
             title=plot_title,
             save_path=os.path.join(
-                plot_particles_path,
+                animate_1d_path,
                 f"{particle_name}.gif",
+            ),
+            christmas_colours=christmas_colours,
+        )
+    if best_lr and animate_1d_untransformed_path is not None:
+        animate_1d_pls_untransformed_predictions(
+            pls=pls,
+            seed=seed,
+            number_of_particles=number_of_particles,
+            initial_particles_noise_only=initial_particles_noise_only,
+            step_size=best_lr,
+            number_of_epochs=int(simulation_duration / best_lr),
+            experiment_data=experiment_data,
+            inducing_points=inducing_points,
+            x=experiment_data.full.x,
+            title=plot_title,
+            save_path=os.path.join(
+                animate_1d_path,
+                f"untransformed-{particle_name}.gif",
             ),
             christmas_colours=christmas_colours,
         )
@@ -562,14 +597,19 @@ def _train_svgp(
     )
     losses = []
     for _ in epochs_iter:
-        for x_batch, y_batch in train_loader:
-            optimizer.zero_grad()
-            output = model(x_batch)
-            loss = -mll(output, y_batch)
-            loss.backward()
-            optimizer.step()
-        output = model(train_data.x)
-        losses.append(-mll(output, train_data.y).item())
+        try:
+            for x_batch, y_batch in train_loader:
+                optimizer.zero_grad()
+                output = model(x_batch)
+                loss = -mll(output, y_batch)
+                loss.backward()
+                optimizer.step()
+            output = model(train_data.x)
+            losses.append(-mll(output, train_data.y).item())
+        except ValueError as e:
+            print(e)
+            print("Continuing...")
+            return None, None
     model.eval()
     return model, losses
 
@@ -644,6 +684,8 @@ def train_svgp(
                 learn_kernel_parameters=False if is_fixed else True,
                 likelihood_noise=observation_noise,
             )
+            if model is None:
+                continue
             torch.save(
                 {
                     "model": model.state_dict(),

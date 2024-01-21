@@ -26,6 +26,8 @@ def calculate_mae(
         ).item()
     elif isinstance(prediction, torch.distributions.Bernoulli):
         return prediction.probs.sub(y).abs().mean().item()
+    elif isinstance(prediction, torch.distributions.Poisson):
+        return prediction.rate.sub(y).abs().mean().item()
     else:
         raise ValueError(f"Prediction type {type(prediction)} not supported")
 
@@ -41,6 +43,8 @@ def calculate_mse(
         ).item()
     elif isinstance(prediction, torch.distributions.Bernoulli):
         return prediction.probs.sub(y).pow(2).mean().item()
+    elif isinstance(prediction, torch.distributions.Poisson):
+        return prediction.rate.sub(y).pow(2).mean().item()
     else:
         raise ValueError(f"Prediction type {type(prediction)} not supported")
 
@@ -57,6 +61,12 @@ def calculate_nll(
     elif isinstance(prediction, torch.distributions.Bernoulli):
         return torch.nn.functional.binary_cross_entropy(
             input=prediction.probs,
+            target=y.double(),
+            reduction="mean",
+        ).item()
+    elif isinstance(prediction, torch.distributions.Poisson):
+        return torch.nn.functional.poisson_nll_loss(
+            input=prediction.rate,
             target=y.double(),
             reduction="mean",
         ).item()

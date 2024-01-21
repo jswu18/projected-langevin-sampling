@@ -315,15 +315,15 @@ if __name__ == "__main__":
             pls_config=loaded_config["pls"],
             svgp_config=loaded_config["svgp"],
         )
-        concatenate_metrics(
-            results_path=f"experiments/uci/regression/outputs/{data_seed}/results",
-            data_types=["train", "test"],
-            model_names=[
-                "pls-onb",
-                "pls-ipb",
-                "svgp-k",
-                "svgp-r",
-            ],
-            datasets=list(RegressionDatasetSchema.__members__.keys()),
-            metrics=["mae", "mse", "nll"],
-        )
+        # concatenate_metrics(
+        #     results_path=f"experiments/uci/regression/outputs/{data_seed}/results",
+        #     data_types=["train", "test"],
+        #     model_names=[
+        #         "pls-onb",
+        #         "pls-ipb",
+        #         "svgp-k",
+        #         "svgp-r",
+        #     ],
+        #     datasets=list(RegressionDatasetSchema.__members__.keys()),
+        #     metrics=["mae", "mse", "nll"],
+        # )

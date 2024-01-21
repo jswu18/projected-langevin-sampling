@@ -8,7 +8,7 @@ from matplotlib import pyplot as plt
 from torch.utils.data import DataLoader, TensorDataset
 from tqdm import tqdm
 
-from experiments.data import Data, ExperimentData
+from experiments.data import Data, ExperimentData, ProblemType
 from src.gps import ExactGP, svGP
 from src.kernels import PLSKernel
 from src.projected_langevin_sampling.base.base import PLSBase
@@ -128,8 +128,9 @@ def plot_1d_experiment_data(
             linewidth=3,
             alpha=0.5,
         )
+    if experiment_data.problem_type == ProblemType.CLASSIFICATION:
         ax.set_ylim([0, 1])
-    ax.set_xlim([-2, 2])
+    ax.set_xlim([min(experiment_data.full.x), max(experiment_data.full.x)])
     if title is not None:
         ax.set_title(title)
     if save_path is not None:
@@ -172,19 +173,12 @@ def plot_1d_pls_prediction(
     is_sample_untransformed: bool = False,
 ):
     fig, ax = plt.subplots(figsize=(13, 6.5))
-    fig, ax = plot_1d_experiment_data(
-        fig=fig,
-        ax=ax,
-        experiment_data=experiment_data,
-        is_sample_untransformed=is_sample_untransformed,
-    )
-    for i in range(inducing_points.x.shape[0]):
-        plt.axvline(
-            x=inducing_points.x[i],
-            color="tab:blue",
-            alpha=0.2,
-            label="induce" if i == 0 else None,
-            zorder=0,
+    if not is_sample_untransformed:
+        fig, ax = plot_1d_experiment_data(
+            fig=fig,
+            ax=ax,
+            experiment_data=experiment_data,
+            is_sample_untransformed=is_sample_untransformed,
         )
     if not is_sample_untransformed:
         ax.autoscale(enable=False)  # turn off autoscale before plotting particles
@@ -207,9 +201,32 @@ def plot_1d_pls_prediction(
                 mean=predicted_distribution.probs.detach(),
                 variance=None,
             )
+        elif isinstance(predicted_distribution, torch.distributions.Poisson):
+            fig, ax = plot_1d_gp_prediction(
+                fig=fig,
+                ax=ax,
+                x=experiment_data.full.x,
+                mean=predicted_distribution.rate.detach(),
+                variance=None,
+            )
         else:
             raise TypeError
-
+    else:
+        fig, ax = plot_1d_gp_prediction(
+            fig=fig,
+            ax=ax,
+            x=experiment_data.full.x,
+            mean=predicted_samples.mean(dim=1),
+            variance=None,
+        )
+    for i in range(inducing_points.x.shape[0]):
+        plt.axvline(
+            x=inducing_points.x[i],
+            color="tab:blue",
+            alpha=0.2,
+            label="induce" if i == 0 else None,
+            zorder=0,
+        )
     for i in range(predicted_samples.shape[1]):
         fig, ax = plot_1d_particle(
             fig=fig,
@@ -220,6 +237,31 @@ def plot_1d_pls_prediction(
         )
     if title is not None:
         ax.set_title(title)
+    fig.tight_layout()
+    fig.savefig(
+        save_path,
+    )
+    plt.close(fig)
+
+
+def plot_1d_pls_prediction_histogram(
+    experiment_data: ExperimentData,
+    predicted_samples: torch.Tensor,
+    save_path: str,
+    title: str = None,
+    number_of_bins: int = 50,
+):
+    fig, ax = plt.subplots(figsize=(13, 6.5))
+    max_train_idx = torch.argmax(experiment_data.train.y)
+    max_full_idx = torch.where(
+        experiment_data.full.x == experiment_data.train.x[max_train_idx]
+    )[0]
+    histogram_data = predicted_samples[max_full_idx, :]
+    ax.hist(histogram_data, bins=number_of_bins)
+    ax.set_xlabel("y")
+    ax.set_ylabel("count")
+    if title is not None:
+        ax.set_title(f"{title} (x={experiment_data.train.x[max_train_idx].item():.2f})")
     fig.tight_layout()
     fig.savefig(
         save_path,
@@ -391,6 +433,7 @@ def animate_1d_pls_predictions(
     save_path: str,
     christmas_colours: bool = False,
     animation_duration: int = 15,
+    fps=15,
 ) -> None:
     fig, ax = plt.subplots(figsize=(13, 6.5))
     fig, ax = plot_1d_experiment_data(
@@ -398,14 +441,6 @@ def animate_1d_pls_predictions(
         ax=ax,
         experiment_data=experiment_data,
     )
-    for i in range(inducing_points.x.shape[0]):
-        plt.axvline(
-            x=inducing_points.x[i],
-            color="tab:blue",
-            alpha=0.2,
-            label="induce" if i == 0 else None,
-            zorder=0,
-        )
     plt.xlim(x.min(), x.max())
     ax.autoscale(enable=False)  # turn off autoscale before plotting particles
 
@@ -432,15 +467,23 @@ def animate_1d_pls_predictions(
         ax.plot(
             x.reshape(-1),
             predicted_samples[:, i].reshape(-1),
-            color=[0.3, 0.3, 0.3]
+            color=[0.1, 0.1, 0.1]
             if not christmas_colours
             else ["green", "red", "blue"][i % 3],
-            alpha=0.1,
+            alpha=0.15,
             zorder=0,
             label="particle" if i == 0 else None,
         )[0]
         for i in range(predicted_samples.shape[-1])
     ]
+    for i in range(inducing_points.x.shape[0]):
+        plt.axvline(
+            x=inducing_points.x[i],
+            color="tab:blue",
+            alpha=0.2,
+            label="induce" if i == 0 else None,
+            zorder=0,
+        )
     plt.legend(loc="lower left")
 
     class ParticleWrapper:
@@ -457,7 +500,6 @@ def animate_1d_pls_predictions(
             self.num_updates += 1
 
     particle_wrapper = ParticleWrapper(particles=particles)
-    fps = min(number_of_epochs // animation_duration, 30)
     number_of_frames = 1 + number_of_epochs // (
         (number_of_epochs // (animation_duration * fps)) + 1
     )
@@ -480,7 +522,114 @@ def animate_1d_pls_predictions(
         for i in range(_predicted_samples.shape[-1]):
             samples_plotted[i].set_data((x, _predicted_samples[:, i].reshape(-1)))
         ax.set_title(
-            f"{title} (simulation time={step_size * particle_wrapper.num_updates:.2e}, iteration={particle_wrapper.num_updates})"
+            f"{title} (simulation time={step_size * particle_wrapper.num_updates:.2e})"
+        )
+        progress_bar.update(n=1)
+        return (samples_plotted[0],)
+
+    ani = animation.FuncAnimation(
+        fig, animate, repeat=True, frames=number_of_frames, interval=50
+    )
+
+    # To save the animation using Pillow as a gif
+    writer = animation.PillowWriter(
+        fps=fps,
+        bitrate=1800,
+    )
+    ani.save(save_path, writer=writer)
+    plt.close()
+
+
+def animate_1d_pls_untransformed_predictions(
+    pls: PLSBase,
+    number_of_particles: int,
+    initial_particles_noise_only: bool,
+    seed: int,
+    step_size: float,
+    number_of_epochs: int,
+    experiment_data: ExperimentData,
+    inducing_points: Data,
+    x: torch.Tensor,
+    title: str,
+    save_path: str,
+    christmas_colours: bool = False,
+    animation_duration: int = 15,
+    fps=15,
+) -> None:
+    fig, ax = plt.subplots(figsize=(13, 6.5))
+    plt.xlim(x.min(), x.max())
+    ax.autoscale(enable=False, axis="x")  # turn off autoscale before plotting particles
+    particles = pls.initialise_particles(
+        number_of_particles=number_of_particles,
+        seed=seed,
+        noise_only=initial_particles_noise_only,
+    )
+    predicted_untransformed_samples = pls.predict_untransformed_samples(
+        x=experiment_data.full.x,
+        particles=particles,
+    ).detach()
+    samples_plotted = [
+        ax.plot(
+            x.reshape(-1),
+            predicted_untransformed_samples[:, i].reshape(-1),
+            color=[0.1, 0.1, 0.1]
+            if not christmas_colours
+            else ["green", "red", "blue"][i % 3],
+            alpha=0.15,
+            zorder=0,
+            label="particle" if i == 0 else None,
+        )[0]
+        for i in range(predicted_untransformed_samples.shape[-1])
+    ]
+    for i in range(inducing_points.x.shape[0]):
+        plt.axvline(
+            x=inducing_points.x[i],
+            color="tab:blue",
+            alpha=0.2,
+            label="induce" if i == 0 else None,
+            zorder=0,
+        )
+    plt.legend(loc="lower left")
+
+    class ParticleWrapper:
+        """
+        Wrapper class to allow particles to be updated in the animation function.
+        """
+
+        def __init__(self, particles: torch.Tensor):
+            self.particles = particles
+            self.num_updates = 0
+
+        def update(self, particle_update):
+            self.particles += particle_update
+            self.num_updates += 1
+
+    particle_wrapper = ParticleWrapper(particles=particles)
+    number_of_frames = 1 + number_of_epochs // (
+        (number_of_epochs // (animation_duration * fps)) + 1
+    )
+    progress_bar = tqdm(
+        total=number_of_frames + 1, desc="PLS Untransformed Particles GIF"
+    )
+
+    def animate(iteration: int):
+        for _ in range((number_of_epochs // (animation_duration * fps)) + 1):
+            particle_wrapper.update(
+                pls.calculate_particle_update(
+                    particles=particle_wrapper.particles,
+                    step_size=step_size,
+                )
+            )
+        _predicted_untransformed_samples = pls.predict_untransformed_samples(
+            x=experiment_data.full.x,
+            particles=particle_wrapper.particles,
+        ).detach()
+        for i in range(_predicted_untransformed_samples.shape[-1]):
+            samples_plotted[i].set_data(
+                (x, _predicted_untransformed_samples[:, i].reshape(-1))
+            )
+        ax.set_title(
+            f"{title} (simulation time={step_size * particle_wrapper.num_updates:.2e})"
         )
         progress_bar.update(n=1)
         return (samples_plotted[0],)
@@ -517,6 +666,7 @@ def animate_1d_gp_predictions(
     learn_kernel_parameters: bool,
     christmas_colours: bool = False,
     animation_duration: int = 15,
+    fps=15,
 ) -> None:
     fig, ax = plt.subplots(figsize=(13, 6.5))
     fig, ax = plot_1d_experiment_data(
@@ -524,14 +674,6 @@ def animate_1d_gp_predictions(
         ax=ax,
         experiment_data=experiment_data,
     )
-    for i in range(inducing_points.x.shape[0]):
-        plt.axvline(
-            x=inducing_points.x[i],
-            color="tab:blue",
-            alpha=0.2,
-            label="induce" if i == 0 else None,
-            zorder=0,
-        )
     plt.xlim(experiment_data.full.x.min(), experiment_data.full.x.max())
     ax.autoscale(enable=False)  # turn off autoscale before plotting particles
 
@@ -582,7 +724,7 @@ def animate_1d_gp_predictions(
             experiment_data.full.x.reshape(-1),
             (mean_prediction - 1.96 * stdev_prediction).reshape(-1),
             (mean_prediction + 1.96 * stdev_prediction).reshape(-1),
-            facecolor=(0.8, 0.8, 0.8),
+            facecolor=(0.9, 0.9, 0.9),
             label="error bound (95%)",
             zorder=0,
         )
@@ -590,6 +732,7 @@ def animate_1d_gp_predictions(
             experiment_data.full.x.reshape(-1),
             mean_prediction.reshape(-1),
             label="mean",
+            color="black",
             zorder=0,
         )[0]
     elif isinstance(model.likelihood, gpytorch.likelihoods.BernoulliLikelihood):
@@ -602,6 +745,15 @@ def animate_1d_gp_predictions(
         )[0]
     else:
         raise NotImplementedError
+
+    for i in range(inducing_points.x.shape[0]):
+        plt.axvline(
+            x=inducing_points.x[i],
+            color="tab:blue",
+            alpha=0.2,
+            label="induce" if i == 0 else None,
+            zorder=0,
+        )
     plt.legend(loc="lower left")
 
     class Counter:
@@ -612,7 +764,6 @@ def animate_1d_gp_predictions(
             self.count += 1
 
     counter = Counter()
-    fps = min(number_of_epochs // animation_duration, 30)
     number_of_frames = 1 + number_of_epochs // (
         (number_of_epochs // (animation_duration * fps)) + 1
     )
@@ -648,9 +799,7 @@ def animate_1d_gp_predictions(
             )
         else:
             raise NotImplementedError
-        ax.set_title(
-            f"{title} (simulation time={learning_rate*counter.count:.2e}, iteration={counter.count})"
-        )
+        ax.set_title(f"{title} (simulation time={learning_rate*counter.count:.2e})")
         if christmas_colours:
             fill.set_color(
                 (

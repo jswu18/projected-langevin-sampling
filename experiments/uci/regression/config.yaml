@@ -6,7 +6,7 @@ kernel:
   batch_size: 100
   number_of_iterations: 10
   number_of_epochs: 50000
-  subsample_size: 10000
+  subsample_size: 2000
 inducing_points:
   seed: 0
   inducing_points_factor: 1

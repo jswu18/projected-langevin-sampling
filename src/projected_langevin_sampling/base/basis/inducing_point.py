@@ -24,11 +24,11 @@ class PLSInducingPointBasis(PLSBase, ABC):
     def __init__(
         self,
         kernel: PLSKernel,
-        observation_noise: Optional[float],
         x_induce: torch.Tensor,
         y_induce: torch.Tensor,
         x_train: torch.Tensor,
         y_train: torch.Tensor,
+        observation_noise: Optional[float] = None,
         jitter: float = 0.0,
     ):
         """

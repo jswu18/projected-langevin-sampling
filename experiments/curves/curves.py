@@ -45,97 +45,97 @@ class Curve(ABC):
 
 
 class Curve1(Curve):
-    __name__ = "$y=2 \sin(0.35 \pi (x-3)^2) + x^2$"
+    __name__ = "$y=2 \sin(0.35 \pi x^2)$"
     seed: int = 1
 
     @staticmethod
     def _calculate_curve(x: torch.Tensor) -> torch.Tensor:
-        return 2 * torch.sin(((x - 3) ** 2) * 0.35 * torch.pi) + x**2
+        return 2 * torch.sin((x**2) * 0.35 * torch.pi)
 
 
 class Curve2(Curve):
-    __name__ = "$y=2\sin(2\pi x)$"
+    __name__ = "$y=2\sin(1.5\pi x)$"
     seed: int = 2
 
     @staticmethod
     def _calculate_curve(x: torch.Tensor) -> torch.Tensor:
-        return 2 * torch.sin(2 * x * torch.pi)
+        return 2 * torch.sin(1.5 * x * torch.pi)
 
 
 class Curve3(Curve):
-    __name__ = "$y=1.2 \cos(2 \pi x)$ + x^2"
+    __name__ = "$y=1.2 \cos(1.5 \pi x)$ - 0.25x"
     seed: int = 3
 
     @staticmethod
     def _calculate_curve(x: torch.Tensor) -> torch.Tensor:
-        return 1.2 * torch.cos(x * (2 * torch.pi)) + x**2
+        return 1.2 * torch.cos(x * (1.5 * torch.pi)) - 0.25 * x
 
 
 class Curve4(Curve):
-    __name__ = "$y=2\sin(1.5\pi x) + 0.6 \cos(4.5 \pi x) + \sin(3.5 \pi x)$"
+    __name__ = "$y=2\sin(0.5\pi x) + 0.6 \cos(2 \pi x) + \sin\pi x)$"
     seed: int = 4
 
     @staticmethod
     def _calculate_curve(x: torch.Tensor) -> torch.Tensor:
         return (
-            2 * torch.sin(x * (1.5 * torch.pi))
-            + 0.6 * torch.cos(x * (4.5 * torch.pi))
-            + torch.sin(x * (3.5 * torch.pi))
+            2 * torch.sin(x * (0.5 * torch.pi))
+            + 0.6 * torch.cos(x * (2 * torch.pi))
+            + torch.sin(x * torch.pi)
         )
 
 
 class Curve5(Curve):
-    __name__ = "$y=2 \sin(2\pi x) + x$"
+    __name__ = "$y=2 \sin(1.5\pi x) + 0.25 x$"
     seed: int = 5
 
     @staticmethod
     def _calculate_curve(x: torch.Tensor) -> torch.Tensor:
-        return 2 * torch.sin(2 * torch.pi * x) + x
+        return 2 * torch.sin(1.5 * torch.pi * x) + 0.25 * x
 
 
 class Curve6(Curve):
-    __name__ = "$y=2 \sin(\pi x) + 0.5x^3$"
+    __name__ = "$y=2 \sin(0.5\pi x^2) + 0.1x$"
     seed: int = 6
 
     @staticmethod
     def _calculate_curve(x: torch.Tensor) -> torch.Tensor:
-        return 2 * torch.sin(torch.pi * x) + 0.5 * (x**3)
+        return 2 * torch.sin(0.5 * torch.pi * x**2) + 0.1 * x
 
 
 class Curve7(Curve):
-    __name__ = "$y=4\sin(\pi x) + 2\sin(3 \pi x) -2x$"
+    __name__ = "$y=4\sin(\pi x) + 2\sin(2 \pi x) -x$"
     seed: int = 7
 
     @staticmethod
     def _calculate_curve(x: torch.Tensor) -> torch.Tensor:
-        return 4 * torch.sin(x * torch.pi) + 2 * torch.sin(x * (3 * torch.pi)) - 2 * x
+        return 4 * torch.sin(x * torch.pi) + 2 * torch.sin(x * (2 * torch.pi)) - x
 
 
 class Curve8(Curve):
-    __name__ = "$y=2\cos(\pi x) + \sin(3 \pi x) -x^2$"
+    __name__ = "$y=6\cos(\pi x) + 3\sin(2 \pi x) -x^2$"
     seed: int = 8
 
     @staticmethod
     def _calculate_curve(x: torch.Tensor) -> torch.Tensor:
-        return 2 * torch.cos(x * torch.pi) + torch.sin(x * (3 * torch.pi)) - x**2
+        return 6 * torch.cos(x * torch.pi) + 3 * torch.sin(x * (2 * torch.pi)) - x**2
 
 
 class Curve9(Curve):
-    __name__ = "$y=\sin(0.5 \pi (x-2)^2)$"
+    __name__ = "$y=\sin(0.3 \pi (x-2)^2) + 0.1x$"
     seed: int = 9
 
     @staticmethod
     def _calculate_curve(x: torch.Tensor) -> torch.Tensor:
-        return torch.sin(((x - 2) ** 2) * 0.5 * torch.pi)
+        return torch.sin(((x - 2) ** 2) * 0.3 * torch.pi) + 0.1 * x
 
 
 class Curve10(Curve):
-    __name__ = "$y=3\sqrt{4-x^2} + \sin(\pi x)$"
+    __name__ = "$y=\sqrt{9-x^2} + \sin(\pi x)$"
     seed: int = 10
 
     @staticmethod
     def _calculate_curve(x: torch.Tensor) -> torch.Tensor:
-        return 3 * torch.sqrt(4 - x**2) + torch.sin(torch.pi * x)
+        return torch.sqrt(9 - x**2) + torch.sin(torch.pi * x)
 
 
 CURVE_FUNCTIONS = [

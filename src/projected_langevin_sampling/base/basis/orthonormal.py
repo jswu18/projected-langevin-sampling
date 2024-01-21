@@ -24,11 +24,11 @@ class PLSOrthonormalBasis(PLSBase, ABC):
     def __init__(
         self,
         kernel: PLSKernel,
-        observation_noise: Optional[float],
         x_induce: torch.Tensor,
         y_induce: torch.Tensor,
         x_train: torch.Tensor,
         y_train: torch.Tensor,
+        observation_noise: Optional[float] = None,
         jitter: float = 0.0,
     ):
         """
@@ -113,7 +113,7 @@ class PLSOrthonormalBasis(PLSBase, ABC):
         """
         Calculates the energy potential of the particles.
         :param particles: Particles of size (M, P).
-        :return: The energy potential for each particle of size (P,).
+        :return: The average energy potential.
         """
         cost = self.calculate_cost(particles=particles)  # size (P, )
 

@@ -1,6 +1,7 @@
 import argparse
 import math
 import os
+import pickle
 from copy import deepcopy
 from typing import Any, Dict
 
@@ -45,7 +46,7 @@ def get_experiment_data(
     number_of_test_intervals: int,
     total_number_of_intervals: int,
 ) -> ExperimentData:
-    x = torch.linspace(-2, 2, number_of_data_points).reshape(-1, 1)
+    x = torch.linspace(-3, 3, number_of_data_points).reshape(-1, 1)
     y = curve_function.regression(
         seed=seed,
         x=x,
@@ -209,7 +210,7 @@ def main(
                 number_of_observation_noise_searches=pls_config[
                     "number_of_observation_noise_searches"
                 ],
-                plot_title=f"{type(curve_function).__name__}",
+                plot_title=curve_function.__name__,
                 plot_particles_path=plot_curve_path,
                 animate_1d_path=plot_curve_path,
                 plot_update_magnitude_path=plot_curve_path,
@@ -271,7 +272,7 @@ def main(
                 models_path=os.path.join(
                     models_path, f"{model_name}-kernel-iterations"
                 ),
-                plot_title=f"{type(curve_function).__name__}",
+                plot_title=curve_function.__name__,
                 plot_1d_path=plot_curve_path,
                 animate_1d_path=plot_curve_path,
                 plot_loss_path=plot_curve_path,
@@ -314,7 +315,7 @@ if __name__ == "__main__":
     concatenate_metrics(
         results_path="experiments/curves/regression/outputs/results",
         data_types=["train", "test"],
-        model_names=["pls-onb", "pls-ipb", "fixed-svgp"],
+        model_names=["pls-onb", "pls-ipb", "svgp-k", "svgp-r"],
         datasets=[
             type(curve_function_).__name__.lower()
             for curve_function_ in CURVE_FUNCTIONS

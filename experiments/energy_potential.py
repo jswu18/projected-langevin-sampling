@@ -155,6 +155,8 @@ class EnergyPotentialOrthonormalBasis(EnergyPotentialBase, ABC):
         y_train: np.ndarray,
         base_gram_induce: np.ndarray,
         base_gram_induce_train: np.ndarray,
+        eigenvalues: np.ndarray,
+        scaled_eigenvectors: np.ndarray,
         jitter: float = 0.0,
     ):
         EnergyPotentialBase.__init__(
@@ -166,23 +168,8 @@ class EnergyPotentialOrthonormalBasis(EnergyPotentialBase, ABC):
             base_gram_induce_train=base_gram_induce_train,
             jitter=jitter,
         )
-        self.eigenvalues, self.eigenvectors = np.linalg.eigh(
-            (1 / self.x_induce.shape[0]) * self.base_gram_induce
-        )
-
-        # Remove negative eigenvalues
-        positive_eigenvalue_idx = np.where(self.eigenvalues > 0)[0]
-        self.eigenvalues = self.eigenvalues[positive_eigenvalue_idx].real  # (K,)
-        self.eigenvectors = self.eigenvectors[:, positive_eigenvalue_idx].real  # (M, K)
-        # K is the number of eigenvalues to keep
-
-        # Scale eigenvectors (M, K)
-        self.scaled_eigenvectors = np.multiply(
-            np.reciprocal(np.sqrt(self.approximation_dimension * self.eigenvalues))[
-                None, :
-            ],
-            self.eigenvectors,
-        )
+        self.eigenvalues = eigenvalues
+        self.scaled_eigenvectors = scaled_eigenvectors
 
     @property
     def approximation_dimension(self):
@@ -234,17 +221,25 @@ class EnergyPotentialInducingPointBasis(EnergyPotentialBase, ABC):
     def _calculate_untransformed_train_predictions(
         self, particles: np.ndarray
     ) -> np.ndarray:
-        return self.base_gram_induce_train.T @ np.linalg.solve(
-            a=self.base_gram_induce,
-            b=particles,
-        )  #  k(X, Z) @ k(Z, Z)^{-1} @ U(t) of size (N, P)
+        # return self.base_gram_induce_train.T @ np.linalg.solve(
+        #     a=self.base_gram_induce,
+        #     b=particles,
+        # )  #  k(X, Z) @ k(Z, Z)^{-1} @ U(t) of size (N, P)
+        return (
+            self.base_gram_induce_train.T
+            @ np.linalg.inv(self.base_gram_induce)
+            @ particles
+        )
 
     def calculate_energy_potential(self, particles: np.ndarray) -> np.ndarray:
         cost = self.calculate_cost(particles=particles)  # size (P, )
 
-        inverse_base_gram_induce_particles = np.linalg.solve(
-            self.base_gram_induce, particles
-        )  # k(Z, Z)^{-1} @ U(t) of size (M, P)
+        # inverse_base_gram_induce_particles = np.linalg.solve(
+        #     self.base_gram_induce, particles
+        # )  # k(Z, Z)^{-1} @ U(t) of size (M, P)
+        inverse_base_gram_induce_particles = (
+            np.linalg.inv(self.base_gram_induce) @ particles
+        )
 
         # cost + M/2 * (k(Z, Z)^{-1} @ particle)^T (k(Z, Z)^{-1} @ particle)
         particle_energy_potential = cost + self.approximation_dimension / 2 * np.square(
@@ -294,6 +289,8 @@ class EnergyPotentialClassificationONB(
         y_train: np.ndarray,
         base_gram_induce: np.ndarray,
         base_gram_induce_train: np.ndarray,
+        eigenvalues: np.ndarray,
+        scaled_eigenvectors: np.ndarray,
         jitter: float = 0.0,
     ):
         EnergyPotentialOrthonormalBasis.__init__(
@@ -303,6 +300,8 @@ class EnergyPotentialClassificationONB(
             y_train=y_train,
             base_gram_induce=base_gram_induce,
             base_gram_induce_train=base_gram_induce_train,
+            eigenvalues=eigenvalues,
+            scaled_eigenvectors=scaled_eigenvectors,
             jitter=jitter,
         )
         EnergyPotentialClassification.__init__(
@@ -357,6 +356,8 @@ class EnergyPotentialRegressionONB(
         y_train: np.ndarray,
         base_gram_induce: np.ndarray,
         base_gram_induce_train: np.ndarray,
+        eigenvalues: np.ndarray,
+        scaled_eigenvectors: np.ndarray,
         jitter: float = 0.0,
     ):
         EnergyPotentialOrthonormalBasis.__init__(
@@ -366,6 +367,8 @@ class EnergyPotentialRegressionONB(
             y_train=y_train,
             base_gram_induce=base_gram_induce,
             base_gram_induce_train=base_gram_induce_train,
+            eigenvalues=eigenvalues,
+            scaled_eigenvectors=scaled_eigenvectors,
             jitter=jitter,
         )
         EnergyPotentialRegression.__init__(

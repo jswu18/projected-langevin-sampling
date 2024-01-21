@@ -7,9 +7,9 @@ from src.kernels.projected_langevin_sampling import PLSKernel
 from src.projected_langevin_sampling.base.base import PLSBase
 
 
-class PLSClassification(PLSBase, ABC):
+class PLSPoissonRegression(PLSBase, ABC):
     """
-    The base class for binary classification projected Langevin sampling.
+    The base class for Poisson regression projected Langevin sampling.
 
     N is the number of training points.
     M is the dimensionality of the function space approximation.
@@ -20,6 +20,7 @@ class PLSClassification(PLSBase, ABC):
     def __init__(
         self,
         kernel: PLSKernel,
+        observation_noise: float,
         x_induce: torch.Tensor,
         y_induce: torch.Tensor,
         x_train: torch.Tensor,
@@ -33,12 +34,13 @@ class PLSClassification(PLSBase, ABC):
         :param x_train: The training points of size (N, D).
         :param y_train: The training points of size (N,).
         :param kernel: The projected Langevin sampling kernel.
+        :param observation_noise: The observation noise.
         :param jitter: A jitter for numerical stability.
         """
         PLSBase.__init__(
             self,
             kernel=kernel,
-            observation_noise=None,
+            observation_noise=observation_noise,
             x_induce=x_induce,
             y_induce=y_induce,
             x_train=x_train,
@@ -47,8 +49,8 @@ class PLSClassification(PLSBase, ABC):
         )
 
     @staticmethod
-    def transform(y):
-        return torch.reciprocal(1 + torch.exp(-y))
+    def transform(y: torch.Tensor) -> torch.Tensor:
+        return torch.exp(y)
 
     def predict(
         self,
@@ -56,14 +58,14 @@ class PLSClassification(PLSBase, ABC):
         particles: torch.Tensor,
         predictive_noise: Optional[torch.Tensor] = None,
         observation_noise: Optional[torch.Tensor] = None,
-    ) -> torch.distributions.Bernoulli:
+    ) -> torch.distributions.Poisson:
         """
-        Predicts a Bernoulli distribution for the given input.
+        Predicts the mean and variance for a given input.
         :param x: input of size (N*, D)
         :param particles: particles of size (P, N)
-        :param predictive_noise: Optional predictive noise of size (N*, P)
-        :param observation_noise: Optional observation noise of size (N*, P)
-        :return: A Bernoulli distribution of size (N*, ).
+        :param predictive_noise: Optional predictive noise of size (N, P)
+        :param observation_noise: Optional observation noise of size (N, P)
+        :return: normal distribution of size (N*,)
         """
         samples = self.predict_samples(
             x=x,
@@ -71,10 +73,8 @@ class PLSClassification(PLSBase, ABC):
             predictive_noise=predictive_noise,
             observation_noise=observation_noise,
         )
-        predictions = samples.mean(dim=1)
-        # predictions[predictions <= 0.5] = 0
-        return torch.distributions.Bernoulli(
-            probs=predictions,
+        return torch.distributions.Poisson(
+            rate=samples.mean(dim=1),
         )
 
     def calculate_cost_derivative(self, particles: torch.Tensor) -> torch.Tensor:
@@ -82,12 +82,12 @@ class PLSClassification(PLSBase, ABC):
         Calculates the derivative of the cost function with respect to the second component evaluated at each particle.
         :return: A tensor of size (N, P).
         """
-        prediction = self.transform(
-            self._calculate_untransformed_train_predictions(particles)
-        )  # of size (N, P)
-
-        return -torch.mul(self.y_train[:, None], 1 - prediction) + torch.mul(
-            1 - self.y_train[:, None], prediction
+        untransformed_prediction = self._calculate_untransformed_train_predictions(
+            particles=particles
+        )  # (N, P)
+        return (
+            -2 * torch.divide(self.y_train[:, None], untransformed_prediction)
+            + 2 * untransformed_prediction
         )
 
     def calculate_cost(self, particles: torch.Tensor) -> torch.Tensor:
@@ -95,10 +95,9 @@ class PLSClassification(PLSBase, ABC):
         Calculates the cost for each particle.
         :return: A tensor of size (P, ).
         """
-        prediction = self.transform(
-            self._calculate_untransformed_train_predictions(particles)
-        )  # of size (N, P)
-        return (
-            -self.y_train[:, None] * torch.log(prediction)
-            - (1 - self.y_train[:, None]) * torch.log(1 - prediction)
-        ).sum(dim=0)
+        untransformed_prediction = self._calculate_untransformed_train_predictions(
+            particles=particles
+        )  # (N, P)
+        return -2 * torch.multiply(
+            self.y_train[:, None], torch.log(torch.abs(untransformed_prediction))
+        ) + torch.square(untransformed_prediction)

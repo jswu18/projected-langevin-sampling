@@ -1,32 +1,32 @@
 data:
-  number_of_data_points: 1000
+  number_of_data_points: 500
   seed: 0
-  number_of_test_intervals: 4
-  total_number_of_intervals: 16
+  number_of_test_intervals: 1
+  total_number_of_intervals: 12
 kernel:
   seed: 0
   learning_rate: 0.01
   batch_size: 100
   number_of_iterations: 10
   number_of_epochs: 2000
-  subsample_size: 1000
+  subsample_size: 2000
 inducing_points:
   seed: 0
   inducing_points_factor: 1
   inducing_points_power: 2
 pls:
-  number_of_particles: 50
-  simulation_duration: 5.0e-1
+  number_of_particles: 25
+  simulation_duration: 1.0e-1
   maximum_number_of_steps: 1.0e+6
   number_of_step_searches: 3
-  step_size_upper: 1.0e-5
+  step_size_upper: 1.0e-3
   minimum_change_in_energy_potential: 0.01
   jitter: 0
   seed: 0
-  christmas_colours: True
-  metric_to_minimise: mae
+  christmas_colours: False
+  metric_to_minimise: loss
   initial_particles_noise_only: True
-  early_stopper_patience: 1.0e-3
+  early_stopper_patience: 1.0e-5
 svgp:
   seed: 0
   number_of_epochs: 1000
