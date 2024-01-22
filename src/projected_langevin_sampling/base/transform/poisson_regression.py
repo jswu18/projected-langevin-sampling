@@ -50,7 +50,7 @@ class PLSPoissonRegression(PLSBase, ABC):
 
     @staticmethod
     def transform(y: torch.Tensor) -> torch.Tensor:
-        return torch.exp(y)
+        return torch.pow(y, 2)
 
     def predict(
         self,

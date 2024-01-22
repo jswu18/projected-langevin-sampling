@@ -51,8 +51,8 @@ def get_experiment_data(
         x=x,
     ).reshape(-1)
     generator = torch.Generator().manual_seed(seed)
-    y = torch.poisson(torch.exp(y_curve), generator=generator).reshape(-1)
-    y_untransformed = torch.exp(y_curve)
+    y = torch.poisson(torch.pow(y_curve, 2), generator=generator).reshape(-1)
+    y_untransformed = torch.pow(y_curve, 2)
     (
         x_train,
         y_train,
@@ -201,6 +201,12 @@ def main(
     }
     for pls_name, pls in pls_dict.items():
         pls_path = os.path.join(models_path, f"{pls_name}.pth")
+        # if os.path.exists(pls_path):
+        #     pls, particles = load_pls(
+        #         pls=pls,
+        #         model_path=pls_path,
+        #     )
+        # else:
         particles = train_pls(
             pls=pls,
             number_of_particles=pls_config["number_of_particles"],
@@ -222,8 +228,8 @@ def main(
             ],
             plot_title=curve_function.__name__,
             plot_particles_path=plot_curve_path,
-            animate_1d_path=plot_curve_path,
-            animate_1d_untransformed_path=plot_curve_path,
+            # animate_1d_path=plot_curve_path,
+            # animate_1d_untransformed_path=plot_curve_path,
             plot_update_magnitude_path=plot_curve_path,
             christmas_colours=pls_config["christmas_colours"]
             if "christmas_colours" in pls_config
