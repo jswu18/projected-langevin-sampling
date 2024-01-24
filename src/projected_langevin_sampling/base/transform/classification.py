@@ -46,9 +46,10 @@ class PLSClassification(PLSBase, ABC):
             jitter=jitter,
         )
 
-    @staticmethod
-    def transform(y):
-        return torch.reciprocal(1 + torch.exp(-y))
+    def transform(self, y):
+        return torch.clip(
+            torch.reciprocal(1 + torch.exp(-y)), self.jitter, 1 - self.jitter
+        )
 
     def predict(
         self,

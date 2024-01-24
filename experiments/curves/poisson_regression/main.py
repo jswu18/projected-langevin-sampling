@@ -201,12 +201,6 @@ def main(
     }
     for pls_name, pls in pls_dict.items():
         pls_path = os.path.join(models_path, f"{pls_name}.pth")
-        # if os.path.exists(pls_path):
-        #     pls, particles = load_pls(
-        #         pls=pls,
-        #         model_path=pls_path,
-        #     )
-        # else:
         particles = train_pls(
             pls=pls,
             number_of_particles=pls_config["number_of_particles"],
@@ -226,10 +220,9 @@ def main(
             number_of_observation_noise_searches=pls_config[
                 "number_of_observation_noise_searches"
             ],
-            plot_title=curve_function.__name__,
+            plot_title="Projected Langevin Sampling for Poisson Regression",
             plot_particles_path=plot_curve_path,
-            # animate_1d_path=plot_curve_path,
-            # animate_1d_untransformed_path=plot_curve_path,
+            animate_1d_path=plot_curve_path,
             plot_update_magnitude_path=plot_curve_path,
             christmas_colours=pls_config["christmas_colours"]
             if "christmas_colours" in pls_config
@@ -245,74 +238,6 @@ def main(
             },
             pls_path,
         )
-        # set_seed(pls_config["seed"])
-        # calculate_metrics(
-        #     model=pls,
-        #     particles=particles,
-        #     model_name=pls_name,
-        #     dataset_name=type(curve_function).__name__,
-        #     experiment_data=experiment_data,
-        #     results_path=results_curve_path,
-        #     plots_path=plot_curve_path,
-        # )
-
-    # for kernel_name, kernel in zip(["k", "r"], [average_ard_kernel, pls_kernel]):
-    #     model_name = f"svgp-{kernel_name}"
-    #     svgp_model_path = os.path.join(models_path, f"{model_name}.pth")
-    #     if os.path.exists(svgp_model_path):
-    #         svgp, _ = load_svgp(
-    #             model_path=svgp_model_path,
-    #             x_induce=inducing_points.x,
-    #             mean=gpytorch.means.ConstantMean(),
-    #             kernel=deepcopy(kernel),
-    #             likelihood=gpytorch.likelihoods.GaussianLikelihood(),
-    #             learn_inducing_locations=False,
-    #         )
-    #     else:
-    #         svgp, losses = train_svgp(
-    #             model_name=model_name,
-    #             experiment_data=experiment_data,
-    #             inducing_points=inducing_points,
-    #             mean=gpytorch.means.ConstantMean(),
-    #             kernel=deepcopy(kernel),
-    #             likelihood=gpytorch.likelihoods.GaussianLikelihood(),
-    #             seed=svgp_config["seed"],
-    #             number_of_epochs=svgp_config["number_of_epochs"],
-    #             batch_size=svgp_config["batch_size"],
-    #             learning_rate_upper=svgp_config["learning_rate_upper"],
-    #             learning_rate_lower=svgp_config["learning_rate_lower"],
-    #             number_of_learning_rate_searches=svgp_config[
-    #                 "number_of_learning_rate_searches"
-    #             ],
-    #             is_fixed=True,
-    #             observation_noise=float(likelihood.noise),
-    #             models_path=os.path.join(
-    #                 models_path, f"{model_name}-kernel-iterations"
-    #             ),
-    #             plot_title=curve_function.__name__,
-    #             plot_1d_path=plot_curve_path,
-    #             # animate_1d_path=plot_curve_path,
-    #             plot_loss_path=plot_curve_path,
-    #             christmas_colours=svgp_config["christmas_colours"]
-    #             if "christmas_colours" in pls_config
-    #             else False,
-    #         )
-    #         torch.save(
-    #             {
-    #                 "model": svgp.state_dict(),
-    #                 "losses": losses,
-    #             },
-    #             os.path.join(models_path, f"{model_name}.pth"),
-    #         )
-    #     set_seed(svgp_config["seed"])
-    #     calculate_metrics(
-    #         model=svgp,
-    #         model_name=model_name,
-    #         dataset_name=type(curve_function).__name__,
-    #         experiment_data=experiment_data,
-    #         results_path=results_curve_path,
-    #         plots_path=plot_curve_path,
-    #     )
 
 
 if __name__ == "__main__":
@@ -329,13 +254,3 @@ if __name__ == "__main__":
             pls_config=loaded_config["pls"],
             svgp_config=loaded_config["svgp"],
         )
-    # concatenate_metrics(
-    #     results_path="experiments/curves/poisson_regression/outputs/results",
-    #     data_types=["train", "test"],
-    #     model_names=["pls-onb", "pls-ipb", "svgp-k", "svgp-r"],
-    #     datasets=[
-    #         type(curve_function_).__name__.lower()
-    #         for curve_function_ in CURVE_FUNCTIONS
-    #     ],
-    #     metrics=["mae", "mse", "nll"],
-    # )

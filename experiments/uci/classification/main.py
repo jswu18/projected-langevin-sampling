@@ -251,7 +251,9 @@ def main(
             )
         for kernel_name, kernel in zip(["k", "r"], [average_ard_kernel, pls_kernel]):
             for inducing_points_name, svgp_inducing_points in zip(
-                ["z", "x"], [inducing_points, experiment_data.train]
+                # ["z", "x"], [inducing_points, experiment_data.train]
+                ["z"],
+                [inducing_points],
             ):
                 model_name = f"svgp-{kernel_name}-{inducing_points_name}"
                 svgp_model_path = os.path.join(models_path, f"{model_name}.pth")
@@ -297,15 +299,15 @@ def main(
                         },
                         os.path.join(models_path, f"{model_name}.pth"),
                     )
-                    set_seed(svgp_config["seed"])
-                    calculate_metrics(
-                        model=svgp,
-                        model_name=model_name,
-                        dataset_name=dataset_name,
-                        experiment_data=experiment_data,
-                        results_path=results_path,
-                        plots_path=plots_path,
-                    )
+                set_seed(svgp_config["seed"])
+                calculate_metrics(
+                    model=svgp,
+                    model_name=model_name,
+                    dataset_name=dataset_name,
+                    experiment_data=experiment_data,
+                    results_path=results_path,
+                    plots_path=plots_path,
+                )
 
 
 if __name__ == "__main__":
@@ -333,10 +335,10 @@ if __name__ == "__main__":
                 "pls-onb",
                 "pls-ipb",
                 "svgp-k-z",
-                "svgp-k-x",
+                # "svgp-k-x",
                 "svgp-r-z",
-                "svgp-r-x",
+                # "svgp-r-x",
             ],
             datasets=list(ClassificationDatasetSchema.__members__.keys()),
-            metrics=["mae", "mse", "nll", "acc", "auc"],
+            metrics=["mae", "mse", "nll", "acc", "auc", "f1"],
         )

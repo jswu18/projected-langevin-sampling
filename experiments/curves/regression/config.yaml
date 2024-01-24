@@ -30,7 +30,7 @@ pls:
   observation_noise_upper: 1.0e+4
   observation_noise_lower: 1.0e-4
   number_of_observation_noise_searches: 25
-  early_stopper_patience: 1.0e-6
+  early_stopper_patience: 1.0e-3
 svgp:
   seed: 0
   number_of_epochs: 1000

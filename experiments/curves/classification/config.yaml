@@ -26,7 +26,7 @@ pls:
   christmas_colours: False
   metric_to_minimise: loss
   initial_particles_noise_only: True
-  early_stopper_patience: 1.0e-5
+  early_stopper_patience: 1.0e-3
 svgp:
   seed: 0
   number_of_epochs: 1000

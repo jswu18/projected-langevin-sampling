@@ -211,14 +211,6 @@ def plot_1d_pls_prediction(
             )
         else:
             raise TypeError
-    else:
-        fig, ax = plot_1d_gp_prediction(
-            fig=fig,
-            ax=ax,
-            x=experiment_data.full.x,
-            mean=predicted_samples.mean(dim=1),
-            variance=None,
-        )
     for i in range(inducing_points.x.shape[0]):
         plt.axvline(
             x=inducing_points.x[i],

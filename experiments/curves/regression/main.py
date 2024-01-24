@@ -1,7 +1,6 @@
 import argparse
 import math
 import os
-import pickle
 from copy import deepcopy
 from typing import Any, Dict
 
@@ -210,7 +209,7 @@ def main(
                 number_of_observation_noise_searches=pls_config[
                     "number_of_observation_noise_searches"
                 ],
-                plot_title=curve_function.__name__,
+                plot_title="Projected Langevin Sampling for Regression",
                 plot_particles_path=plot_curve_path,
                 animate_1d_path=plot_curve_path,
                 plot_update_magnitude_path=plot_curve_path,
@@ -272,7 +271,7 @@ def main(
                 models_path=os.path.join(
                     models_path, f"{model_name}-kernel-iterations"
                 ),
-                plot_title=curve_function.__name__,
+                plot_title=f"SVGP for Regression (kernel ${kernel_name}$)",
                 plot_1d_path=plot_curve_path,
                 animate_1d_path=plot_curve_path,
                 plot_loss_path=plot_curve_path,

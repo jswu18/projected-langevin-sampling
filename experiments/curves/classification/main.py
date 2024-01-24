@@ -1,7 +1,6 @@
 import argparse
 import math
 import os
-import pickle
 from copy import deepcopy
 from typing import Any, Dict
 
@@ -53,7 +52,7 @@ def get_experiment_data(
         y_curve=y_curve,
         seed=seed,
     )
-    y_untransformed = PLSClassification.transform(y=y_curve)
+    y_untransformed = torch.reciprocal(1 + torch.exp(torch.neg(y_curve)))
     (
         x_train,
         y_train,
@@ -230,7 +229,7 @@ def main(
                     "minimum_change_in_energy_potential"
                 ],
                 seed=pls_config["seed"],
-                plot_title=f"$p(y=sigmoid({curve_function.__name__.replace('$', '').split('=')[1]}))$",
+                plot_title="Projected Langevin Sampling for Binary Classification",
                 plot_particles_path=plot_curve_path,
                 animate_1d_path=plot_curve_path,
                 plot_update_magnitude_path=plot_curve_path,
@@ -291,7 +290,7 @@ def main(
                 models_path=os.path.join(
                     models_path, f"{model_name}-kernel-iterations"
                 ),
-                plot_title=f"$p(y=sigmoid({curve_function.__name__.replace('$', '').split('=')[1]}))$",
+                plot_title=f"SVGP for Binary Classification (kernel ${kernel_name}$)",
                 plot_1d_path=plot_curve_path,
                 animate_1d_path=plot_curve_path,
                 plot_loss_path=plot_curve_path,

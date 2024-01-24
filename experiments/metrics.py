@@ -147,6 +147,18 @@ def calculate_metrics(
                     os.path.join(results_path, _model_name, f"auc_{data.name}.csv"),
                     index_label="dataset",
                 )
+                f1 = sklearn.metrics.f1_score(
+                    y_true=data.y.detach().numpy(),
+                    y_pred=prediction.probs.round().detach().numpy(),
+                )
+                pd.DataFrame(
+                    [[f1]],
+                    columns=[_model_name],
+                    index=[dataset_name],
+                ).to_csv(
+                    os.path.join(results_path, _model_name, f"f1_{data.name}.csv"),
+                    index_label="dataset",
+                )
 
             create_directory(os.path.join(plots_path, _model_name))
             plot_true_versus_predicted(

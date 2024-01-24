@@ -113,10 +113,10 @@ def _load_subsample_data(
     subsample_indices = knn.kneighbors(
         X=x_sample,
         return_distance=False,
-    )
+    ).flatten()
     return Data(
         x=data.x[subsample_indices],
-        y=data.y[subsample_indices],
+        y=data.y[..., subsample_indices],
     )
 
 
@@ -638,6 +638,7 @@ def train_svgp(
     animate_1d_path: Optional[str] = None,
     plot_loss_path: Optional[str] = None,
     christmas_colours: bool = False,
+    load_model: bool = True,
 ) -> (svGP, List[float]):
     create_directory(models_path)
     best_nll = float("inf")
@@ -660,7 +661,7 @@ def train_svgp(
             f"svgp_{i+1}_of_{number_of_learning_rate_searches}.pth",
         )
         set_seed(seed)
-        if os.path.exists(model_iteration_path):
+        if os.path.exists(model_iteration_path) and load_model:
             model, losses = load_svgp(
                 model_path=model_iteration_path,
                 x_induce=inducing_points.x,

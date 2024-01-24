@@ -38,9 +38,7 @@ class Curve(ABC):
             generator = torch.Generator().manual_seed(seed)
         else:
             generator = None
-        probabilities = PLSClassification.transform(
-            y=y_curve,
-        )
+        probabilities = torch.reciprocal(1 + torch.exp(-y_curve))
         return torch.bernoulli(probabilities, generator=generator).type(torch.bool)
 
 
