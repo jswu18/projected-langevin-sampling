@@ -1,3 +1,4 @@
+import math
 from typing import Dict, List, Optional, Tuple, Union
 
 import gpytorch
@@ -20,8 +21,8 @@ _DATA_COLORS = {
 }
 
 _DATA_TRANSPARENCY = {
-    "train": 0.3,
-    "test": 0.3,
+    "train": 0.5,
+    "test": 0.5,
 }
 
 
@@ -69,6 +70,8 @@ def plot_1d_data(
 ) -> Tuple[plt.Figure, plt.Axes]:
     if data.name in _DATA_COLORS:
         color = _DATA_COLORS[data.name]
+    if data.name in _DATA_TRANSPARENCY:
+        alpha = _DATA_TRANSPARENCY[data.name]
     if data.y is not None:
         ax.scatter(
             data.x,
@@ -123,13 +126,14 @@ def plot_1d_experiment_data(
             experiment_data.full.x,
             experiment_data.full.y_untransformed.reshape(experiment_data.full.x.shape),
             label="latent",
-            color="tab:blue",
+            color="midnightblue",
             linestyle=(0, (3, 1, 1, 1, 1, 1)),
             linewidth=3,
-            alpha=0.5,
         )
     if experiment_data.problem_type == ProblemType.CLASSIFICATION:
         ax.set_ylim([0, 1])
+    if experiment_data.problem_type == ProblemType.POISSON_REGRESSION:
+        ax.set_ylim(bottom=0)
     ax.set_xlim([min(experiment_data.full.x), max(experiment_data.full.x)])
     if title is not None:
         ax.set_title(title)
@@ -152,7 +156,7 @@ def plot_1d_particle(
         x.reshape(-1),
         y.reshape(-1),
         color=[0.1, 0.1, 0.1],
-        alpha=0.15,
+        alpha=0.1,
         zorder=0,
         label="particle" if add_label else None,
     )
@@ -164,10 +168,10 @@ def plot_1d_particle(
 
 def plot_1d_pls_prediction(
     experiment_data: ExperimentData,
-    inducing_points: Data,
     x: torch.Tensor,
     predicted_samples: torch.Tensor,
     save_path: str,
+    y_name: Optional[str] = None,
     predicted_distribution: Optional[torch.distributions.Distribution] = None,
     title: str = None,
     is_sample_untransformed: bool = False,
@@ -211,14 +215,6 @@ def plot_1d_pls_prediction(
             )
         else:
             raise TypeError
-    for i in range(inducing_points.x.shape[0]):
-        plt.axvline(
-            x=inducing_points.x[i],
-            color="tab:blue",
-            alpha=0.2,
-            label="induce" if i == 0 else None,
-            zorder=0,
-        )
     for i in range(predicted_samples.shape[1]):
         fig, ax = plot_1d_particle(
             fig=fig,
@@ -227,6 +223,8 @@ def plot_1d_pls_prediction(
             y=predicted_samples[:, i],
             add_label=i == 0,
         )
+    if y_name is not None:
+        ax.set_ylabel(y_name)
     if title is not None:
         ax.set_title(title)
     fig.tight_layout()
@@ -238,22 +236,79 @@ def plot_1d_pls_prediction(
 
 def plot_1d_pls_prediction_histogram(
     experiment_data: ExperimentData,
+    x: torch.Tensor,
     predicted_samples: torch.Tensor,
+    untransformed_predicted_samples: torch.Tensor,
     save_path: str,
     title: str = None,
     number_of_bins: int = 50,
 ):
-    fig, ax = plt.subplots(figsize=(13, 6.5))
+    fig, ax = plt.subplots(3, 1, figsize=(9, 18))
+    fig, ax[0] = plot_1d_experiment_data(
+        fig=fig,
+        ax=ax[0],
+        experiment_data=experiment_data,
+        is_sample_untransformed=False,
+    )
+    ax[0].autoscale(enable=False)  # turn off autoscale before plotting particles
+    for i in range(predicted_samples.shape[1]):
+        fig, ax[0] = plot_1d_particle(
+            fig=fig,
+            ax=ax[0],
+            x=x,
+            y=predicted_samples[:, i],
+            add_label=i == 0,
+        )
+    fig, ax[0] = plot_1d_gp_prediction(
+        fig=fig,
+        ax=ax[0],
+        x=experiment_data.full.x,
+        mean=predicted_samples.mean(dim=1),
+        variance=None,
+    )
+    for i in range(predicted_samples.shape[1]):
+        fig, ax[1] = plot_1d_particle(
+            fig=fig,
+            ax=ax[1],
+            x=x,
+            y=untransformed_predicted_samples[:, i],
+            add_label=i == 0,
+        )
+    if title is not None:
+        ax[0].set_title(f"{title}: $f(x)^2$")
+        ax[1].set_title(f"{title}: $f(x)$")
+    ax[0].set_xlabel("$x$")
+    ax[1].set_xlabel("$x$")
+    ax[0].set_ylabel("$f(x)^2$")
+    ax[1].set_ylabel("$f(x)$")
+    ax[1].set_xlim([min(x), max(x)])
     max_train_idx = torch.argmax(experiment_data.train.y)
     max_full_idx = torch.where(
         experiment_data.full.x == experiment_data.train.x[max_train_idx]
     )[0]
-    histogram_data = predicted_samples[max_full_idx, :]
-    ax.hist(histogram_data, bins=number_of_bins)
-    ax.set_xlabel("y")
-    ax.set_ylabel("count")
+
+    ax[1].axvline(
+        x=experiment_data.train.x[max_train_idx].item(),
+        color="tab:red",
+        label="cross section",
+        linewidth=3,
+        alpha=0.75,
+    )
+
+    histogram_data = untransformed_predicted_samples[max_full_idx, :]
+    ax[2].hist(
+        histogram_data,
+        bins=number_of_bins,
+        color="tab:red",
+        alpha=0.75,
+    )
+    ax[2].set_xlabel(f"bins")
+    ax[2].set_ylabel("frequency")
     if title is not None:
-        ax.set_title(f"{title} (x={experiment_data.train.x[max_train_idx].item():.2f})")
+        ax[2].set_title(
+            f"{title} Histogram: $f(x={experiment_data.train.x[max_train_idx].item():.2f})$ cross section"
+        )
+    ax[1].legend()
     fig.tight_layout()
     fig.savefig(
         save_path,
@@ -299,14 +354,15 @@ def plot_1d_gp_prediction_and_inducing_points(
         ax=ax,
         experiment_data=experiment_data,
     )
-    for i in range(inducing_points.x.shape[0]):
-        plt.axvline(
-            x=inducing_points.x[i],
-            color="tab:blue",
-            alpha=0.2,
-            label="induce" if i == 0 else None,
-            zorder=0,
-        )
+    if inducing_points is not None:
+        for i in range(inducing_points.x.shape[0]):
+            plt.axvline(
+                x=inducing_points.x[i],
+                color="black",
+                alpha=0.2,
+                label="induce" if i == 0 else None,
+                zorder=1,
+            )
     ax.autoscale(enable=False)  # turn off autoscale before plotting gp prediction
     prediction = model.likelihood(model(experiment_data.full.x))
     if isinstance(model.likelihood, gpytorch.likelihoods.GaussianLikelihood):
@@ -325,9 +381,9 @@ def plot_1d_gp_prediction_and_inducing_points(
             zorder=0,
             color="black",
         )
-        ax.legend()
     else:
         raise NotImplementedError
+    ax.legend()
     ax.set_title(title)
     fig.tight_layout()
     fig.savefig(save_path)
@@ -419,7 +475,6 @@ def animate_1d_pls_predictions(
     step_size: float,
     number_of_epochs: int,
     experiment_data: ExperimentData,
-    inducing_points: Data,
     x: torch.Tensor,
     title: str,
     save_path: str,
@@ -462,20 +517,12 @@ def animate_1d_pls_predictions(
             color=[0.1, 0.1, 0.1]
             if not christmas_colours
             else ["green", "red", "blue"][i % 3],
-            alpha=0.15,
+            alpha=0.1,
             zorder=0,
             label="particle" if i == 0 else None,
         )[0]
         for i in range(predicted_samples.shape[-1])
     ]
-    for i in range(inducing_points.x.shape[0]):
-        plt.axvline(
-            x=inducing_points.x[i],
-            color="tab:blue",
-            alpha=0.2,
-            label="induce" if i == 0 else None,
-            zorder=0,
-        )
     plt.legend(loc="lower left")
 
     class ParticleWrapper:
@@ -492,13 +539,12 @@ def animate_1d_pls_predictions(
             self.num_updates += 1
 
     particle_wrapper = ParticleWrapper(particles=particles)
-    number_of_frames = 1 + number_of_epochs // (
-        (number_of_epochs // (animation_duration * fps)) + 1
-    )
+    epochs_per_frame = (number_of_epochs // (animation_duration * fps)) + 1
+    number_of_frames = number_of_epochs // epochs_per_frame
     progress_bar = tqdm(total=number_of_frames + 1, desc="PLS Particles GIF")
 
     def animate(iteration: int):
-        for _ in range((number_of_epochs // (animation_duration * fps)) + 1):
+        for _ in range(epochs_per_frame):
             particle_wrapper.update(
                 pls.calculate_particle_update(
                     particles=particle_wrapper.particles,
@@ -540,7 +586,6 @@ def animate_1d_pls_untransformed_predictions(
     step_size: float,
     number_of_epochs: int,
     experiment_data: ExperimentData,
-    inducing_points: Data,
     x: torch.Tensor,
     title: str,
     save_path: str,
@@ -567,20 +612,12 @@ def animate_1d_pls_untransformed_predictions(
             color=[0.1, 0.1, 0.1]
             if not christmas_colours
             else ["green", "red", "blue"][i % 3],
-            alpha=0.15,
+            alpha=0.1,
             zorder=0,
             label="particle" if i == 0 else None,
         )[0]
         for i in range(predicted_untransformed_samples.shape[-1])
     ]
-    for i in range(inducing_points.x.shape[0]):
-        plt.axvline(
-            x=inducing_points.x[i],
-            color="tab:blue",
-            alpha=0.2,
-            label="induce" if i == 0 else None,
-            zorder=0,
-        )
     plt.legend(loc="lower left")
 
     class ParticleWrapper:
@@ -645,7 +682,7 @@ def animate_1d_gp_predictions(
     mean: gpytorch.means.Mean,
     kernel: gpytorch.kernels.Kernel,
     likelihood: Union[
-        gpytorch.likelihoods.MultitaskGaussianLikelihood,
+        gpytorch.likelihoods.GaussianLikelihood,
         gpytorch.likelihoods.BernoulliLikelihood,
     ],
     seed: int,
@@ -666,6 +703,15 @@ def animate_1d_gp_predictions(
         ax=ax,
         experiment_data=experiment_data,
     )
+    if not learn_inducing_locations:
+        for i in range(inducing_points.x.shape[0]):
+            plt.axvline(
+                x=inducing_points.x[i],
+                color="black",
+                alpha=0.2,
+                label="induce" if i == 0 else None,
+                zorder=1,
+            )
     plt.xlim(experiment_data.full.x.min(), experiment_data.full.x.max())
     ax.autoscale(enable=False)  # turn off autoscale before plotting particles
 
@@ -737,15 +783,6 @@ def animate_1d_gp_predictions(
         )[0]
     else:
         raise NotImplementedError
-
-    for i in range(inducing_points.x.shape[0]):
-        plt.axvline(
-            x=inducing_points.x[i],
-            color="tab:blue",
-            alpha=0.2,
-            label="induce" if i == 0 else None,
-            zorder=0,
-        )
     plt.legend(loc="lower left")
 
     class Counter:

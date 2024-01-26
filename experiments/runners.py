@@ -1,7 +1,7 @@
 import math
 import os
 from copy import deepcopy
-from typing import List, Optional, Union
+from typing import List, Optional, Tuple, Union
 
 import gpytorch
 import numpy as np
@@ -139,7 +139,7 @@ def learn_subsample_gps(
     create_directory(data_path)
     models = []
     losses_history = {}
-    if subsample_size > len(experiment_data.train.x):
+    if subsample_size >= len(experiment_data.train.x):
         number_of_iterations = 1
         model_name = "full_exact_gp"
     else:
@@ -216,12 +216,120 @@ def learn_subsample_gps(
     return models
 
 
-def train_pls(
+def plot_pls_1d_particles(
+    pls: PLSBase,
+    particles: torch.Tensor,
+    particle_name: str,
+    experiment_data: ExperimentData,
+    inducing_points: Data,
+    plot_particles_path: str,
+    plot_title: str = None,
+) -> None:
+    create_directory(plot_particles_path)
+    predicted_distribution = pls.predict(
+        x=experiment_data.full.x,
+        particles=particles,
+    )
+    predicted_samples = pls.predict_samples(
+        x=experiment_data.full.x,
+        particles=particles,
+    ).detach()
+    plot_1d_pls_prediction(
+        experiment_data=experiment_data,
+        x=experiment_data.full.x,
+        predicted_samples=predicted_samples,
+        predicted_distribution=predicted_distribution,
+        title=f"{plot_title}" if plot_title is not None else None,
+        save_path=os.path.join(
+            plot_particles_path,
+            f"particles-{particle_name}.png",
+        ),
+    )
+    if experiment_data.full.y_untransformed is not None:
+        untransformed_predicted_samples = pls.predict_untransformed_samples(
+            x=experiment_data.full.x,
+            particles=particles,
+        ).detach()
+        plot_1d_pls_prediction(
+            experiment_data=experiment_data,
+            x=experiment_data.full.x,
+            predicted_samples=untransformed_predicted_samples,
+            y_name="$f(x)$",
+            title=f"{plot_title}: $f(x)$" if plot_title is not None else None,
+            save_path=os.path.join(
+                plot_particles_path,
+                f"untransformed-particles-{particle_name}.png",
+            ),
+            is_sample_untransformed=True,
+        )
+        plot_1d_pls_prediction_histogram(
+            experiment_data=experiment_data,
+            x=experiment_data.full.x,
+            predicted_samples=predicted_samples,
+            untransformed_predicted_samples=untransformed_predicted_samples,
+            title=f"{plot_title}" if plot_title is not None else None,
+            save_path=os.path.join(
+                plot_particles_path,
+                f"particles-histogram-{particle_name}.png",
+            ),
+        )
+
+
+def animate_pls_1d_particles(
     pls: PLSBase,
     number_of_particles: int,
     particle_name: str,
     experiment_data: ExperimentData,
-    inducing_points: Data,
+    seed: int,
+    best_lr: float,
+    number_of_epochs: int,
+    animate_1d_path: str,
+    plot_title: str = None,
+    animate_1d_untransformed_path: str = None,
+    christmas_colours: bool = False,
+    initial_particles_noise_only: bool = False,
+):
+    if best_lr is None:
+        return
+    animate_1d_pls_predictions(
+        pls=pls,
+        seed=seed,
+        number_of_particles=number_of_particles,
+        initial_particles_noise_only=initial_particles_noise_only,
+        step_size=best_lr,
+        number_of_epochs=number_of_epochs,
+        experiment_data=experiment_data,
+        x=experiment_data.full.x,
+        title=plot_title,
+        save_path=os.path.join(
+            animate_1d_path,
+            f"{particle_name}.gif",
+        ),
+        christmas_colours=christmas_colours,
+    )
+    if animate_1d_untransformed_path is not None:
+        animate_1d_pls_untransformed_predictions(
+            pls=pls,
+            seed=seed,
+            number_of_particles=number_of_particles,
+            initial_particles_noise_only=initial_particles_noise_only,
+            step_size=best_lr,
+            number_of_epochs=number_of_epochs,
+            experiment_data=experiment_data,
+            x=experiment_data.full.x,
+            title=plot_title,
+            save_path=os.path.join(
+                animate_1d_path,
+                f"untransformed-{particle_name}.gif",
+            ),
+            christmas_colours=christmas_colours,
+        )
+
+
+def train_pls(
+    pls: PLSBase,
+    particle_name: str,
+    experiment_data: ExperimentData,
     simulation_duration: float,
     maximum_number_of_steps: int,
     early_stopper_patience: float,
@@ -229,64 +337,14 @@ def train_pls(
     step_size_upper: float,
     minimum_change_in_energy_potential: float,
     seed: int,
+    particles: torch.Tensor,
     observation_noise_upper: float = 0,
     observation_noise_lower: float = 0,
     number_of_observation_noise_searches: int = 0,
     plot_title: str = None,
-    plot_particles_path: str = None,
-    animate_1d_path: str = None,
-    animate_1d_untransformed_path: str = None,
-    plot_update_magnitude_path: str = None,
-    christmas_colours: bool = False,
+    plot_energy_potential_path: str = None,
     metric_to_minimise: str = "nll",
-    initial_particles_noise_only: bool = False,
-) -> torch.Tensor:
-    particles_out = pls.initialise_particles(
-        number_of_particles=number_of_particles,
-        seed=seed,
-        noise_only=initial_particles_noise_only,
-    )
-    if plot_particles_path is not None:
-        create_directory(plot_particles_path)
-        predicted_distribution = pls.predict(
-            x=experiment_data.full.x,
-            particles=particles_out,
-        )
-        plot_1d_pls_prediction(
-            experiment_data=experiment_data,
-            inducing_points=inducing_points,
-            x=experiment_data.full.x,
-            predicted_samples=pls.predict_samples(
-                x=experiment_data.full.x,
-                particles=particles_out,
-            ).detach(),
-            predicted_distribution=predicted_distribution,
-            title=f"{plot_title} (initial particles)"
-            if plot_title is not None
-            else None,
-            save_path=os.path.join(
-                plot_particles_path,
-                f"particles-initial-{particle_name}.png",
-            ),
-        )
-        if experiment_data.full.y_untransformed is not None:
-            plot_1d_pls_prediction(
-                experiment_data=experiment_data,
-                inducing_points=inducing_points,
-                x=experiment_data.full.x,
-                predicted_samples=pls.predict_untransformed_samples(
-                    x=experiment_data.full.x,
-                    particles=particles_out,
-                ).detach(),
-                title=f"{plot_title} (initial untransformed particles)"
-                if plot_title is not None
-                else None,
-                save_path=os.path.join(
-                    plot_particles_path,
-                    f"untransformed-particles-initial-{particle_name}.png",
-                ),
-                is_sample_untransformed=True,
-            )
+) -> Tuple[torch.Tensor, float, int]:
     best_energy_potential, best_mae, best_mse, best_nll = (
         float("inf"),
         float("inf"),
@@ -300,6 +358,7 @@ def train_pls(
         np.log10(simulation_duration / maximum_number_of_steps),
         number_of_step_searches,
     )
+    particles_out = particles.detach().clone()
     for i, step_size in enumerate(
         tqdm(
             step_sizes,
@@ -307,30 +366,25 @@ def train_pls(
         )
     ):
         number_of_epochs = int(simulation_duration / step_size)
-        particles = pls.initialise_particles(
-            number_of_particles=number_of_particles,
-            seed=seed,
-            noise_only=initial_particles_noise_only,
-        )
+        particles_i = particles.detach().clone()
         energy_potentials = []
         early_stopper = EarlyStopper(patience=early_stopper_patience)
         set_seed(seed)
-        prev_energy_potential = None
         for _ in range(number_of_epochs):
             particle_update = pls.calculate_particle_update(
-                particles=particles,
+                particles=particles_i,
                 step_size=step_size,
             )
-            particles += particle_update
-            energy_potential = pls.calculate_energy_potential(particles=particles)
+            particles_i += particle_update
+            energy_potential = pls.calculate_energy_potential(particles=particles_i)
             if early_stopper.should_stop(loss=energy_potential, step_size=step_size):
                 break
             energy_potentials.append(energy_potential)
-        if energy_potentials and np.isfinite(particles).all():
+        if energy_potentials and np.isfinite(particles_i).all():
             energy_potentials_history[step_size] = energy_potentials
             prediction = pls.predict(
                 x=experiment_data.train.x,
-                particles=particles,
+                particles=particles_i,
             )
             nll = calculate_nll(
                 prediction=prediction,
@@ -362,7 +416,7 @@ def train_pls(
                     step_size,
                 )
                 best_energy_potential = energy_potentials[-1]
-                particles_out = deepcopy(particles.detach())
+                particles_out = deepcopy(particles_i.detach())
                 best_lr = step_size
             if (
                 i > 0
@@ -375,7 +429,6 @@ def train_pls(
                 < minimum_change_in_energy_potential
             ):
                 break
-    particles = particles_out
     if number_of_observation_noise_searches:
         pls.observation_noise = pls_observation_noise_search(
             data=experiment_data.train,
@@ -386,110 +439,19 @@ def train_pls(
             number_of_searches=number_of_observation_noise_searches,
             y_std=experiment_data.y_std,
         )
-    if plot_particles_path is not None:
-        create_directory(plot_particles_path)
-        predicted_distribution = pls.predict(
-            x=experiment_data.full.x,
-            particles=particles_out,
-        )
-        plot_1d_pls_prediction(
-            experiment_data=experiment_data,
-            inducing_points=inducing_points,
-            x=experiment_data.full.x,
-            predicted_samples=pls.predict_samples(
-                x=experiment_data.full.x,
-                particles=particles,
-            ).detach(),
-            predicted_distribution=predicted_distribution,
-            title=f"{plot_title} (learned particles)"
-            if plot_title is not None
-            else None,
-            save_path=os.path.join(
-                plot_particles_path,
-                f"particles-learned-{particle_name}.png",
-            ),
-        )
-        if experiment_data.full.y_untransformed is not None:
-            plot_1d_pls_prediction(
-                experiment_data=experiment_data,
-                inducing_points=inducing_points,
-                x=experiment_data.full.x,
-                predicted_samples=pls.predict_untransformed_samples(
-                    x=experiment_data.full.x,
-                    particles=particles,
-                ).detach(),
-                title=f"{plot_title} (learned untransformed particles)"
-                if plot_title is not None
-                else None,
-                save_path=os.path.join(
-                    plot_particles_path,
-                    f"untransformed-particles-learned-{particle_name}.png",
-                ),
-                is_sample_untransformed=True,
-            )
-            plot_1d_pls_prediction_histogram(
-                experiment_data=experiment_data,
-                predicted_samples=pls.predict_untransformed_samples(
-                    x=experiment_data.full.x,
-                    particles=particles,
-                ).detach(),
-                title=f"{plot_title} (learned untransformed particles histogram)"
-                if plot_title is not None
-                else None,
-                save_path=os.path.join(
-                    plot_particles_path,
-                    f"particles-learned-histogram-{particle_name}.png",
-                ),
-            )
-    if energy_potentials_history and plot_update_magnitude_path is not None:
-        create_directory(plot_update_magnitude_path)
+    if energy_potentials_history and plot_energy_potential_path is not None:
+        create_directory(plot_energy_potential_path)
         plot_energy_potentials(
             energy_potentials_history=energy_potentials_history,
             title=f"{plot_title} (energy potentials)"
             if plot_title is not None
             else None,
             save_path=os.path.join(
-                plot_update_magnitude_path,
+                plot_energy_potential_path,
                 f"energy-potential-{particle_name}.png",
             ),
         )
-    if best_lr and animate_1d_path is not None:
-        animate_1d_pls_predictions(
-            pls=pls,
-            seed=seed,
-            number_of_particles=number_of_particles,
-            initial_particles_noise_only=initial_particles_noise_only,
-            step_size=best_lr,
-            number_of_epochs=int(simulation_duration / best_lr),
-            experiment_data=experiment_data,
-            inducing_points=inducing_points,
-            x=experiment_data.full.x,
-            title=plot_title,
-            save_path=os.path.join(
-                animate_1d_path,
-                f"{particle_name}.gif",
-            ),
-            christmas_colours=christmas_colours,
-        )
-    if best_lr and animate_1d_untransformed_path is not None:
-        animate_1d_pls_untransformed_predictions(
-            pls=pls,
-            seed=seed,
-            number_of_particles=number_of_particles,
-            initial_particles_noise_only=initial_particles_noise_only,
-            step_size=best_lr,
-            number_of_epochs=int(simulation_duration / best_lr),
-            experiment_data=experiment_data,
-            inducing_points=inducing_points,
-            x=experiment_data.full.x,
-            title=plot_title,
-            save_path=os.path.join(
-                animate_1d_path,
-                f"untransformed-{particle_name}.gif",
-            ),
-            christmas_colours=christmas_colours,
-        )
-    return particles
+    return particles_out, best_lr, len(energy_potentials_history[best_lr])
 
 
 def pls_observation_noise_search(
@@ -555,6 +517,7 @@ def _train_svgp(
     learning_rate: float,
     learn_inducing_locations: bool,
     learn_kernel_parameters: bool,
+    early_stopper_patience: float,
     likelihood_noise: Optional[float] = None,
 ) -> (ExactGP, List[float]):
     set_seed(seed)
@@ -565,6 +528,7 @@ def _train_svgp(
         likelihood=likelihood,
         learn_inducing_locations=learn_inducing_locations,
     )
+    early_stopper = EarlyStopper(patience=early_stopper_patience)
     all_params = set(model.parameters())
     if not learn_kernel_parameters:
         if isinstance(model.kernel, PLSKernel):
@@ -593,19 +557,20 @@ def _train_svgp(
 
     epochs_iter = tqdm(
         range(number_of_epochs),
-        desc=f"svGP Epoch ({learn_kernel_parameters=}, {learn_inducing_locations=})",
+        desc=f"svGP Epoch ({learn_kernel_parameters=}, {learn_inducing_locations=}, {learning_rate=})",
     )
     losses = []
     for _ in epochs_iter:
         try:
             for x_batch, y_batch in train_loader:
                 optimizer.zero_grad()
-                output = model(x_batch)
-                loss = -mll(output, y_batch)
+                loss = -mll(model(x_batch), y_batch)
                 loss.backward()
                 optimizer.step()
-            output = model(train_data.x)
-            losses.append(-mll(output, train_data.y).item())
+            loss = -mll(model(train_data.x), train_data.y).item()
+            if early_stopper.should_stop(loss=loss, step_size=learning_rate):
+                break
+            losses.append(loss)
         except ValueError as e:
             print(e)
             print("Continuing...")
@@ -632,18 +597,13 @@ def train_svgp(
     number_of_learning_rate_searches: int,
     is_fixed: bool,
     models_path: str,
+    early_stopper_patience: float,
     observation_noise: Optional[float] = None,
     plot_title: Optional[str] = None,
-    plot_1d_path: Optional[str] = None,
-    animate_1d_path: Optional[str] = None,
     plot_loss_path: Optional[str] = None,
-    christmas_colours: bool = False,
     load_model: bool = True,
-) -> (svGP, List[float]):
+) -> Tuple[svGP, List[float], float]:
     create_directory(models_path)
-    best_nll = float("inf")
-    best_mse = float("inf")
-    best_mae = float("inf")
     best_loss = float("inf")
     losses_history = {}
     model_out = None
@@ -662,7 +622,7 @@ def train_svgp(
         )
         set_seed(seed)
         if os.path.exists(model_iteration_path) and load_model:
-            model, losses = load_svgp(
+            model, losses, _ = load_svgp(
                 model_path=model_iteration_path,
                 x_induce=inducing_points.x,
                 mean=deepcopy(mean),
@@ -683,6 +643,7 @@ def train_svgp(
                 learning_rate=learning_rate,
                 learn_inducing_locations=False if is_fixed else True,
                 learn_kernel_parameters=False if is_fixed else True,
+                early_stopper_patience=early_stopper_patience,
                 likelihood_noise=observation_noise,
             )
             if model is None:
@@ -691,47 +652,17 @@ def train_svgp(
                 {
                     "model": model.state_dict(),
                     "losses": losses,
+                    "best_learning_rate": best_learning_rate,
                 },
                 model_iteration_path,
             )
         losses_history[learning_rate] = losses
-        set_seed(seed)
-        prediction = model.likelihood(model(experiment_data.train.x))
-        nll = calculate_nll(
-            prediction=prediction,
-            y=experiment_data.train.y,
-        )
-        mae = calculate_mae(
-            prediction=prediction,
-            y=experiment_data.train.y,
-        )
-        mse = calculate_mse(
-            prediction=prediction,
-            y=experiment_data.train.y,
-        )
         loss = losses[-1]
         if loss < best_loss:
-            best_nll = nll
-            best_mae = mae
-            best_mse = mse
             best_loss = loss
             best_learning_rate = learning_rate
             model_out = model
             losses_out = losses
-    if plot_1d_path is not None:
-        create_directory(plot_1d_path)
-        plot_1d_gp_prediction_and_inducing_points(
-            model=model_out,
-            experiment_data=experiment_data,
-            inducing_points=inducing_points
-            if is_fixed
-            else None,  # induce data can't be visualised if it's learned by the model
-            title=f"{plot_title} ({model_name})" if plot_title is not None else None,
-            save_path=os.path.join(
-                plot_1d_path,
-                f"{model_name}.png",
-            ),
-        )
     if plot_loss_path is not None:
         create_directory(plot_loss_path)
         plot_losses(
@@ -744,24 +675,4 @@ def train_svgp(
                 f"{model_name}-losses.png",
             ),
         )
-    if animate_1d_path is not None:
-        animate_1d_gp_predictions(
-            experiment_data=experiment_data,
-            inducing_points=inducing_points,
-            mean=deepcopy(mean),
-            kernel=deepcopy(kernel),
-            likelihood=deepcopy(likelihood),
-            seed=seed,
-            number_of_epochs=number_of_epochs,
-            batch_size=batch_size,
-            learning_rate=best_learning_rate,
-            title=f"{plot_title} ({model_name})" if plot_title is not None else None,
-            save_path=os.path.join(
-                plot_1d_path,
-                f"{model_name}.gif",
-            ),
-            learn_inducing_locations=False if is_fixed else True,
-            learn_kernel_parameters=False if is_fixed else True,
-            christmas_colours=christmas_colours,
-        )
-    return model_out, losses_out
+    return model_out, losses_out, best_learning_rate

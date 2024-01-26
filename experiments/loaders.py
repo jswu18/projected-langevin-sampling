@@ -13,12 +13,18 @@ from src.projected_langevin_sampling.base.base import PLSBase
 def load_pls(
     pls: PLSBase,
     model_path: str,
-) -> (PLSRegressionONB, torch.Tensor):
+):
     model_config = torch.load(model_path)
     particles = model_config["particles"]
     pls.observation_noise = model_config["observation_noise"]
     print(f"Loaded particles and observation_noise from {model_path=}.")
-    return pls, particles
+    best_lr = None
+    number_of_epochs = None
+    if "best_lr" in model_config:
+        best_lr = model_config["best_lr"]
+    if "number_of_epochs" in model_config:
+        number_of_epochs = model_config["number_of_epochs"]
+    return pls, particles, best_lr, number_of_epochs
 
 
 def load_svgp(
@@ -31,7 +37,7 @@ def load_svgp(
         gpytorch.likelihoods.BernoulliLikelihood,
     ],
     learn_inducing_locations: bool,
-) -> Tuple[svGP, torch.Tensor]:
+) -> Tuple[svGP, torch.Tensor, float]:
     model = svGP(
         x_induce=x_induce,
         mean=mean,
@@ -42,7 +48,10 @@ def load_svgp(
     loaded_states = torch.load(model_path)
     model.load_state_dict(loaded_states["model"])
     print(f"Loaded svGP model from {model_path=}.")
-    return model, loaded_states["losses"]
+    best_learning_rate = None
+    if "best_learning_rate" in loaded_states:
+        best_learning_rate = loaded_states["best_learning_rate"]
+    return model, loaded_states["losses"], best_learning_rate
 
 
 def load_ard_exact_gp_model(

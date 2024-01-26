@@ -326,14 +326,14 @@ class SpamDataset(Dataset):
 
 
 class RegressionDatasetSchema(str, enum.Enum):
-    # boston = "boston"
-    # concrete = "concrete"
-    # energy_cooling = "energy_cooling"
-    # energy_heating = "energy_heating"
+    boston = "boston"
+    concrete = "concrete"
+    energy_cooling = "energy_cooling"
+    energy_heating = "energy_heating"
     kin8nm = "kin8nm"
     power = "power"
-    # wine = "wine"
-    # yacht = "yacht"
+    wine = "wine"
+    yacht = "yacht"
 
 
 class ClassificationDatasetSchema(str, enum.Enum):
@@ -343,23 +343,21 @@ class ClassificationDatasetSchema(str, enum.Enum):
     heart = "heart"
     ionosphere = "ionosphere"
     rice = "rice"
-    # spam = "spam"
 
 
 DATASET_SCHEMA_MAPPING = {
-    # RegressionDatasetSchema.boston: BostonDataset,
-    # RegressionDatasetSchema.concrete: ConcreteDataset,
-    # RegressionDatasetSchema.energy_cooling: EnergyCoolingDataset,
-    # RegressionDatasetSchema.energy_heating: EnergyHeatingDataset,
+    RegressionDatasetSchema.boston: BostonDataset,
+    RegressionDatasetSchema.concrete: ConcreteDataset,
+    RegressionDatasetSchema.energy_cooling: EnergyCoolingDataset,
+    RegressionDatasetSchema.energy_heating: EnergyHeatingDataset,
     RegressionDatasetSchema.kin8nm: Kin8nmDataset,
     RegressionDatasetSchema.power: PowerDataset,
-    # RegressionDatasetSchema.wine: WineDataset,
-    # RegressionDatasetSchema.yacht: YachtDataset,
+    RegressionDatasetSchema.wine: WineDataset,
+    RegressionDatasetSchema.yacht: YachtDataset,
     ClassificationDatasetSchema.breast: BreastDataset,
     ClassificationDatasetSchema.crab: CrabDataset,
     ClassificationDatasetSchema.diabetes: DiabetesDataset,
     ClassificationDatasetSchema.heart: HeartDataset,
     ClassificationDatasetSchema.ionosphere: IonosphereDataset,
     ClassificationDatasetSchema.rice: RiceDataset,
-    # ClassificationDatasetSchema.spam: SpamDataset,
 }

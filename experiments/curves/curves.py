@@ -2,10 +2,6 @@ from abc import ABC, abstractmethod
 
 import torch
 
-from src.projected_langevin_sampling.base.transform.classification import (
-    PLSClassification,
-)
-
 
 class Curve(ABC):
     seed: int

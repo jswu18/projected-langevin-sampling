@@ -14,10 +14,16 @@ from experiments.curves.curves import CURVE_FUNCTIONS, Curve
 from experiments.data import Data, ExperimentData, ProblemType
 from experiments.loaders import load_pls, load_svgp
 from experiments.metrics import calculate_metrics
-from experiments.plotters import plot_1d_experiment_data
+from experiments.plotters import (
+    animate_1d_gp_predictions,
+    plot_1d_experiment_data,
+    plot_1d_gp_prediction_and_inducing_points,
+)
 from experiments.preprocess import split_regression_data_intervals
 from experiments.runners import (
+    animate_pls_1d_particles,
     learn_subsample_gps,
+    plot_pls_1d_particles,
     select_inducing_points,
     train_pls,
     train_svgp,
@@ -207,20 +213,35 @@ def main(
             jitter=pls_config["jitter"],
         ),
     }
+    plot_title = "PLS for Binary Classification"
     for pls_name, pls in pls_dict.items():
         pls_path = os.path.join(models_path, f"{pls_name}.pth")
+        set_seed(pls_config["seed"])
+        particles = pls.initialise_particles(
+            number_of_particles=pls_config["number_of_particles"],
+            seed=pls_config["seed"],
+            noise_only=pls_config["initial_particles_noise_only"],
+        )
+        plot_pls_1d_particles(
+            pls=pls,
+            particles=particles,
+            particle_name=f"{pls_name}-initial",
+            experiment_data=experiment_data,
+            inducing_points=inducing_points,
+            plot_particles_path=plot_curve_path,
+            plot_title=plot_title,
+        )
         if os.path.exists(pls_path):
-            pls, particles = load_pls(
+            pls, particles, best_lr, number_of_epochs = load_pls(
                 pls=pls,
                 model_path=pls_path,
             )
         else:
-            particles = train_pls(
+            particles, best_lr, number_of_epochs = train_pls(
                 pls=pls,
-                number_of_particles=pls_config["number_of_particles"],
+                particles=particles,
                 particle_name=pls_name,
                 experiment_data=experiment_data,
-                inducing_points=inducing_points,
                 simulation_duration=pls_config["simulation_duration"],
                 step_size_upper=pls_config["step_size_upper"],
                 number_of_step_searches=pls_config["number_of_step_searches"],
@@ -229,24 +250,45 @@ def main(
                     "minimum_change_in_energy_potential"
                 ],
                 seed=pls_config["seed"],
-                plot_title="Projected Langevin Sampling for Binary Classification",
-                plot_particles_path=plot_curve_path,
-                animate_1d_path=plot_curve_path,
-                plot_update_magnitude_path=plot_curve_path,
-                christmas_colours=pls_config["christmas_colours"]
-                if "christmas_colours" in pls_config
-                else False,
+                plot_title=plot_title,
+                plot_energy_potential_path=plot_curve_path,
                 metric_to_minimise=pls_config["metric_to_minimise"],
-                initial_particles_noise_only=pls_config["initial_particles_noise_only"],
                 early_stopper_patience=pls_config["early_stopper_patience"],
             )
             torch.save(
                 {
                     "particles": particles,
                     "observation_noise": pls.observation_noise,
+                    "best_lr": best_lr,
+                    "number_of_epochs": number_of_epochs,
                 },
                 pls_path,
             )
+        plot_pls_1d_particles(
+            pls=pls,
+            particles=particles,
+            particle_name=f"{pls_name}-learned",
+            experiment_data=experiment_data,
+            inducing_points=inducing_points,
+            plot_particles_path=plot_curve_path,
+            plot_title=plot_title,
+        )
+        animate_pls_1d_particles(
+            pls=pls,
+            number_of_particles=pls_config["number_of_particles"],
+            particle_name=pls_name,
+            experiment_data=experiment_data,
+            seed=pls_config["seed"],
+            best_lr=best_lr,
+            number_of_epochs=number_of_epochs,
+            animate_1d_path=plot_curve_path,
+            plot_title=plot_title,
+            animate_1d_untransformed_path=None,
+            christmas_colours=pls_config["christmas_colours"]
+            if "christmas_colours" in pls_config
+            else False,
+            initial_particles_noise_only=pls_config["initial_particles_noise_only"],
+        )
         set_seed(pls_config["seed"])
         calculate_metrics(
             model=pls,
@@ -257,11 +299,14 @@ def main(
             results_path=results_curve_path,
             plots_path=plot_curve_path,
         )
+
+    plot_title = "SVGP for Binary Classification"
+    svgp_likelihood = gpytorch.likelihoods.BernoulliLikelihood()
     for kernel_name, kernel in zip(["k", "r"], [average_ard_kernel, pls_kernel]):
         model_name = f"svgp-{kernel_name}"
         svgp_model_path = os.path.join(models_path, f"{model_name}.pth")
         if os.path.exists(svgp_model_path):
-            svgp, _ = load_svgp(
+            svgp, losses, best_learning_rate = load_svgp(
                 model_path=svgp_model_path,
                 x_induce=inducing_points.x,
                 mean=gpytorch.means.ConstantMean(),
@@ -270,13 +315,13 @@ def main(
                 learn_inducing_locations=False,
             )
         else:
-            svgp, losses = train_svgp(
+            svgp, losses, best_learning_rate = train_svgp(
                 model_name=model_name,
                 experiment_data=experiment_data,
                 inducing_points=inducing_points,
                 mean=gpytorch.means.ConstantMean(),
                 kernel=deepcopy(kernel),
-                likelihood=gpytorch.likelihoods.BernoulliLikelihood(),
+                likelihood=svgp_likelihood,
                 seed=svgp_config["seed"],
                 number_of_epochs=svgp_config["number_of_epochs"],
                 batch_size=svgp_config["batch_size"],
@@ -287,24 +332,52 @@ def main(
                 ],
                 is_fixed=True,
                 observation_noise=None,
+                early_stopper_patience=svgp_config["early_stopper_patience"],
                 models_path=os.path.join(
                     models_path, f"{model_name}-kernel-iterations"
                 ),
-                plot_title=f"SVGP for Binary Classification (kernel ${kernel_name}$)",
-                plot_1d_path=plot_curve_path,
-                animate_1d_path=plot_curve_path,
+                plot_title=plot_title,
                 plot_loss_path=plot_curve_path,
-                christmas_colours=svgp_config["christmas_colours"]
-                if "christmas_colours" in pls_config
-                else False,
             )
             torch.save(
                 {
                     "model": svgp.state_dict(),
                     "losses": losses,
+                    "best_learning_rate": best_learning_rate,
                 },
                 svgp_model_path,
             )
+        plot_1d_gp_prediction_and_inducing_points(
+            model=svgp,
+            experiment_data=experiment_data,
+            inducing_points=inducing_points,
+            title=plot_title,
+            save_path=os.path.join(
+                plot_curve_path,
+                f"{model_name}.png",
+            ),
+        )
+        animate_1d_gp_predictions(
+            experiment_data=experiment_data,
+            inducing_points=inducing_points,
+            mean=deepcopy(svgp.mean),
+            kernel=deepcopy(svgp.kernel),
+            likelihood=deepcopy(svgp_likelihood),
+            seed=svgp_config["seed"],
+            number_of_epochs=len(losses),
+            batch_size=svgp_config["batch_size"],
+            learning_rate=best_learning_rate,
+            title=plot_title,
+            save_path=os.path.join(
+                plot_curve_path,
+                f"{model_name}.gif",
+            ),
+            learn_inducing_locations=False,
+            learn_kernel_parameters=False,
+            christmas_colours=svgp_config["christmas_colours"]
+            if "christmas_colours" in pls_config
+            else False,
+        )
         set_seed(svgp_config["seed"])
         calculate_metrics(
             model=svgp,

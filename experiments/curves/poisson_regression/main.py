@@ -8,21 +8,18 @@ import matplotlib.pyplot as plt
 import torch
 import yaml
 
-from experiments.constructors import (
-    construct_average_ard_kernel,
-    construct_average_gaussian_likelihood,
-)
+from experiments.constructors import construct_average_ard_kernel
 from experiments.curves.curves import CURVE_FUNCTIONS, Curve
 from experiments.data import Data, ExperimentData, ProblemType
-from experiments.loaders import load_pls, load_svgp
-from experiments.metrics import calculate_metrics, concatenate_metrics
+from experiments.loaders import load_pls
 from experiments.plotters import plot_1d_experiment_data
 from experiments.preprocess import split_regression_data_intervals
 from experiments.runners import (
+    animate_pls_1d_particles,
     learn_subsample_gps,
+    plot_pls_1d_particles,
     select_inducing_points,
     train_pls,
-    train_svgp,
 )
 from experiments.utils import create_directory
 from src.inducing_point_selectors import ConditionalVarianceInducingPointSelector
@@ -34,7 +31,7 @@ from src.projected_langevin_sampling import (
 from src.utils import set_seed
 
 parser = argparse.ArgumentParser(
-    description="Main script for toy regression curves experiments."
+    description="Main script for toy Poisson regression experiments."
 )
 parser.add_argument("--config_path", type=str)
 
@@ -70,7 +67,7 @@ def get_experiment_data(
     )
     experiment_data = ExperimentData(
         name=type(curve_function).__name__.lower(),
-        problem_type=ProblemType.REGRESSION,
+        problem_type=ProblemType.POISSON_REGRESSION,
         full=Data(
             x=x,
             y=y.type(torch.int),
@@ -121,7 +118,6 @@ def main(
     kernel_config: Dict[str, Any],
     inducing_points_config: Dict[str, Any],
     pls_config: Dict[str, Any],
-    svgp_config: Dict[str, Any],
 ) -> None:
     experiment_data = get_experiment_data(
         curve_function=curve_function,
@@ -136,7 +132,6 @@ def main(
         curve_name=type(curve_function).__name__.lower(),
     )
     plot_curve_path = f"experiments/curves/poisson_regression/outputs/plots/{type(curve_function).__name__.lower()}"
-    results_curve_path = f"experiments/curves/poisson_regression/outputs/results/{type(curve_function).__name__.lower()}"
     models_path = f"experiments/curves/poisson_regression/outputs/models/{type(curve_function).__name__.lower()}"
     data_path = f"experiments/curves/poisson_regression/outputs/data/{type(curve_function).__name__.lower()}"
     subsample_gp_model_path = os.path.join(models_path, "subsample_gp")
@@ -160,9 +155,6 @@ def main(
     )
     average_ard_kernel = construct_average_ard_kernel(
         kernels=[model.kernel for model in subsample_gp_models]
-    )
-    likelihood = construct_average_gaussian_likelihood(
-        likelihoods=[model.likelihood for model in subsample_gp_models]
     )
     inducing_points = select_inducing_points(
         seed=inducing_points_config["seed"],
@@ -199,44 +191,86 @@ def main(
             jitter=pls_config["jitter"],
         ),
     }
+    plot_title = "PLS for Poisson Regression"
     for pls_name, pls in pls_dict.items():
         pls_path = os.path.join(models_path, f"{pls_name}.pth")
-        particles = train_pls(
+        set_seed(pls_config["seed"])
+        particles = pls.initialise_particles(
+            number_of_particles=pls_config["number_of_particles"],
+            seed=pls_config["seed"],
+            noise_only=pls_config["initial_particles_noise_only"],
+        )
+        plot_pls_1d_particles(
+            pls=pls,
+            particles=particles,
+            particle_name=f"{pls_name}-initial",
+            experiment_data=experiment_data,
+            inducing_points=inducing_points,
+            plot_particles_path=plot_curve_path,
+            plot_title=plot_title,
+        )
+        if os.path.exists(pls_path):
+            pls, particles, best_lr, number_of_epochs = load_pls(
+                pls=pls,
+                model_path=pls_path,
+            )
+        else:
+            particles, best_lr, number_of_epochs = train_pls(
+                pls=pls,
+                particles=particles,
+                particle_name=pls_name,
+                experiment_data=experiment_data,
+                simulation_duration=pls_config["simulation_duration"],
+                step_size_upper=pls_config["step_size_upper"],
+                number_of_step_searches=pls_config["number_of_step_searches"],
+                maximum_number_of_steps=pls_config["maximum_number_of_steps"],
+                minimum_change_in_energy_potential=pls_config[
+                    "minimum_change_in_energy_potential"
+                ],
+                seed=pls_config["seed"],
+                observation_noise_upper=pls_config["observation_noise_upper"],
+                observation_noise_lower=pls_config["observation_noise_lower"],
+                number_of_observation_noise_searches=pls_config[
+                    "number_of_observation_noise_searches"
+                ],
+                plot_title=plot_title,
+                plot_energy_potential_path=plot_curve_path,
+                metric_to_minimise=pls_config["metric_to_minimise"],
+                early_stopper_patience=pls_config["early_stopper_patience"],
+            )
+            torch.save(
+                {
+                    "particles": particles,
+                    "observation_noise": pls.observation_noise,
+                    "best_lr": best_lr,
+                    "number_of_epochs": number_of_epochs,
+                },
+                pls_path,
+            )
+        plot_pls_1d_particles(
+            pls=pls,
+            particles=particles,
+            particle_name=f"{pls_name}-learned",
+            experiment_data=experiment_data,
+            inducing_points=inducing_points,
+            plot_particles_path=plot_curve_path,
+            plot_title=plot_title,
+        )
+        animate_pls_1d_particles(
             pls=pls,
             number_of_particles=pls_config["number_of_particles"],
             particle_name=pls_name,
             experiment_data=experiment_data,
-            inducing_points=inducing_points,
-            simulation_duration=pls_config["simulation_duration"],
-            step_size_upper=pls_config["step_size_upper"],
-            number_of_step_searches=pls_config["number_of_step_searches"],
-            maximum_number_of_steps=pls_config["maximum_number_of_steps"],
-            minimum_change_in_energy_potential=pls_config[
-                "minimum_change_in_energy_potential"
-            ],
             seed=pls_config["seed"],
-            observation_noise_upper=pls_config["observation_noise_upper"],
-            observation_noise_lower=pls_config["observation_noise_lower"],
-            number_of_observation_noise_searches=pls_config[
-                "number_of_observation_noise_searches"
-            ],
-            plot_title="Projected Langevin Sampling for Poisson Regression",
-            plot_particles_path=plot_curve_path,
+            best_lr=best_lr,
+            number_of_epochs=number_of_epochs,
             animate_1d_path=plot_curve_path,
-            plot_update_magnitude_path=plot_curve_path,
+            plot_title=plot_title,
+            animate_1d_untransformed_path=None,
             christmas_colours=pls_config["christmas_colours"]
             if "christmas_colours" in pls_config
             else False,
-            metric_to_minimise=pls_config["metric_to_minimise"],
             initial_particles_noise_only=pls_config["initial_particles_noise_only"],
-            early_stopper_patience=pls_config["early_stopper_patience"],
-        )
-        torch.save(
-            {
-                "particles": particles,
-                "observation_noise": pls.observation_noise,
-            },
-            pls_path,
         )
 
 
@@ -252,5 +286,4 @@ if __name__ == "__main__":
             kernel_config=loaded_config["kernel"],
             inducing_points_config=loaded_config["inducing_points"],
             pls_config=loaded_config["pls"],
-            svgp_config=loaded_config["svgp"],
         )

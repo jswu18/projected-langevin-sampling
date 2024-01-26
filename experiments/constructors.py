@@ -1,5 +1,4 @@
 import collections
-from copy import deepcopy
 from typing import List
 
 import gpytorch
@@ -11,18 +10,6 @@ def construct_average_gaussian_likelihood(
     likelihoods: List[gpytorch.likelihoods.GaussianLikelihood],
 ) -> gpytorch.likelihoods.GaussianLikelihood:
     average_likelihood = gpytorch.likelihoods.GaussianLikelihood()
-    average_likelihood.noise = torch.tensor(
-        np.array([likelihood.noise.detach().numpy() for likelihood in likelihoods])
-    ).mean()
-    return average_likelihood
-
-
-def construct_average_dirichlet_likelihood(
-    likelihoods: List[gpytorch.likelihoods.DirichletClassificationLikelihood],
-) -> gpytorch.likelihoods.DirichletClassificationLikelihood:
-    average_likelihood = gpytorch.likelihoods.DirichletClassificationLikelihood(
-        targets=likelihoods[0].targets, learn_additional_noise=True
-    )
     average_likelihood.noise = torch.tensor(
         np.array([likelihood.noise.detach().numpy() for likelihood in likelihoods])
     ).mean()

@@ -189,18 +189,23 @@ def main(
         }
         for pls_name, pls in pls_dict.items():
             pls_path = os.path.join(models_path, f"{pls_name}.pth")
+            set_seed(pls_config["seed"])
+            particles = pls.initialise_particles(
+                number_of_particles=pls_config["number_of_particles"],
+                seed=pls_config["seed"],
+                noise_only=pls_config["initial_particles_noise_only"],
+            )
             if os.path.exists(pls_path):
-                pls, particles = load_pls(
+                pls, particles, _, _ = load_pls(
                     pls=pls,
                     model_path=pls_path,
                 )
             else:
-                particles = train_pls(
+                particles, best_lr, number_of_epochs = train_pls(
                     pls=pls,
-                    number_of_particles=pls_config["number_of_particles"],
+                    particles=particles,
                     particle_name=pls_name,
                     experiment_data=experiment_data,
-                    inducing_points=inducing_points,
                     simulation_duration=pls_config["simulation_duration"],
                     maximum_number_of_steps=pls_config["maximum_number_of_steps"],
                     step_size_upper=pls_config["step_size_upper"],
@@ -215,19 +220,15 @@ def main(
                         "number_of_observation_noise_searches"
                     ],
                     plot_title=f"{dataset_name}",
-                    plot_particles_path=None,
-                    animate_1d_path=None,
-                    plot_update_magnitude_path=plots_path,
                     metric_to_minimise=pls_config["metric_to_minimise"],
-                    initial_particles_noise_only=pls_config[
-                        "initial_particles_noise_only"
-                    ],
                     early_stopper_patience=pls_config["early_stopper_patience"],
                 )
                 torch.save(
                     {
                         "particles": particles,
                         "observation_noise": pls.observation_noise,
+                        "best_lr": best_lr,
+                        "number_of_epochs": number_of_epochs,
                     },
                     pls_path,
                 )
@@ -245,7 +246,7 @@ def main(
             model_name = f"svgp-{kernel_name}"
             svgp_model_path = os.path.join(models_path, f"{model_name}.pth")
             if os.path.exists(svgp_model_path):
-                svgp, _ = load_svgp(
+                svgp, _, _ = load_svgp(
                     model_path=svgp_model_path,
                     x_induce=inducing_points.x,
                     mean=gpytorch.means.ConstantMean(),
@@ -254,7 +255,7 @@ def main(
                     learn_inducing_locations=False,
                 )
             else:
-                svgp, losses = train_svgp(
+                svgp, losses, best_learning_rate = train_svgp(
                     model_name=model_name,
                     experiment_data=experiment_data,
                     inducing_points=inducing_points,
@@ -271,18 +272,18 @@ def main(
                     ],
                     is_fixed=True,
                     observation_noise=float(likelihood.noise),
+                    early_stopper_patience=svgp_config["early_stopper_patience"],
                     models_path=os.path.join(
                         models_path, f"{model_name}-kernel-iterations"
                     ),
                     plot_title=f"{dataset_name}",
-                    plot_1d_path=None,
-                    animate_1d_path=None,
                     plot_loss_path=plots_path,
                 )
                 torch.save(
                     {
                         "model": svgp.state_dict(),
                         "losses": losses,
+                        "best_learning_rate": best_learning_rate,
                     },
                     os.path.join(models_path, f"{model_name}.pth"),
                 )
@@ -315,15 +316,15 @@ if __name__ == "__main__":
             pls_config=loaded_config["pls"],
             svgp_config=loaded_config["svgp"],
         )
-        # concatenate_metrics(
-        #     results_path=f"experiments/uci/regression/outputs/{data_seed}/results",
-        #     data_types=["train", "test"],
-        #     model_names=[
-        #         "pls-onb",
-        #         "pls-ipb",
-        #         "svgp-k",
-        #         "svgp-r",
-        #     ],
-        #     datasets=list(RegressionDatasetSchema.__members__.keys()),
-        #     metrics=["mae", "mse", "nll"],
-        # )
+        concatenate_metrics(
+            results_path=f"experiments/uci/regression/outputs/{data_seed}/results",
+            data_types=["train", "test"],
+            model_names=[
+                "pls-onb",
+                "pls-ipb",
+                "svgp-k",
+                "svgp-r",
+            ],
+            datasets=list(RegressionDatasetSchema.__members__.keys()),
+            metrics=["mae", "mse", "nll"],
+        )

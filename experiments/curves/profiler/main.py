@@ -1,75 +1,53 @@
 import argparse
-import math
 import os
-from typing import Any, Dict, Type, Union
+from typing import Any, Dict, Optional, Type
 
 import gpytorch
-import numpy as np
+import matplotlib.pyplot as plt
 import pandas as pd
 import torch
 import yaml
 from torch.profiler import ProfilerActivity, profile, record_function
 
-from experiments.constructors import (
-    construct_average_ard_kernel,
-    construct_average_gaussian_likelihood,
-)
-from experiments.curves.curves import CURVE_FUNCTIONS, Curve
+from experiments.curves.curves import CURVE_FUNCTIONS
 from experiments.data import Data, ExperimentData, ProblemType
-from experiments.preprocess import split_regression_data_intervals
-from experiments.runners import learn_subsample_gps, select_inducing_points
+from experiments.runners import select_inducing_points
 from experiments.utils import create_directory
 from src.gps import svGP
 from src.inducing_point_selectors import ConditionalVarianceInducingPointSelector
 from src.kernels.projected_langevin_sampling import PLSKernel
 from src.projected_langevin_sampling import PLSRegressionIPB, PLSRegressionONB
+from src.projected_langevin_sampling.base.transform.regression import PLSRegression
 
 parser = argparse.ArgumentParser(
-    description="Main script for toy regression curves experiments."
+    description="Main script for profiling PLS and svGP models."
 )
 parser.add_argument("--config_path", type=str)
 
 
 def get_experiment_data(
-    curve_function: Curve,
     number_of_data_points: int,
     seed: int,
-    sigma_true: float,
-    number_of_test_intervals: int,
-    total_number_of_intervals: int,
+    sigma_true: float = 0.2,
 ) -> ExperimentData:
+    curve_function = CURVE_FUNCTIONS[0]
     x = torch.linspace(-3, 3, number_of_data_points).reshape(-1, 1)
     y = curve_function.regression(
         seed=seed,
         x=x,
         sigma_true=sigma_true,
     )
-    (
-        x_train,
-        y_train,
-        _,
-        x_test,
-        y_test,
-        _,
-    ) = split_regression_data_intervals(
-        split_seed=curve_function.seed,
-        x=x,
-        y=y,
-        number_of_test_intervals=number_of_test_intervals,
-        total_number_of_intervals=total_number_of_intervals,
-    )
     experiment_data = ExperimentData(
         name=type(curve_function).__name__.lower(),
         problem_type=ProblemType.REGRESSION,
         full=Data(x=x, y=y, name="full"),
-        train=Data(x=x_train, y=y_train, name="train"),
-        test=Data(x=x_test, y=y_test, name="test"),
+        train=Data(x=x, y=y, name="train"),
     )
     return experiment_data
 
 
 def train_pls(
-    pls_object: Type[Union["PLSRegressionONB", "PLSRegressionIPB"]],
+    pls_class: Type[PLSRegression],
     pls_kernel: PLSKernel,
     inducing_points: Data,
     experiment_data: ExperimentData,
@@ -78,7 +56,7 @@ def train_pls(
     number_of_epochs: int,
     step_size: float,
 ) -> None:
-    pls = pls_object(
+    pls = pls_class(
         kernel=pls_kernel,
         x_induce=inducing_points.x,
         y_induce=inducing_points.y,
@@ -96,10 +74,6 @@ def train_pls(
             step_size=step_size,
         )
         particles += particle_update
-
-
-def parse_profiler(profiler: profile):
-    return pd.DataFrame({e.key: e.__dict__ for e in profiler.key_averages()}).T
 
 
 def train_svgp(
@@ -138,163 +112,372 @@ def train_svgp(
     )
     for _ in range(number_of_epochs):
         optimizer.zero_grad()
-        output = model(train_data.x)
-        loss = -mll(output, train_data.y)
+        loss = -mll(model(train_data.x), train_data.y)
         loss.backward()
         optimizer.step()
 
 
-def main(
-    curve_function: Curve,
-    data_config: Dict[str, Any],
-    kernel_config: Dict[str, Any],
-    inducing_points_config: Dict[str, Any],
-    pls_config: Dict[str, Any],
-    svgp_config: Dict[str, Any],
-    profiler_config: Dict[str, Any],
-) -> None:
-    experiment_data = get_experiment_data(
-        curve_function=curve_function,
-        number_of_data_points=data_config["number_of_data_points"],
-        seed=data_config["seed"],
-        sigma_true=data_config["sigma_true"],
-        number_of_test_intervals=data_config["number_of_test_intervals"],
-        total_number_of_intervals=data_config["total_number_of_intervals"],
+def parse_profiler(profiler: profile):
+    df = pd.DataFrame({e.key: e.__dict__ for e in profiler.key_averages()}).T
+    return pd.DataFrame(
+        [
+            [
+                df.loc["model_training", "cpu_time_total"]
+                / 1e6
+                * df.loc["model_training", "count"]
+            ]
+        ],
+        columns=["cpu_time_total"],
     )
-    models_path = f"experiments/curves/profiler/outputs/models/{type(curve_function).__name__.lower()}"
-    data_path = f"experiments/curves/profiler/outputs/data/{type(curve_function).__name__.lower()}"
-    profiler_path = f"experiments/curves/profiler/outputs"
-    subsample_gp_model_path = os.path.join(models_path, "subsample_gp")
-    subsample_gp_data_path = os.path.join(data_path, "subsample_gp")
 
-    subsample_gp_models = learn_subsample_gps(
-        experiment_data=experiment_data,
-        kernel=gpytorch.kernels.ScaleKernel(
-            gpytorch.kernels.RBFKernel(ard_num_dims=experiment_data.train.x.shape[1])
-        ),
-        likelihood=gpytorch.likelihoods.GaussianLikelihood(),
-        subsample_size=kernel_config["subsample_size"],
-        seed=kernel_config["seed"],
-        number_of_epochs=kernel_config["number_of_epochs"],
-        learning_rate=kernel_config["learning_rate"],
-        number_of_iterations=kernel_config["number_of_iterations"],
-        model_path=subsample_gp_model_path,
-        data_path=subsample_gp_data_path,
-        plot_1d_subsample_path=None,
-        plot_loss_path=None,
-    )
-    average_ard_kernel = construct_average_ard_kernel(
-        kernels=[model.kernel for model in subsample_gp_models]
-    )
-    likelihood = construct_average_gaussian_likelihood(
-        likelihoods=[model.likelihood for model in subsample_gp_models]
-    )
-    for number_induce_points in np.arange(10, 110, 10).astype(int):
-        inducing_points = select_inducing_points(
-            seed=inducing_points_config["seed"],
-            inducing_point_selector=ConditionalVarianceInducingPointSelector(),
-            data=experiment_data.train,
-            number_induce_points=int(
-                inducing_points_config["inducing_points_factor"]
-                * math.pow(
-                    experiment_data.train.x.shape[0],
-                    1 / inducing_points_config["inducing_points_power"],
-                )
-            ),
-            kernel=average_ard_kernel,
-        )
-        pls_kernel = PLSKernel(
-            base_kernel=average_ard_kernel,
-            approximation_samples=inducing_points.x,
-        )
-        df_list = []
-        for pls_name, pls in zip(
-            ["pls-onb", "pls-ipb"], [PLSRegressionONB, PLSRegressionIPB]
-        ):
-            df_model_list = []
-            model_profiler_path = os.path.join(profiler_path, pls_name)
-            create_directory(model_profiler_path)
-            for i in range(profiler_config["number_of_repeats"]):
-                with profile(
-                    activities=[ProfilerActivity.CPU], record_shapes=True
-                ) as prof:
-                    with record_function("model_training"):
-                        train_pls(
-                            pls_object=pls,
-                            pls_kernel=pls_kernel,
-                            inducing_points=inducing_points,
-                            experiment_data=experiment_data,
-                            observation_noise=float(likelihood.noise),
-                            number_of_particles=pls_config["number_of_particles"],
-                            number_of_epochs=profiler_config["number_of_epochs"],
-                            step_size=pls_config["step_size"],
-                        )
-                df = parse_profiler(
-                    profiler=prof,
-                )
-                df.to_csv(
-                    os.path.join(
-                        model_profiler_path, f"{number_induce_points}-{i}.csv"
-                    ),
-                    index=False,
-                )
-                df_model_list.append(
-                    pd.DataFrame(
-                        [
-                            [
-                                df.loc["model_training", "cpu_time_total"]
-                                / 1e6
-                                * df.loc["model_training", "count"]
-                            ]
-                        ],
-                        columns=[pls_name],
-                    )
-                )
-            df_list.append(pd.concat(df_model_list, axis=0))
 
-        for kernel_name, kernel in zip(["k", "r"], [average_ard_kernel, pls_kernel]):
-            model_name = f"svgp-{kernel_name}"
-            model_profiler_path = os.path.join(profiler_path, model_name)
-            create_directory(model_profiler_path)
-            df_model_list = []
-            for i in range(profiler_config["number_of_repeats"]):
-                with profile(
-                    activities=[ProfilerActivity.CPU], record_shapes=True
-                ) as prof:
-                    with record_function("model_training"):
-                        train_svgp(
-                            number_of_epochs=profiler_config["number_of_epochs"],
-                            kernel=kernel,
-                            train_data=experiment_data.train,
-                            inducing_points=inducing_points,
-                            learning_rate=svgp_config["learning_rate"],
-                        )
-                df = parse_profiler(
-                    profiler=prof,
+def profile_pls(
+    pls_class: Type[PLSRegression],
+    pls_kernel: PLSKernel,
+    observation_noise: float,
+    inducing_points: Data,
+    experiment_data: ExperimentData,
+    number_of_particles: int,
+    number_of_epochs: int,
+    df_path: str,
+    step_size: float = 1e-10,
+) -> pd.DataFrame:
+    with profile(activities=[ProfilerActivity.CPU], record_shapes=True) as prof:
+        with record_function("model_training"):
+            train_pls(
+                pls_class=pls_class,
+                pls_kernel=pls_kernel,
+                inducing_points=inducing_points,
+                experiment_data=experiment_data,
+                observation_noise=observation_noise,
+                number_of_particles=number_of_particles,
+                number_of_epochs=number_of_epochs,
+                step_size=step_size,
+            )
+    df = parse_profiler(
+        profiler=prof,
+    )
+    df.to_csv(
+        df_path,
+        index=False,
+    )
+    return df
+
+
+def profile_svgp(
+    inducing_points: Data,
+    experiment_data: ExperimentData,
+    kernel: gpytorch.kernels.Kernel,
+    number_of_epochs: int,
+    df_path: str,
+    learning_rate: float = 1e-10,
+) -> pd.DataFrame:
+    if os.path.exists(df_path):
+        df = pd.read_csv(df_path)
+    else:
+        with profile(activities=[ProfilerActivity.CPU], record_shapes=True) as prof:
+            with record_function("model_training"):
+                train_svgp(
+                    number_of_epochs=number_of_epochs,
+                    kernel=kernel,
+                    train_data=experiment_data.train,
+                    inducing_points=inducing_points,
+                    learning_rate=learning_rate,
                 )
-                df.to_csv(
-                    os.path.join(
-                        model_profiler_path, f"{number_induce_points}-{i}.csv"
-                    ),
-                    index=False,
-                )
-                df_model_list.append(
-                    pd.DataFrame(
-                        [
-                            [
-                                df.loc["model_training", "cpu_time_total"]
-                                / 1e6
-                                * df.loc["model_training", "count"]
-                            ]
-                        ],
-                        columns=[model_name],
-                    )
-                )
-            df_list.append(pd.concat(df_model_list, axis=0))
-        pd.concat(df_list, axis=1).to_csv(
-            os.path.join(profiler_path, f"total-{number_induce_points}.csv"),
+        df = parse_profiler(
+            profiler=prof,
+        )
+        df.to_csv(
+            df_path,
             index=False,
         )
+    return df
+
+
+def run_experiment(
+    seed: int,
+    number_of_data_points: int,
+    number_induce_points: int,
+    number_of_epochs: int,
+    number_of_particles: int,
+    models_path: str,
+    data_path: str,
+    results_path: str,
+    observation_noise: float = 0.01,
+):
+    data_dir = os.path.join(data_path, f"seed_{seed}", f"n_{number_of_data_points}")
+    create_directory(data_dir)
+    model_dir = os.path.join(models_path, f"seed_{seed}", f"n_{number_of_data_points}")
+    create_directory(model_dir)
+
+    experiment_data_path = os.path.join(data_dir, "experiment_data.pth")
+    if os.path.exists(experiment_data_path):
+        experiment_data = ExperimentData.load(
+            path=experiment_data_path, problem_type=ProblemType.CLASSIFICATION
+        )
+        print(f"Loaded experiment data from {experiment_data_path=}")
+    else:
+        experiment_data = get_experiment_data(
+            number_of_data_points=number_of_data_points,
+            seed=seed,
+        )
+        experiment_data.save(experiment_data_path)
+    ard_kernel = gpytorch.kernels.ScaleKernel(
+        gpytorch.kernels.RBFKernel(ard_num_dims=experiment_data.train.x.shape[1])
+    )
+
+    induce_data_dir = os.path.join(data_dir, f"m_{number_induce_points}")
+    create_directory(induce_data_dir)
+    inducing_points_path = os.path.join(induce_data_dir, "inducing_points.pth")
+    if os.path.exists(inducing_points_path):
+        inducing_points = torch.load(inducing_points_path)
+        print(f"Loaded inducing points from {inducing_points_path=}")
+    else:
+        inducing_points = select_inducing_points(
+            seed=seed,
+            inducing_point_selector=ConditionalVarianceInducingPointSelector(),
+            data=experiment_data.train,
+            number_induce_points=number_induce_points,
+            kernel=ard_kernel,
+        )
+        torch.save(inducing_points, inducing_points_path)
+    pls_kernel = PLSKernel(
+        base_kernel=ard_kernel,
+        approximation_samples=inducing_points.x,
+    )
+    df_list = []
+    for pls_name, pls_class in zip(
+        ["pls-onb", "pls-ipb"], [PLSRegressionONB, PLSRegressionIPB]
+    ):
+        df_dir = os.path.join(
+            results_path,
+            f"seed_{seed}",
+            f"n_{number_of_data_points}",
+            f"m_{number_induce_points}",
+            f"t_{number_of_epochs}",
+            pls_name,
+            f"j_{number_of_particles}",
+        )
+        create_directory(df_dir)
+        df_path = os.path.join(df_dir, "profile.csv")
+        if os.path.exists(df_path):
+            df = pd.read_csv(df_path)
+            print(f"Loaded profile from {df_path=}")
+        else:
+            df = profile_pls(
+                pls_class=pls_class,
+                pls_kernel=pls_kernel,
+                observation_noise=observation_noise,
+                inducing_points=inducing_points,
+                experiment_data=experiment_data,
+                number_of_particles=number_of_particles,
+                number_of_epochs=number_of_epochs,
+                df_path=df_path,
+            )
+        df["model"] = [pls_name]
+        df_list.append(df)
+    df_pls = pd.concat(df_list)
+    df_pls["seed"] = seed
+    df_pls["n"] = number_of_data_points
+    df_pls["m"] = number_induce_points
+    df_pls["t"] = number_of_epochs
+    df_pls["j"] = number_of_particles
+
+    df_list = []
+    for model_name, kernel in zip(["svgp-k", "svgp-r"], [ard_kernel, pls_kernel]):
+        df_dir = os.path.join(
+            results_path,
+            f"seed_{seed}",
+            f"n_{number_of_data_points}",
+            f"m_{number_induce_points}",
+            f"t_{number_of_epochs}",
+            model_name,
+        )
+        create_directory(df_dir)
+        df_path = os.path.join(df_dir, "profile.csv")
+        if os.path.exists(df_path):
+            df = pd.read_csv(df_path)
+            print(f"Loaded profile from {df_path=}")
+        else:
+            df = profile_svgp(
+                inducing_points=inducing_points,
+                experiment_data=experiment_data,
+                kernel=kernel,
+                number_of_epochs=number_of_epochs,
+                df_path=df_path,
+            )
+        df["model"] = [model_name]
+        df_list.append(df)
+    df_svgp = pd.concat(df_list)
+    df_svgp["seed"] = seed
+    df_svgp["n"] = number_of_data_points
+    df_svgp["m"] = number_induce_points
+    df_svgp["t"] = number_of_epochs
+    return df_pls, df_svgp
+
+
+def plot_df(
+    x_axis: str,
+    x_axis_name: str,
+    save_path: str,
+    df_pls: Optional[pd.DataFrame] = None,
+    df_svgp: Optional[pd.DataFrame] = None,
+):
+    def _plot_df(fig, ax, df):
+        df_mean = (
+            df[["model", x_axis, "cpu_time_total"]]
+            .groupby([x_axis, "model"])
+            .mean()
+            .reset_index()
+        )
+        df_std = (
+            df[["model", x_axis, "cpu_time_total"]]
+            .groupby([x_axis, "model"])
+            .std()
+            .reset_index()
+        )
+        for model in df["model"].unique():
+            df_mean = df_mean[df_mean["model"] == model].sort_values(x_axis)
+            df_std = df_std[df_std["model"] == model].sort_values(x_axis)
+            ax.errorbar(
+                df_mean[x_axis],
+                df_mean["cpu_time_total"],
+                yerr=df_std["cpu_time_total"],
+                label=model,
+                capsize=5,
+            )
+        return fig, ax
+
+    fig, ax = plt.subplots(figsize=(13, 6.5))
+    if df_pls is not None:
+        fig, ax = _plot_df(fig, ax, df_pls)
+    if df_svgp is not None:
+        fig, ax = _plot_df(fig, ax, df_svgp)
+    ax.set_xlabel(x_axis_name)
+    ax.set_ylabel("CPU time (s)")
+    ax.set_title(f"CPU time vs {x_axis_name}")
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig(
+        save_path,
+    )
+    plt.close(fig)
+
+
+def main(
+    number_of_data_points_config: Dict[str, Any],
+    number_of_induce_points_config: Dict[str, Any],
+    number_of_epochs_config: Dict[str, Any],
+    number_of_particles_config: Dict[str, Any],
+    profiler_config: Dict[str, Any],
+) -> None:
+    profiler_path = f"experiments/curves/profiler/outputs"
+    models_path = f"{profiler_path}/models"
+    data_path = f"{profiler_path}/data"
+    results_path = f"{profiler_path}/results"
+    create_directory(models_path)
+    create_directory(data_path)
+    create_directory(results_path)
+    df_pls_list = []
+    df_svgp_list = []
+    for seed in range(profiler_config["number_of_seeds"]):
+        for number_of_data_points in range(
+            number_of_data_points_config["start"],
+            number_of_data_points_config["stop"] + 1,
+            number_of_data_points_config["step"],
+        ):
+            df_pls, df_svgp = run_experiment(
+                seed=seed,
+                number_of_data_points=number_of_data_points,
+                number_induce_points=number_of_induce_points_config["default"],
+                number_of_epochs=number_of_epochs_config["default"],
+                number_of_particles=number_of_particles_config["default"],
+                models_path=models_path,
+                data_path=data_path,
+                results_path=results_path,
+            )
+            df_pls_list.append(df_pls)
+            df_svgp_list.append(df_svgp)
+        for number_induce_points in range(
+            number_of_induce_points_config["start"],
+            number_of_induce_points_config["stop"] + 1,
+            number_of_induce_points_config["step"],
+        ):
+            df_pls, df_svgp = run_experiment(
+                seed=seed,
+                number_of_data_points=number_of_data_points_config["default"],
+                number_induce_points=number_induce_points,
+                number_of_epochs=number_of_epochs_config["default"],
+                number_of_particles=number_of_particles_config["default"],
+                models_path=models_path,
+                data_path=data_path,
+                results_path=results_path,
+            )
+            df_pls_list.append(df_pls)
+            df_svgp_list.append(df_svgp)
+        for number_of_epochs in range(
+            number_of_epochs_config["start"],
+            number_of_epochs_config["stop"] + 1,
+            number_of_epochs_config["step"],
+        ):
+            df_pls, df_svgp = run_experiment(
+                seed=seed,
+                number_of_data_points=number_of_data_points_config["default"],
+                number_induce_points=number_of_induce_points_config["default"],
+                number_of_epochs=number_of_epochs,
+                number_of_particles=number_of_particles_config["default"],
+                models_path=models_path,
+                data_path=data_path,
+                results_path=results_path,
+            )
+            df_pls_list.append(df_pls)
+            df_svgp_list.append(df_svgp)
+        for number_of_particles in range(
+            number_of_particles_config["start"],
+            number_of_particles_config["stop"] + 1,
+            number_of_particles_config["step"],
+        ):
+            df_pls, df_svgp = run_experiment(
+                seed=seed,
+                number_of_data_points=number_of_data_points_config["default"],
+                number_induce_points=number_of_induce_points_config["default"],
+                number_of_epochs=number_of_epochs_config["default"],
+                number_of_particles=number_of_particles,
+                models_path=models_path,
+                data_path=data_path,
+                results_path=results_path,
+            )
+            df_pls_list.append(df_pls)
+            df_svgp_list.append(df_svgp)
+    df_pls = pd.concat(df_pls_list).drop_duplicates()
+    df_svgp = pd.concat(df_svgp_list).drop_duplicates()
+    plot_df(
+        df_pls=df_pls,
+        df_svgp=df_svgp,
+        x_axis="n",
+        x_axis_name="Number of data points (N)",
+        save_path=f"{profiler_path}/n.png",
+    )
+    plot_df(
+        df_pls=df_pls,
+        df_svgp=df_svgp,
+        x_axis="m",
+        x_axis_name="Number of inducing points (M)",
+        save_path=f"{profiler_path}/m.png",
+    )
+    plot_df(
+        df_pls=df_pls,
+        df_svgp=df_svgp,
+        x_axis="t",
+        x_axis_name="Number of epochs (T)",
+        save_path=f"{profiler_path}/t.png",
+    )
+    plot_df(
+        df_pls=df_pls,
+        x_axis="particles",
+        x_axis_name="Number of particles (J)",
+        save_path=f"{profiler_path}/particles.png",
+    )
 
 
 if __name__ == "__main__":
@@ -302,13 +485,10 @@ if __name__ == "__main__":
     args = parser.parse_args()
     with open(args.config_path, "r") as file:
         loaded_config = yaml.safe_load(file)
-    for curve_function_ in CURVE_FUNCTIONS[:1]:
-        main(
-            curve_function=curve_function_,
-            data_config=loaded_config["data"],
-            kernel_config=loaded_config["kernel"],
-            inducing_points_config=loaded_config["inducing_points"],
-            pls_config=loaded_config["pls"],
-            svgp_config=loaded_config["svgp"],
-            profiler_config=loaded_config["profiler"],
-        )
+    main(
+        number_of_data_points_config=loaded_config["number_of_data_points"],
+        number_of_induce_points_config=loaded_config["number_of_induce_points"],
+        number_of_epochs_config=loaded_config["number_of_epochs"],
+        number_of_particles_config=loaded_config["number_of_particles"],
+        profiler_config=loaded_config["profiler"],
+    )

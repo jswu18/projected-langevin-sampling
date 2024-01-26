@@ -1,25 +1,22 @@
-data:
-  number_of_data_points: 500
-  seed: 0
-  sigma_true: 0.2
-  number_of_test_intervals: 1
-  total_number_of_intervals: 12
-kernel:
-  seed: 0
-  learning_rate: 0.01
-  batch_size: 100
-  number_of_iterations: 10
-  number_of_epochs: 2000
-  subsample_size: 2000
-inducing_points:
-  seed: 0
-  inducing_points_factor: 1
-  inducing_points_power: 2
-pls:
-  number_of_particles: 100
-  step_size: 1.0e-7
-svgp:
-  learning_rate: 1.0e-3
+number_of_data_points:
+  start: 100
+  stop: 1000
+  step: 100
+  default: 500
+number_of_induce_points:
+  start: 10
+  stop: 100
+  step: 10
+  default: 20
+number_of_epochs:
+    start: 10
+    stop: 100
+    step: 10
+    default: 100
+number_of_particles:
+    start: 10
+    stop: 100
+    step: 10
+    default: 50
 profiler:
-  number_of_epochs: 2
-  number_of_repeats: 3
+  number_of_seeds: 5
