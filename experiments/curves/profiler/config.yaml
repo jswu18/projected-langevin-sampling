@@ -2,21 +2,21 @@ number_of_data_points:
   start: 100
   stop: 1000
   step: 100
-  default: 500
+  default: 100
 number_of_induce_points:
   start: 10
   stop: 100
   step: 10
-  default: 20
+  default: 10
 number_of_epochs:
-    start: 10
-    stop: 100
-    step: 10
-    default: 100
+  start: 10
+  stop: 100
+  step: 10
+  default: 10
 number_of_particles:
-    start: 10
-    stop: 100
-    step: 10
-    default: 50
+  start: 100
+  stop: 1000
+  step: 100
+  default: 100
 profiler:
-  number_of_seeds: 5
+  number_of_seeds: 10
