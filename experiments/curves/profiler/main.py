@@ -329,15 +329,15 @@ def plot_df(
             ax.errorbar(
                 df_mean[x_axis],
                 df_mean["cpu_time_milliseconds"],
-                yerr=df_std["cpu_time_milliseconds"],
-                label=model,
+                yerr=2 * df_std["cpu_time_milliseconds"],
+                label=f"{model} (±2 stdev)",
                 capsize=3,
                 marker=".",
                 markersize=10,
             )
         return fig, ax
 
-    fig, ax = plt.subplots(figsize=(13, 6.5))
+    fig, ax = plt.subplots(figsize=(10, 5))
     if df_pls is not None:
         fig, ax = _plot_df(fig, ax, df_pls)
     if df_svgp is not None:
