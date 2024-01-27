@@ -3,10 +3,7 @@ from typing import Tuple, Union
 import gpytorch
 import torch
 
-from experiments.data import Data, ExperimentData
 from src.gps import ExactGP, svGP
-from src.kernels import PLSKernel
-from src.projected_langevin_sampling import PLSRegressionONB
 from src.projected_langevin_sampling.base.base import PLSBase
 
 
@@ -62,8 +59,6 @@ def load_ard_exact_gp_model(
     kernel: gpytorch.kernels.Kernel,
 ) -> Tuple[ExactGP, torch.Tensor]:
     data = torch.load(data_path)
-    data.x
-    data.y
     model_state_dict = torch.load(model_path)
     model = ExactGP(
         x=data.x,

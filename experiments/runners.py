@@ -15,7 +15,6 @@ from experiments.early_stopper import EarlyStopper
 from experiments.loaders import load_ard_exact_gp_model, load_svgp
 from experiments.metrics import calculate_mae, calculate_mse, calculate_nll
 from experiments.plotters import (
-    animate_1d_gp_predictions,
     animate_1d_pls_predictions,
     animate_1d_pls_untransformed_predictions,
     plot_1d_gp_prediction_and_inducing_points,
