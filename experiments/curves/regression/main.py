@@ -16,7 +16,6 @@ from experiments.constructors import (
 from experiments.curves.curves import CURVE_FUNCTIONS, Curve
 from experiments.data import Data, ExperimentData, ProblemType
 from experiments.loaders import load_pls, load_svgp
-from experiments.metrics import calculate_metrics, concatenate_metrics
 from experiments.plotters import (
     animate_1d_gp_predictions,
     plot_1d_experiment_data,
@@ -84,7 +83,7 @@ def get_experiment_data(
 def plot_experiment_data(
     experiment_data: ExperimentData,
     title: str,
-    curve_name: str,
+    plot_curve_path: str,
 ) -> None:
     fig, ax = plt.subplots(figsize=(13, 6.5))
     fig, ax = plot_1d_experiment_data(
@@ -94,10 +93,8 @@ def plot_experiment_data(
     )
     ax.set_title(title)
     fig.tight_layout()
-    create_directory(f"experiments/curves/regression/outputs/plots/{curve_name}")
-    plt.savefig(
-        f"experiments/curves/regression/outputs/plots/{curve_name}/experiment-data.png"
-    )
+    create_directory(plot_curve_path)
+    plt.savefig(os.path.join(plot_curve_path, "experiment-data.png"))
     plt.close()
 
 
@@ -108,6 +105,7 @@ def main(
     inducing_points_config: Dict[str, Any],
     pls_config: Dict[str, Any],
     svgp_config: Dict[str, Any],
+    outputs_path: str,
 ) -> None:
     experiment_data = get_experiment_data(
         curve_function=curve_function,
@@ -117,18 +115,22 @@ def main(
         number_of_test_intervals=data_config["number_of_test_intervals"],
         total_number_of_intervals=data_config["total_number_of_intervals"],
     )
+    data_path = os.path.join(
+        outputs_path, "data", type(curve_function).__name__.lower()
+    )
+    plot_curve_path = os.path.join(
+        outputs_path, "plots", type(curve_function).__name__.lower()
+    )
+    models_path = os.path.join(
+        outputs_path, "models", type(curve_function).__name__.lower()
+    )
     plot_experiment_data(
         experiment_data=experiment_data,
         title=f"{curve_function.__name__} data",
-        curve_name=type(curve_function).__name__.lower(),
+        plot_curve_path=plot_curve_path,
     )
-    plot_curve_path = f"experiments/curves/regression/outputs/plots/{type(curve_function).__name__.lower()}"
-    results_curve_path = f"experiments/curves/regression/outputs/results/{type(curve_function).__name__.lower()}"
-    models_path = f"experiments/curves/regression/outputs/models/{type(curve_function).__name__.lower()}"
-    data_path = f"experiments/curves/regression/outputs/data/{type(curve_function).__name__.lower()}"
     subsample_gp_model_path = os.path.join(models_path, "subsample_gp")
     subsample_gp_data_path = os.path.join(data_path, "subsample_gp")
-
     subsample_gp_models = learn_subsample_gps(
         experiment_data=experiment_data,
         kernel=gpytorch.kernels.ScaleKernel(
@@ -269,16 +271,6 @@ def main(
             else False,
             initial_particles_noise_only=pls_config["initial_particles_noise_only"],
         )
-        set_seed(pls_config["seed"])
-        calculate_metrics(
-            model=pls,
-            particles=particles,
-            model_name=pls_name,
-            dataset_name=type(curve_function).__name__,
-            experiment_data=experiment_data,
-            results_path=results_curve_path,
-            plots_path=plot_curve_path,
-        )
 
     plot_title = "SVGP for Regression"
     for kernel_name, kernel in zip(["k", "r"], [average_ard_kernel, pls_kernel]):
@@ -357,15 +349,6 @@ def main(
             if "christmas_colours" in pls_config
             else False,
         )
-        set_seed(svgp_config["seed"])
-        calculate_metrics(
-            model=svgp,
-            model_name=model_name,
-            dataset_name=type(curve_function).__name__,
-            experiment_data=experiment_data,
-            results_path=results_curve_path,
-            plots_path=plot_curve_path,
-        )
 
 
 if __name__ == "__main__":
@@ -373,6 +356,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     with open(args.config_path, "r") as file:
         loaded_config = yaml.safe_load(file)
+    outputs_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "outputs")
     for curve_function_ in CURVE_FUNCTIONS:
         main(
             curve_function=curve_function_,
@@ -381,14 +365,5 @@ if __name__ == "__main__":
             inducing_points_config=loaded_config["inducing_points"],
             pls_config=loaded_config["pls"],
             svgp_config=loaded_config["svgp"],
+            outputs_path=outputs_path,
         )
-    concatenate_metrics(
-        results_path="experiments/curves/regression/outputs/results",
-        data_types=["train", "test"],
-        model_names=["pls-onb", "pls-ipb", "svgp-k", "svgp-r"],
-        datasets=[
-            type(curve_function_).__name__.lower()
-            for curve_function_ in CURVE_FUNCTIONS
-        ],
-        metrics=["mae", "mse", "nll"],
-    )

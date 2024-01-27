@@ -81,23 +81,18 @@ def main(
     inducing_points_config: Dict[str, Any],
     pls_config: Dict[str, Any],
     svgp_config: Dict[str, Any],
+    outputs_path: str,
 ) -> None:
     for dataset_schema in RegressionDatasetSchema:
         dataset_name = str(dataset_schema.name)
         print(f"Running experiment for {dataset_name=} and {data_seed=}.")
 
-        data_path = (
-            f"experiments/uci/regression/outputs/{data_seed}/data/{dataset_name}"
+        data_path = os.path.join(outputs_path, str(data_seed), "data", dataset_name)
+        plots_path = os.path.join(outputs_path, str(data_seed), "plots", dataset_name)
+        results_path = os.path.join(
+            outputs_path, str(data_seed), "results", dataset_name
         )
-        plots_path = (
-            f"experiments/uci/regression/outputs/{data_seed}/plots/{dataset_name}"
-        )
-        results_path = (
-            f"experiments/uci/regression/outputs/{data_seed}/results/{dataset_name}"
-        )
-        models_path = (
-            f"experiments/uci/regression/outputs/{data_seed}/models/{dataset_name}"
-        )
+        models_path = os.path.join(outputs_path, str(data_seed), "models", dataset_name)
         subsample_gp_model_path = os.path.join(models_path, "subsample_gp")
         subsample_gp_data_path = os.path.join(data_path, "subsample_gp")
         os.makedirs(data_path, exist_ok=True)
@@ -307,6 +302,8 @@ if __name__ == "__main__":
         data_seeds = [0, 1, 2, 3, 4]
     else:
         data_seeds = [args.data_seed]
+
+    outputs_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "outputs")
     for data_seed in data_seeds:
         main(
             data_seed=data_seed,
@@ -315,9 +312,10 @@ if __name__ == "__main__":
             inducing_points_config=loaded_config["inducing_points"],
             pls_config=loaded_config["pls"],
             svgp_config=loaded_config["svgp"],
+            outputs_path=outputs_path,
         )
         concatenate_metrics(
-            results_path=f"experiments/uci/regression/outputs/{data_seed}/results",
+            results_path=os.path.join(outputs_path, str(data_seed), "results"),
             data_types=["train", "test"],
             model_names=[
                 "pls-onb",

@@ -13,7 +13,6 @@ from experiments.constructors import construct_average_ard_kernel
 from experiments.curves.curves import CURVE_FUNCTIONS, Curve
 from experiments.data import Data, ExperimentData, ProblemType
 from experiments.loaders import load_pls, load_svgp
-from experiments.metrics import calculate_metrics
 from experiments.plotters import (
     animate_1d_gp_predictions,
     plot_1d_experiment_data,
@@ -32,9 +31,6 @@ from experiments.utils import create_directory
 from src.inducing_point_selectors import ConditionalVarianceInducingPointSelector
 from src.kernels import PLSKernel
 from src.projected_langevin_sampling import PLSClassificationIPB, PLSClassificationONB
-from src.projected_langevin_sampling.base.transform.classification import (
-    PLSClassification,
-)
 from src.utils import set_seed
 
 parser = argparse.ArgumentParser(
@@ -100,10 +96,9 @@ def get_experiment_data(
 
 
 def plot_experiment_data(
-    curve_function: Curve,
     experiment_data: ExperimentData,
     title: str,
-    curve_name: str,
+    plot_curve_path: str,
 ) -> None:
     fig, ax = plt.subplots(figsize=(13, 6.5))
     fig, ax = plot_1d_experiment_data(
@@ -114,10 +109,8 @@ def plot_experiment_data(
     ax.legend()
     ax.set_title(title)
     fig.tight_layout()
-    create_directory(f"experiments/curves/classification/outputs/plots/{curve_name}")
-    plt.savefig(
-        f"experiments/curves/classification/outputs/plots/{curve_name}/experiment-data.png"
-    )
+    create_directory(plot_curve_path)
+    plt.savefig(os.path.join(plot_curve_path, "experiment-data.png"))
     plt.close()
 
 
@@ -128,6 +121,7 @@ def main(
     inducing_points_config: Dict[str, Any],
     pls_config: Dict[str, Any],
     svgp_config: Dict[str, Any],
+    outputs_path: str,
 ) -> None:
     experiment_data = get_experiment_data(
         curve_function=curve_function,
@@ -136,16 +130,20 @@ def main(
         number_of_test_intervals=data_config["number_of_test_intervals"],
         total_number_of_intervals=data_config["total_number_of_intervals"],
     )
+    data_path = os.path.join(
+        outputs_path, "data", type(curve_function).__name__.lower()
+    )
+    plot_curve_path = os.path.join(
+        outputs_path, "plots", type(curve_function).__name__.lower()
+    )
+    models_path = os.path.join(
+        outputs_path, "models", type(curve_function).__name__.lower()
+    )
     plot_experiment_data(
-        curve_function=curve_function,
         experiment_data=experiment_data,
         title=f"{curve_function.__name__} data",
-        curve_name=type(curve_function).__name__.lower(),
+        plot_curve_path=plot_curve_path,
     )
-    plot_curve_path = f"experiments/curves/classification/outputs/plots/{type(curve_function).__name__.lower()}"
-    results_curve_path = f"experiments/curves/classification/outputs/results/{type(curve_function).__name__.lower()}"
-    models_path = f"experiments/curves/classification/outputs/models/{type(curve_function).__name__.lower()}"
-    data_path = f"experiments/curves/classification/outputs/data/{type(curve_function).__name__.lower()}"
     subsample_gp_model_path = os.path.join(models_path, "subsample_gp")
     subsample_gp_data_path = os.path.join(data_path, "subsample_gp")
     likelihood = gpytorch.likelihoods.DirichletClassificationLikelihood(
@@ -289,16 +287,6 @@ def main(
             else False,
             initial_particles_noise_only=pls_config["initial_particles_noise_only"],
         )
-        set_seed(pls_config["seed"])
-        calculate_metrics(
-            model=pls,
-            particles=particles,
-            model_name=pls_name,
-            dataset_name=type(curve_function).__name__,
-            experiment_data=experiment_data,
-            results_path=results_curve_path,
-            plots_path=plot_curve_path,
-        )
 
     plot_title = "SVGP for Binary Classification"
     svgp_likelihood = gpytorch.likelihoods.BernoulliLikelihood()
@@ -378,15 +366,6 @@ def main(
             if "christmas_colours" in pls_config
             else False,
         )
-        set_seed(svgp_config["seed"])
-        calculate_metrics(
-            model=svgp,
-            model_name=model_name,
-            dataset_name=type(curve_function).__name__,
-            experiment_data=experiment_data,
-            results_path=results_curve_path,
-            plots_path=plot_curve_path,
-        )
 
 
 if __name__ == "__main__":
@@ -394,6 +373,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     with open(args.config_path, "r") as file:
         loaded_config = yaml.safe_load(file)
+    outputs_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "outputs")
     for curve_function_ in CURVE_FUNCTIONS:
         main(
             curve_function=curve_function_,
@@ -402,4 +382,5 @@ if __name__ == "__main__":
             inducing_points_config=loaded_config["inducing_points"],
             pls_config=loaded_config["pls"],
             svgp_config=loaded_config["svgp"],
+            outputs_path=outputs_path,
         )

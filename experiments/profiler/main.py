@@ -16,7 +16,7 @@ from experiments.utils import create_directory
 from src.gps import svGP
 from src.inducing_point_selectors import ConditionalVarianceInducingPointSelector
 from src.kernels.projected_langevin_sampling import PLSKernel
-from src.projected_langevin_sampling import PLSRegressionIPB, PLSRegressionONB
+from src.projected_langevin_sampling import PLSRegressionONB
 from src.projected_langevin_sampling.base.transform.regression import PLSRegression
 
 parser = argparse.ArgumentParser(
@@ -361,7 +361,7 @@ def main(
     number_of_particles_config: Dict[str, Any],
     profiler_config: Dict[str, Any],
 ) -> None:
-    profiler_path = f"experiments/curves/profiler/outputs"
+    profiler_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "outputs")
     models_path = f"{profiler_path}/models"
     data_path = f"{profiler_path}/data"
     results_path = f"{profiler_path}/results"
