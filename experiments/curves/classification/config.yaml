@@ -24,7 +24,7 @@ pls:
   jitter: 0
   seed: 0
   christmas_colours: False
-  metric_to_optimise: loss
+  metric_to_optimise: acc
   initial_particles_noise_only: True
   early_stopper_patience: 1.0e-3
 svgp:
