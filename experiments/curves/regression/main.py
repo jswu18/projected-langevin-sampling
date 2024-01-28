@@ -213,7 +213,6 @@ def main(
             particles=particles,
             particle_name=f"{pls_name}-initial",
             experiment_data=experiment_data,
-            inducing_points=inducing_points,
             plot_particles_path=plot_curve_path,
             plot_title=plot_title,
         )
