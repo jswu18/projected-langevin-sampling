@@ -11,7 +11,8 @@ from tqdm import tqdm
 from experiments.data import Data, ExperimentData, ProblemType
 from src.gps import ExactGP, svGP
 from src.kernels import PLSKernel
-from src.projected_langevin_sampling.base.base import PLSBase
+from src.projected_langevin_sampling import ProjectedLangevinSampling
+from src.projected_langevin_sampling.basis import OrthonormalBasis
 from src.utils import set_seed
 
 _DATA_COLORS = {
@@ -41,16 +42,26 @@ def plot_1d_gp_prediction(
             (mean - 1.96 * stdev).reshape(-1),
             (mean + 1.96 * stdev).reshape(-1),
             facecolor=(0.9, 0.9, 0.9),
-            label="error bound (95%)",
+            label="95% error",
             zorder=0,
         )
-    ax.plot(x.reshape(-1), mean.reshape(-1), label="mean", zorder=0, color="black")
+    ax.plot(
+        x.reshape(-1),
+        mean.reshape(-1),
+        label="mean",
+        zorder=1,
+        color="black",
+        linewidth=0.5,
+    )
     ax.set_xlabel("x")
     ax.set_ylabel("y")
-    ax.legend()
     if title is not None:
         ax.set_title(title)
     if save_path is not None:
+        fig.legend(
+            loc="outside lower center",
+            ncols=3,
+        )
         fig.savefig(save_path, bbox_inches="tight")
         plt.close(fig)
         return fig, ax
@@ -78,13 +89,17 @@ def plot_1d_data(
             label=data.name,
             alpha=alpha,
             color=color,
+            s=10,
         )
     ax.set_xlabel("x")
     ax.set_ylabel("y")
-    ax.legend()
     if title is not None:
         ax.set_title(title)
     if save_path is not None:
+        fig.legend(
+            loc="outside lower center",
+            ncols=3,
+        )
         fig.savefig(save_path)
         plt.close(fig)
         return fig, ax
@@ -99,6 +114,7 @@ def plot_1d_experiment_data(
     save_path: str = None,
     title: str = None,
     is_sample_untransformed: bool = False,
+    alpha: float = 0.3,
 ) -> Tuple[plt.Figure, plt.Axes]:
     for data in [
         experiment_data.train,
@@ -118,7 +134,7 @@ def plot_1d_experiment_data(
                 ),
                 save_path=None,
                 title=None,
-                alpha=0.3,
+                alpha=alpha,
             )
     if not is_sample_untransformed and experiment_data.full.y_untransformed is not None:
         ax.plot(
@@ -127,7 +143,7 @@ def plot_1d_experiment_data(
             label="latent",
             color="midnightblue",
             linestyle=(0, (3, 1, 1, 1, 1, 1)),
-            linewidth=3,
+            linewidth=1,
         )
     if experiment_data.problem_type == ProblemType.CLASSIFICATION:
         ax.set_ylim([0, 1])
@@ -150,18 +166,18 @@ def plot_1d_particle(
     x: torch.Tensor,
     y: torch.Tensor,
     add_label: bool = False,
+    alpha: float = 0.2,
 ) -> Tuple[plt.Figure, plt.Axes]:
     ax.plot(
         x.reshape(-1),
         y.reshape(-1),
-        color=[0.1, 0.1, 0.1],
-        alpha=0.1,
+        color="black",
+        alpha=alpha,
         zorder=0,
         label="particle" if add_label else None,
     )
     ax.set_xlabel("x")
     ax.set_ylabel("y")
-    ax.legend()
     return fig, ax
 
 
@@ -174,8 +190,9 @@ def plot_1d_pls_prediction(
     predicted_distribution: Optional[torch.distributions.Distribution] = None,
     title: str = None,
     is_sample_untransformed: bool = False,
+    max_particles_to_plot: int = 10,
 ):
-    fig, ax = plt.subplots(figsize=(13, 6.5))
+    fig, ax = plt.subplots(figsize=(5, 3), layout="constrained")
     if not is_sample_untransformed:
         fig, ax = plot_1d_experiment_data(
             fig=fig,
@@ -214,7 +231,7 @@ def plot_1d_pls_prediction(
             )
         else:
             raise TypeError
-    for i in range(predicted_samples.shape[1]):
+    for i in range(min(predicted_samples.shape[1], max_particles_to_plot)):
         fig, ax = plot_1d_particle(
             fig=fig,
             ax=ax,
@@ -226,7 +243,10 @@ def plot_1d_pls_prediction(
         ax.set_ylabel(y_name)
     if title is not None:
         ax.set_title(title)
-    fig.tight_layout()
+    fig.legend(
+        loc="outside lower center",
+        ncols=3,
+    )
     fig.savefig(
         save_path,
     )
@@ -242,51 +262,27 @@ def plot_1d_pls_prediction_histogram(
     title: str = None,
     number_of_bins: int = 50,
 ):
-    fig, ax = plt.subplots(3, 1, figsize=(9, 18))
-    fig, ax[0] = plot_1d_experiment_data(
-        fig=fig,
-        ax=ax[0],
-        experiment_data=experiment_data,
-        is_sample_untransformed=False,
-    )
-    ax[0].autoscale(enable=False)  # turn off autoscale before plotting particles
+    fig, ax = plt.subplots(1, 2, figsize=(10, 3), layout="constrained")
     for i in range(predicted_samples.shape[1]):
         fig, ax[0] = plot_1d_particle(
             fig=fig,
             ax=ax[0],
             x=x,
-            y=predicted_samples[:, i],
-            add_label=i == 0,
-        )
-    fig, ax[0] = plot_1d_gp_prediction(
-        fig=fig,
-        ax=ax[0],
-        x=experiment_data.full.x,
-        mean=predicted_samples.mean(dim=1),
-        variance=None,
-    )
-    for i in range(predicted_samples.shape[1]):
-        fig, ax[1] = plot_1d_particle(
-            fig=fig,
-            ax=ax[1],
-            x=x,
             y=untransformed_predicted_samples[:, i],
             add_label=i == 0,
+            alpha=0.1,
         )
     if title is not None:
-        ax[0].set_title(f"{title}: $f(x)^2$")
-        ax[1].set_title(f"{title}: $f(x)$")
+        ax[0].set_title(f"$f(x)$")
     ax[0].set_xlabel("$x$")
-    ax[1].set_xlabel("$x$")
-    ax[0].set_ylabel("$f(x)^2$")
-    ax[1].set_ylabel("$f(x)$")
-    ax[1].set_xlim([min(x), max(x)])
+    ax[0].set_ylabel("$f(x)$")
+    ax[0].set_xlim([min(x), max(x)])
     max_train_idx = torch.argmax(experiment_data.train.y)
     max_full_idx = torch.where(
         experiment_data.full.x == experiment_data.train.x[max_train_idx]
     )[0]
 
-    ax[1].axvline(
+    ax[0].axvline(
         x=experiment_data.train.x[max_train_idx].item(),
         color="tab:red",
         label="cross section",
@@ -295,20 +291,20 @@ def plot_1d_pls_prediction_histogram(
     )
 
     histogram_data = untransformed_predicted_samples[max_full_idx, :]
-    ax[2].hist(
+    ax[1].hist(
         histogram_data,
         bins=number_of_bins,
         color="tab:red",
         alpha=0.75,
     )
-    ax[2].set_xlabel(f"bins")
-    ax[2].set_ylabel("frequency")
+    ax[1].set_xlabel(f"$f(x)$ bin")
+    ax[1].set_ylabel("count")
     if title is not None:
-        ax[2].set_title(
-            f"{title} Histogram: $f(x={experiment_data.train.x[max_train_idx].item():.2f})$ cross section"
+        ax[1].set_title(
+            f"Histogram at $f(x={experiment_data.train.x[max_train_idx].item():.2f})$"
         )
-    ax[1].legend()
-    fig.tight_layout()
+    fig.legend(loc="outside lower center", ncols=2)
+
     fig.savefig(
         save_path,
     )
@@ -320,7 +316,7 @@ def plot_losses(
     title: str,
     save_path: str,
 ):
-    fig, ax = plt.subplots(figsize=(13, 6.5))
+    fig, ax = plt.subplots(figsize=(5, 3), layout="constrained")
     for i, learning_rate in enumerate(losses_history.keys()):
         shade = ((len(losses_history) - i) / len(losses_history)) * 0.8
         ax.plot(
@@ -332,8 +328,11 @@ def plot_losses(
     ax.set_xlabel("epoch")
     ax.set_ylabel("loss")
     if len(losses_history) <= 20:
-        ax.legend()
-    fig.tight_layout()
+        fig.legend(
+            loc="outside lower center",
+            ncols=3,
+        )
+
     fig.savefig(
         save_path,
     )
@@ -347,7 +346,7 @@ def plot_1d_gp_prediction_and_inducing_points(
     save_path: str,
     inducing_points: Data = None,
 ):
-    fig, ax = plt.subplots(figsize=(13, 6.5))
+    fig, ax = plt.subplots(figsize=(5, 3), layout="constrained")
     fig, ax = plot_1d_experiment_data(
         fig=fig,
         ax=ax,
@@ -382,9 +381,12 @@ def plot_1d_gp_prediction_and_inducing_points(
         )
     else:
         raise NotImplementedError
-    ax.legend()
+    fig.legend(
+        loc="outside lower center",
+        ncols=3,
+    )
     ax.set_title(title)
-    fig.tight_layout()
+
     fig.savefig(save_path)
     plt.close(fig)
 
@@ -394,7 +396,7 @@ def plot_energy_potentials(
     title: str,
     save_path: str,
 ):
-    fig, ax = plt.subplots(figsize=(13, 6.5))
+    fig, ax = plt.subplots(figsize=(13, 6), layout="constrained")
     for i, step_size in enumerate(
         sorted(energy_potentials_history.keys(), reverse=True)
     ):
@@ -414,8 +416,11 @@ def plot_energy_potentials(
             1.5 * max(np.log([x[0] for x in energy_potentials_history.values()])),
         ]
     )
-    ax.legend()
-    fig.tight_layout()
+    fig.legend(
+        loc="outside lower center",
+        ncols=3,
+    )
+
     fig.savefig(
         save_path,
     )
@@ -429,7 +434,7 @@ def plot_true_versus_predicted(
     save_path: str,
     error_bar: bool = True,
 ):
-    fig, ax = plt.subplots(figsize=(13, 13))
+    fig, ax = plt.subplots(figsize=(13, 13), layout="constrained")
     if error_bar:
         _, _, bars = plt.errorbar(
             y_true.detach().numpy(),
@@ -458,8 +463,11 @@ def plot_true_versus_predicted(
     plt.plot(axis_lims, axis_lims, color="gray", label="target", linestyle="dashed")
     plt.xlim(axis_lims)
     plt.ylim(axis_lims)
-    plt.legend()
-    fig.tight_layout()
+    fig.legend(
+        loc="outside lower center",
+        ncols=3,
+    )
+
     fig.savefig(
         save_path,
     )
@@ -467,7 +475,7 @@ def plot_true_versus_predicted(
 
 
 def animate_1d_pls_predictions(
-    pls: PLSBase,
+    pls: ProjectedLangevinSampling,
     number_of_particles: int,
     initial_particles_noise_only: bool,
     seed: int,
@@ -479,13 +487,16 @@ def animate_1d_pls_predictions(
     save_path: str,
     christmas_colours: bool = False,
     animation_duration: int = 15,
+    max_particles_to_plot: int = 10,
     fps=15,
 ) -> None:
-    fig, ax = plt.subplots(figsize=(13, 6.5))
+    number_of_particles = min(number_of_particles, max_particles_to_plot)
+    fig, ax = plt.subplots(figsize=(5, 3), layout="constrained")
     fig, ax = plot_1d_experiment_data(
         fig=fig,
         ax=ax,
         experiment_data=experiment_data,
+        alpha=0.1,
     )
     plt.xlim(x.min(), x.max())
     ax.autoscale(enable=False)  # turn off autoscale before plotting particles
@@ -513,16 +524,17 @@ def animate_1d_pls_predictions(
         ax.plot(
             x.reshape(-1),
             predicted_samples[:, i].reshape(-1),
-            color=[0.1, 0.1, 0.1]
-            if not christmas_colours
-            else ["green", "red", "blue"][i % 3],
-            alpha=0.1,
-            zorder=0,
+            color="black" if not christmas_colours else ["green", "red", "blue"][i % 3],
+            alpha=0.3,
+            zorder=1,
             label="particle" if i == 0 else None,
         )[0]
         for i in range(predicted_samples.shape[-1])
     ]
-    plt.legend(loc="lower left")
+    fig.legend(
+        loc="outside lower center",
+        ncols=4,
+    )
 
     class ParticleWrapper:
         """
@@ -558,9 +570,7 @@ def animate_1d_pls_predictions(
         ).detach()
         for i in range(_predicted_samples.shape[-1]):
             samples_plotted[i].set_data((x, _predicted_samples[:, i].reshape(-1)))
-        ax.set_title(
-            f"{title} (simulation time={step_size * particle_wrapper.num_updates:.2e})"
-        )
+        ax.set_title(f"{title} (t={step_size * particle_wrapper.num_updates:.2e})")
         progress_bar.update(n=1)
         return (samples_plotted[0],)
 
@@ -578,7 +588,7 @@ def animate_1d_pls_predictions(
 
 
 def animate_1d_pls_untransformed_predictions(
-    pls: PLSBase,
+    pls: ProjectedLangevinSampling,
     number_of_particles: int,
     initial_particles_noise_only: bool,
     seed: int,
@@ -590,9 +600,10 @@ def animate_1d_pls_untransformed_predictions(
     save_path: str,
     christmas_colours: bool = False,
     animation_duration: int = 15,
+    max_particles_to_plot: int = 10,
     fps=15,
 ) -> None:
-    fig, ax = plt.subplots(figsize=(13, 6.5))
+    number_of_particles = min(number_of_particles, max_particles_to_plot)
     plt.xlim(x.min(), x.max())
     ax.autoscale(enable=False, axis="x")  # turn off autoscale before plotting particles
     particles = pls.initialise_particles(
@@ -608,16 +619,17 @@ def animate_1d_pls_untransformed_predictions(
         ax.plot(
             x.reshape(-1),
             predicted_untransformed_samples[:, i].reshape(-1),
-            color=[0.1, 0.1, 0.1]
-            if not christmas_colours
-            else ["green", "red", "blue"][i % 3],
-            alpha=0.1,
-            zorder=0,
+            color="black" if not christmas_colours else ["green", "red", "blue"][i % 3],
+            alpha=0.3,
+            zorder=1,
             label="particle" if i == 0 else None,
         )[0]
         for i in range(predicted_untransformed_samples.shape[-1])
     ]
-    plt.legend(loc="lower left")
+    fig.legend(
+        loc="outside lower center",
+        ncols=4,
+    )
 
     class ParticleWrapper:
         """
@@ -656,9 +668,7 @@ def animate_1d_pls_untransformed_predictions(
             samples_plotted[i].set_data(
                 (x, _predicted_untransformed_samples[:, i].reshape(-1))
             )
-        ax.set_title(
-            f"{title} (simulation time={step_size * particle_wrapper.num_updates:.2e})"
-        )
+        ax.set_title(f"{title} (t={step_size * particle_wrapper.num_updates:.2e})")
         progress_bar.update(n=1)
         return (samples_plotted[0],)
 
@@ -696,11 +706,12 @@ def animate_1d_gp_predictions(
     animation_duration: int = 15,
     fps=15,
 ) -> None:
-    fig, ax = plt.subplots(figsize=(13, 6.5))
+    fig, ax = plt.subplots(figsize=(5, 3), layout="constrained")
     fig, ax = plot_1d_experiment_data(
         fig=fig,
         ax=ax,
         experiment_data=experiment_data,
+        alpha=0.1,
     )
     if not learn_inducing_locations:
         for i in range(inducing_points.x.shape[0]):
@@ -762,7 +773,7 @@ def animate_1d_gp_predictions(
             (mean_prediction - 1.96 * stdev_prediction).reshape(-1),
             (mean_prediction + 1.96 * stdev_prediction).reshape(-1),
             facecolor=(0.9, 0.9, 0.9),
-            label="error bound (95%)",
+            label="95% error",
             zorder=0,
         )
         mean_line = ax.plot(
@@ -782,7 +793,10 @@ def animate_1d_gp_predictions(
         )[0]
     else:
         raise NotImplementedError
-    plt.legend(loc="lower left")
+    fig.legend(
+        loc="outside lower center",
+        ncols=3,
+    )
 
     class Counter:
         def __init__(self):
@@ -827,7 +841,7 @@ def animate_1d_gp_predictions(
             )
         else:
             raise NotImplementedError
-        ax.set_title(f"{title} (simulation time={learning_rate*counter.count:.2e})")
+        ax.set_title(f"{title} (t={learning_rate*counter.count:.2e})")
         if christmas_colours:
             fill.set_color(
                 (
@@ -849,4 +863,19 @@ def animate_1d_gp_predictions(
         bitrate=1800,
     )
     ani.save(save_path, writer=writer)
+    plt.close()
+
+
+def plot_eigenvalues(basis: OrthonormalBasis, save_path: str, title: str) -> None:
+    eigenvalues, _ = torch.linalg.eigh(
+        (1 / basis.x_induce.shape[0]) * basis.base_gram_induce.evaluate()
+    )
+    fig, ax = plt.subplots(figsize=(13, 13), layout="constrained")
+    ax.bar(
+        np.arange(1, eigenvalues.shape[0] + 1), np.flip(eigenvalues.detach().numpy())
+    )
+    ax.set_xlabel("eigenvalue index")
+    ax.set_ylabel("eigenvalue")
+    ax.set_title(title)
+    fig.savefig(save_path)
     plt.close()

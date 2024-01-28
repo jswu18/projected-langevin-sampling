@@ -5,12 +5,13 @@ from typing import List, Optional, Tuple, Union
 
 import gpytorch
 import numpy as np
+import sklearn
 import torch
 from sklearn.neighbors import NearestNeighbors
 from torch.utils.data import DataLoader, TensorDataset
 from tqdm import tqdm
 
-from experiments.data import Data, ExperimentData
+from experiments.data import Data, ExperimentData, ProblemType
 from experiments.early_stopper import EarlyStopper
 from experiments.loaders import load_ard_exact_gp_model, load_svgp
 from experiments.metrics import calculate_mae, calculate_mse, calculate_nll
@@ -28,7 +29,7 @@ from src.bisection_search import LogBisectionSearch
 from src.gps import ExactGP, svGP
 from src.inducing_point_selectors import InducingPointSelector
 from src.kernels import PLSKernel
-from src.projected_langevin_sampling.base.base import PLSBase
+from src.projected_langevin_sampling import ProjectedLangevinSampling
 from src.samplers import sample_point
 from src.utils import set_seed
 
@@ -216,11 +217,10 @@ def learn_subsample_gps(
 
 
 def plot_pls_1d_particles(
-    pls: PLSBase,
+    pls: ProjectedLangevinSampling,
     particles: torch.Tensor,
     particle_name: str,
     experiment_data: ExperimentData,
-    inducing_points: Data,
     plot_particles_path: str,
     plot_title: str = None,
 ) -> None:
@@ -275,7 +275,7 @@ def plot_pls_1d_particles(
 
 
 def animate_pls_1d_particles(
-    pls: PLSBase,
+    pls: ProjectedLangevinSampling,
     number_of_particles: int,
     particle_name: str,
     experiment_data: ExperimentData,
@@ -326,7 +326,7 @@ def animate_pls_1d_particles(
 
 
 def train_pls(
-    pls: PLSBase,
+    pls: ProjectedLangevinSampling,
     particle_name: str,
     experiment_data: ExperimentData,
     simulation_duration: float,
@@ -342,14 +342,18 @@ def train_pls(
     number_of_observation_noise_searches: int = 0,
     plot_title: str = None,
     plot_energy_potential_path: str = None,
-    metric_to_minimise: str = "nll",
+    metric_to_optimise: str = "nll",
 ) -> Tuple[torch.Tensor, float, int]:
-    best_energy_potential, best_mae, best_mse, best_nll = (
+    best_energy_potential, best_mae, best_mse, best_nll, best_acc, best_auc, best_f1 = (
         float("inf"),
         float("inf"),
         float("inf"),
         float("inf"),
+        0,
+        0,
+        0,
     )
+    acc, auc, f1 = 0, 0, 0
     best_lr = None
     energy_potentials_history = {}
     step_sizes = np.logspace(
@@ -397,14 +401,48 @@ def train_pls(
                 prediction=prediction,
                 y=experiment_data.train.y,
             )
-            if metric_to_minimise not in ["nll", "mse", "mae", "loss"]:
-                raise ValueError(f"Unknown metric to minimise: {metric_to_minimise}")
+            if (
+                experiment_data.problem_type == ProblemType.CLASSIFICATION
+                and isinstance(prediction, torch.distributions.Bernoulli)
+            ):
+                acc = sklearn.metrics.accuracy_score(
+                    y_true=experiment_data.train.y.detach().numpy(),
+                    y_pred=prediction.probs.round().detach().numpy(),
+                )
+                auc = sklearn.metrics.roc_auc_score(
+                    y_true=experiment_data.train.y.detach().numpy(),
+                    y_score=prediction.probs.detach().numpy(),
+                )
+                f1 = sklearn.metrics.f1_score(
+                    y_true=experiment_data.train.y.detach().numpy(),
+                    y_pred=prediction.probs.round().detach().numpy(),
+                )
+            if (
+                metric_to_optimise in ["acc", "auc", "f1"]
+                and experiment_data.problem_type != ProblemType.CLASSIFICATION
+            ):
+                raise ValueError(
+                    f"Cannot use binary classification metric {metric_to_optimise} for problem type {experiment_data.problem_type}."
+                )
+            if metric_to_optimise not in [
+                "nll",
+                "mse",
+                "mae",
+                "acc",
+                "auc",
+                "f1",
+                "loss",
+            ]:
+                raise ValueError(f"Unknown metric to minimise: {metric_to_optimise}")
             elif (
-                (metric_to_minimise == "nll" and nll < best_nll)
-                or (metric_to_minimise == "mse" and mse < best_mse)
-                or (metric_to_minimise == "mae" and mae < best_mae)
+                (metric_to_optimise == "nll" and nll < best_nll)
+                or (metric_to_optimise == "mse" and mse < best_mse)
+                or (metric_to_optimise == "mae" and mae < best_mae)
+                or (metric_to_optimise == "acc" and acc > best_acc)
+                or (metric_to_optimise == "auc" and auc > best_auc)
+                or (metric_to_optimise == "f1" and f1 > best_f1)
                 or (
-                    metric_to_minimise == "loss"
+                    metric_to_optimise == "loss"
                     and energy_potentials[-1] < best_energy_potential
                 )
             ):
@@ -455,7 +493,7 @@ def train_pls(
 
 def pls_observation_noise_search(
     data: Data,
-    model: PLSBase,
+    model: ProjectedLangevinSampling,
     particles: torch.Tensor,
     observation_noise_upper: float,
     observation_noise_lower: float,

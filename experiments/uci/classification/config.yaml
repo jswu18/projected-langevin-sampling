@@ -14,13 +14,13 @@ inducing_points:
 pls:
   number_of_particles: 100
   simulation_duration: 2.5e-1
-  maximum_number_of_steps: 1.0e+6
+  maximum_number_of_steps: 1.0e+10
   number_of_step_searches: 5
-  step_size_upper: 1.0e-1
+  step_size_upper: 1.0e-3
   minimum_change_in_energy_potential: 0.01
   jitter: 1.0e-10
   seed: 0
-  metric_to_minimise: loss
+  metric_to_optimise: mae
   initial_particles_noise_only: True
   observation_noise_upper: 1.0e+4
   observation_noise_lower: 1.0e-4

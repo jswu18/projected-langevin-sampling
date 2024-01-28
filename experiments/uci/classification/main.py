@@ -13,6 +13,7 @@ from experiments.constructors import construct_average_ard_kernel
 from experiments.data import ExperimentData, ProblemType
 from experiments.loaders import load_pls, load_svgp
 from experiments.metrics import calculate_metrics, concatenate_metrics
+from experiments.plotters import plot_eigenvalues
 from experiments.preprocess import set_up_experiment
 from experiments.runners import (
     learn_subsample_gps,
@@ -26,7 +27,13 @@ from experiments.uci.constants import (
 )
 from src.inducing_point_selectors import ConditionalVarianceInducingPointSelector
 from src.kernels import PLSKernel
-from src.projected_langevin_sampling import PLSClassificationIPB, PLSClassificationONB
+from src.projected_langevin_sampling import ProjectedLangevinSampling
+from src.projected_langevin_sampling.basis import InducingPointBasis, OrthonormalBasis
+from src.projected_langevin_sampling.costs import BernoulliCost
+from src.projected_langevin_sampling.link_functions import (
+    ProbitLinkFunction,
+    SigmoidLinkFunction,
+)
 from src.utils import set_seed
 
 parser = argparse.ArgumentParser(
@@ -175,25 +182,63 @@ def main(
             base_kernel=average_ard_kernel,
             approximation_samples=inducing_points.x,
         )
+        onb_basis = OrthonormalBasis(
+            kernel=pls_kernel,
+            x_induce=inducing_points.x,
+            x_train=experiment_data.train.x,
+        )
+        ipb_basis = InducingPointBasis(
+            kernel=pls_kernel,
+            x_induce=inducing_points.x,
+            y_induce=inducing_points.y,
+            x_train=experiment_data.train.x,
+        )
+        sigmoid_cost = BernoulliCost(
+            y_train=experiment_data.train.y,
+            link_function=SigmoidLinkFunction(),
+        )
+        probit_cost = BernoulliCost(
+            y_train=experiment_data.train.y,
+            link_function=ProbitLinkFunction(),
+        )
         pls_dict = {
-            "pls-onb": PLSClassificationONB(
-                kernel=pls_kernel,
-                x_induce=inducing_points.x,
-                y_induce=inducing_points.y,
-                x_train=experiment_data.train.x,
-                y_train=experiment_data.train.y,
-                jitter=pls_config["jitter"],
+            "pls-onb-probit": ProjectedLangevinSampling(
+                basis=onb_basis,
+                cost=probit_cost,
             ),
-            "pls-ipb": PLSClassificationIPB(
-                kernel=pls_kernel,
-                x_induce=inducing_points.x,
-                y_induce=inducing_points.y,
-                x_train=experiment_data.train.x,
-                y_train=experiment_data.train.y,
-                jitter=pls_config["jitter"],
+            "pls-ipb-probit": ProjectedLangevinSampling(
+                basis=ipb_basis,
+                cost=probit_cost,
+            ),
+            "pls-onb-sigmoid": ProjectedLangevinSampling(
+                basis=onb_basis,
+                cost=sigmoid_cost,
+            ),
+            "pls-ipb-sigmoid": ProjectedLangevinSampling(
+                basis=ipb_basis,
+                cost=sigmoid_cost,
             ),
         }
+        # if experiment_data.train.x.shape[0] < kernel_config["subsample_size"]:
+        #     pls_kernel_full = PLSKernel(
+        #         base_kernel=average_ard_kernel,
+        #         approximation_samples=experiment_data.train.x,
+        #     )
+        #     pls_dict["pls-onb-full"] = PLSClassificationONB(
+        #         kernel=pls_kernel_full,
+        #         x_induce=experiment_data.train.x,
+        #         y_induce=experiment_data.train.y,
+        #         x_train=experiment_data.train.x,
+        #         y_train=experiment_data.train.y,
+        #         jitter=pls_config["jitter"],
+        #     )
         for pls_name, pls in pls_dict.items():
+            if isinstance(pls.basis, OrthonormalBasis):
+                plot_eigenvalues(
+                    basis=pls.basis,
+                    save_path=os.path.join(plots_path, f"eigenvalues-{pls_name}.png"),
+                    title=f"Eigenvalues ({dataset_name})",
+                )
             pls_path = os.path.join(models_path, f"{pls_name}.pth")
             set_seed(pls_config["seed"])
             particles = pls.initialise_particles(
@@ -223,7 +268,8 @@ def main(
                     observation_noise_upper=pls_config["observation_noise_upper"],
                     observation_noise_lower=pls_config["observation_noise_lower"],
                     plot_title=f"{dataset_name}",
-                    metric_to_minimise=pls_config["metric_to_minimise"],
+                    plot_energy_potential_path=plots_path,
+                    metric_to_optimise=pls_config["metric_to_optimise"],
                     early_stopper_patience=pls_config["early_stopper_patience"],
                 )
                 torch.save(

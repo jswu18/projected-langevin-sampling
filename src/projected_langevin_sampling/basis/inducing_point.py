@@ -1,16 +1,15 @@
 import math
-from abc import ABC
 from typing import Optional
 
 import gpytorch
 import torch
 
 from src.kernels import PLSKernel
-from src.projected_langevin_sampling.base.base import PLSBase
+from src.projected_langevin_sampling.basis.base import PLSBasis
 from src.samplers import sample_multivariate_normal
 
 
-class PLSInducingPointBasis(PLSBase, ABC):
+class InducingPointBasis(PLSBasis):
     """
     A Non-orthonormal basis (IP) approximation.
     The base class for projected Langevin sampling with particles on a function space approximated by a set of M inducing points.
@@ -27,33 +26,22 @@ class PLSInducingPointBasis(PLSBase, ABC):
         x_induce: torch.Tensor,
         y_induce: torch.Tensor,
         x_train: torch.Tensor,
-        y_train: torch.Tensor,
-        observation_noise: Optional[float] = None,
-        jitter: float = 0.0,
     ):
-        """
-        Constructor for the data approximation base class of projected Langevin sampling.
-        :param x_induce: The inducing points of size (M, D).
-        :param y_induce: The inducing points of size (M,).
-        :param x_train: The training points of size (N, D).
-        :param y_train: The training points of size (N,).
-        :param kernel: The projected Langevin sampling kernel.
-        :param observation_noise: The observation noise.
-        :param jitter: A jitter for numerical stability.
-        """
-        PLSBase.__init__(
-            self,
-            kernel=kernel,
-            observation_noise=observation_noise,
-            x_induce=x_induce,
-            y_induce=y_induce,
-            x_train=x_train,
-            y_train=y_train,
-            jitter=jitter,
-        )
+        self.kernel = kernel
+        self.x_induce = x_induce  # size (M, D)
+        self.y_induce = y_induce  # size (M,)
+        self.gram_induce = self.kernel.forward(
+            x1=x_induce, x2=x_induce
+        )  # r(Z, Z) of size (M, M)
+        self.base_gram_induce = self.kernel.base_kernel(
+            x1=x_induce, x2=x_induce
+        )  # k(Z, X) of size (M, M)
+        self.base_gram_induce_train = self.kernel.base_kernel(
+            x1=x_induce, x2=x_train
+        )  # k(Z, X) of size (M, N)
 
     @property
-    def approximation_dimension(self):
+    def approximation_dimension(self) -> int:
         """
         The dimensionality of the function space approximation M (number of inducing points).
         :return: The dimensionality of the function space approximation.
@@ -66,19 +54,15 @@ class PLSInducingPointBasis(PLSBase, ABC):
         noise_only: bool = True,
         seed: Optional[int] = None,
     ) -> torch.Tensor:
-        """
-        Initialise the particles with either noise only or noise and an initialisation from the inducing points.
-        :param number_of_particles: The number of particles.
-        :param noise_only: Whether to initialise the particles to the noise only. Defaults to True.
-        :param seed: An optional seed for reproducibility.
-        :return: The initialised particles.
-        """
-        noise = self._initialise_particles_noise(
-            number_of_particles=number_of_particles, seed=seed
+        particle_noise = self._initialise_particles_noise(
+            number_of_particles=number_of_particles,
+            seed=seed,
         )
-        return noise if noise_only else (self.y_induce[:, None] + noise)  # size (M, P)
+        return (
+            particle_noise if noise_only else (self.y_induce[:, None] + particle_noise)
+        )  # size (M, P)
 
-    def _calculate_untransformed_train_predictions(
+    def calculate_untransformed_train_prediction_samples(
         self, particles: torch.Tensor
     ) -> torch.Tensor:
         """
@@ -92,14 +76,15 @@ class PLSInducingPointBasis(PLSBase, ABC):
             rhs=particles,
         )  #  k(X, Z) @ k(Z, Z)^{-1} @ U(t) of size (N, P)
 
-    def calculate_energy_potential(self, particles: torch.Tensor) -> float:
+    def calculate_energy_potential(
+        self, particles: torch.Tensor, cost: torch.Tensor
+    ) -> float:
         """
         Calculates the energy potential of the particles.
         :param particles: Particles of size (M, P).
+        :param cost: The cost of size (P,).
         :return: The energy potential for each particle of size (P,).
         """
-        cost = self.calculate_cost(particles=particles)  # size (P, )
-
         inverse_base_gram_induce_particles = gpytorch.solve(
             self.base_gram_induce, particles
         )  # k(Z, Z)^{-1} @ U(t) of size (M, P)
@@ -116,11 +101,13 @@ class PLSInducingPointBasis(PLSBase, ABC):
     def _calculate_particle_update(
         self,
         particles: torch.Tensor,
+        cost_derivative: torch.Tensor,
         step_size: float,
     ) -> torch.Tensor:
         """
         Calculates the update for each particle following the Wasserstein projected Langevin sampling.
         :param particles: Particles of size (M, P).
+        :param cost_derivative: The cost derivative of size (N, P).
         :param step_size: A step size for the projected Langevin sampling update in the form of a scalar.
         :return: The update to be applied to the particles of size (M, P).
         """
@@ -132,9 +119,6 @@ class PLSInducingPointBasis(PLSBase, ABC):
             cov=self.base_gram_induce,
             size=(particles.shape[1],),
         ).T  # e ~ N(0, k(Z, Z)) of size (M, P)
-        cost_derivative = self.calculate_cost_derivative(
-            particles=particles
-        )  # size (N, P)
 
         # - eta * k(Z, X) @ d_2 c(Y, k(X, Z) @ k(Z, Z)^{-1} @ U(t))
         # - eta * M * k(Z, Z)^{-1} @ U(t)
@@ -205,7 +189,7 @@ class PLSInducingPointBasis(PLSBase, ABC):
         self,
         particles: torch.Tensor,
         x: torch.Tensor,
-        noise: Optional[torch.Tensor] = None,
+        noise: torch.Tensor = None,
     ) -> torch.Tensor:
         """
         Predicts samples for given test points x without applying the output transformation.

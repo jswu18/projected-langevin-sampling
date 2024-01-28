@@ -30,7 +30,13 @@ from experiments.runners import (
 from experiments.utils import create_directory
 from src.inducing_point_selectors import ConditionalVarianceInducingPointSelector
 from src.kernels import PLSKernel
-from src.projected_langevin_sampling import PLSClassificationIPB, PLSClassificationONB
+from src.projected_langevin_sampling import ProjectedLangevinSampling
+from src.projected_langevin_sampling.basis import InducingPointBasis, OrthonormalBasis
+from src.projected_langevin_sampling.costs import BernoulliCost
+from src.projected_langevin_sampling.link_functions import (
+    ProbitLinkFunction,
+    SigmoidLinkFunction,
+)
 from src.utils import set_seed
 
 parser = argparse.ArgumentParser(
@@ -193,22 +199,41 @@ def main(
         base_kernel=average_ard_kernel,
         approximation_samples=inducing_points.x,
     )
+    onb_basis = OrthonormalBasis(
+        kernel=pls_kernel,
+        x_induce=inducing_points.x,
+        x_train=experiment_data.train.x,
+    )
+    ipb_basis = InducingPointBasis(
+        kernel=pls_kernel,
+        x_induce=inducing_points.x,
+        y_induce=inducing_points.y,
+        x_train=experiment_data.train.x,
+    )
+    sigmoid_cost = BernoulliCost(
+        y_train=experiment_data.train.y,
+        link_function=SigmoidLinkFunction(),
+    )
+    probit_cost = BernoulliCost(
+        y_train=experiment_data.train.y,
+        link_function=ProbitLinkFunction(),
+    )
     pls_dict = {
-        "pls-onb": PLSClassificationONB(
-            kernel=pls_kernel,
-            x_induce=inducing_points.x,
-            y_induce=inducing_points.y,
-            x_train=experiment_data.train.x,
-            y_train=experiment_data.train.y,
-            jitter=pls_config["jitter"],
+        "pls-onb-probit": ProjectedLangevinSampling(
+            basis=onb_basis,
+            cost=probit_cost,
         ),
-        "pls-ipb": PLSClassificationIPB(
-            kernel=pls_kernel,
-            x_induce=inducing_points.x,
-            y_induce=inducing_points.y,
-            x_train=experiment_data.train.x,
-            y_train=experiment_data.train.y,
-            jitter=pls_config["jitter"],
+        "pls-ipb-probit": ProjectedLangevinSampling(
+            basis=ipb_basis,
+            cost=probit_cost,
+        ),
+        "pls-onb-sigmoid": ProjectedLangevinSampling(
+            basis=onb_basis,
+            cost=sigmoid_cost,
+        ),
+        "pls-ipb-sigmoid": ProjectedLangevinSampling(
+            basis=ipb_basis,
+            cost=sigmoid_cost,
         ),
     }
     plot_title = "PLS for Binary Classification"
@@ -225,7 +250,6 @@ def main(
             particles=particles,
             particle_name=f"{pls_name}-initial",
             experiment_data=experiment_data,
-            inducing_points=inducing_points,
             plot_particles_path=plot_curve_path,
             plot_title=plot_title,
         )
@@ -250,7 +274,7 @@ def main(
                 seed=pls_config["seed"],
                 plot_title=plot_title,
                 plot_energy_potential_path=plot_curve_path,
-                metric_to_minimise=pls_config["metric_to_minimise"],
+                metric_to_optimise=pls_config["metric_to_optimise"],
                 early_stopper_patience=pls_config["early_stopper_patience"],
             )
             torch.save(
@@ -267,7 +291,6 @@ def main(
             particles=particles,
             particle_name=f"{pls_name}-learned",
             experiment_data=experiment_data,
-            inducing_points=inducing_points,
             plot_particles_path=plot_curve_path,
             plot_title=plot_title,
         )

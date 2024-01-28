@@ -16,8 +16,10 @@ from experiments.utils import create_directory
 from src.gps import svGP
 from src.inducing_point_selectors import ConditionalVarianceInducingPointSelector
 from src.kernels.projected_langevin_sampling import PLSKernel
-from src.projected_langevin_sampling import PLSRegressionONB
-from src.projected_langevin_sampling.base.transform.regression import PLSRegression
+from src.projected_langevin_sampling import ProjectedLangevinSampling
+from src.projected_langevin_sampling.basis import OrthonormalBasis
+from src.projected_langevin_sampling.costs import GaussianCost
+from src.projected_langevin_sampling.link_functions import IdentityLinkFunction
 
 parser = argparse.ArgumentParser(
     description="Main script for profiling PLS and svGP models."
@@ -47,7 +49,6 @@ def get_experiment_data(
 
 
 def train_pls(
-    pls_class: Type[PLSRegression],
     pls_kernel: PLSKernel,
     inducing_points: Data,
     experiment_data: ExperimentData,
@@ -56,13 +57,19 @@ def train_pls(
     number_of_epochs: int,
     step_size: float,
 ) -> None:
-    pls = pls_class(
+    onb_basis = OrthonormalBasis(
         kernel=pls_kernel,
         x_induce=inducing_points.x,
-        y_induce=inducing_points.y,
         x_train=experiment_data.train.x,
+    )
+    cost = GaussianCost(
+        observation_noise=float(observation_noise),
         y_train=experiment_data.train.y,
-        observation_noise=observation_noise,
+        link_function=IdentityLinkFunction(),
+    )
+    pls = ProjectedLangevinSampling(
+        basis=onb_basis,
+        cost=cost,
     )
     particles = pls.initialise_particles(
         number_of_particles=number_of_particles,
@@ -132,7 +139,6 @@ def parse_profiler(profiler: profile):
 
 
 def profile_pls(
-    pls_class: Type[PLSRegression],
     pls_kernel: PLSKernel,
     observation_noise: float,
     inducing_points: Data,
@@ -145,7 +151,6 @@ def profile_pls(
     with profile(activities=[ProfilerActivity.CPU], record_shapes=True) as prof:
         with record_function("model_training"):
             train_pls(
-                pls_class=pls_class,
                 pls_kernel=pls_kernel,
                 inducing_points=inducing_points,
                 experiment_data=experiment_data,
@@ -258,7 +263,6 @@ def run_experiment(
         print(f"Loaded profile from {df_path=}")
     else:
         df_pls = profile_pls(
-            pls_class=PLSRegressionONB,
             pls_kernel=pls_kernel,
             observation_noise=observation_noise,
             inducing_points=inducing_points,
@@ -337,7 +341,7 @@ def plot_df(
             )
         return fig, ax
 
-    fig, ax = plt.subplots(figsize=(10, 5))
+    fig, ax = plt.subplots(figsize=(5, 3), layout="constrained")
     if df_pls is not None:
         fig, ax = _plot_df(fig, ax, df_pls)
     if df_svgp is not None:
@@ -346,8 +350,10 @@ def plot_df(
     ax.set_xlabel(x_axis_name)
     ax.set_ylabel("CPU Time (milliseconds)")
     ax.set_title(f"CPU Time vs {x_axis_name}")
-    ax.legend()
-    fig.tight_layout()
+    fig.legend(
+        loc="outside lower center",
+        ncols=3,
+    )
     fig.savefig(
         save_path,
     )

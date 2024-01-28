@@ -1,15 +1,14 @@
 import math
-from abc import ABC
 from typing import Optional
 
 import torch
 
 from src.kernels import PLSKernel
-from src.projected_langevin_sampling.base.base import PLSBase
+from src.projected_langevin_sampling.basis.base import PLSBasis
 from src.samplers import sample_multivariate_normal
 
 
-class PLSOrthonormalBasis(PLSBase, ABC):
+class OrthonormalBasis(PLSBasis):
     """
     The base class for projected Langevin sampling with particles on a function space approximated by an orthonormal basis (ONB)
     constructed from a set of M inducing points through the eigendecomposition of the kernel matrix.
@@ -25,33 +24,17 @@ class PLSOrthonormalBasis(PLSBase, ABC):
         self,
         kernel: PLSKernel,
         x_induce: torch.Tensor,
-        y_induce: torch.Tensor,
         x_train: torch.Tensor,
-        y_train: torch.Tensor,
-        observation_noise: Optional[float] = None,
-        jitter: float = 0.0,
     ):
-        """
-        Constructor for the data approximation base class of projected Langevin sampling.
-        :param x_induce: The inducing points of size (M, D).
-        :param y_induce: The inducing points of size (M,).
-        :param x_train: The training points of size (N, D).
-        :param y_train: The training points of size (N,).
-        :param kernel: The projected Langevin sampling kernel.
-        :param observation_noise: The observation noise.
-        :param jitter: A jitter for numerical stability.
-        """
-        PLSBase.__init__(
-            self,
-            kernel=kernel,
-            observation_noise=observation_noise,
-            x_induce=x_induce,
-            y_induce=y_induce,
-            x_train=x_train,
-            y_train=y_train,
-            jitter=jitter,
-        )
+        self.kernel = kernel
 
+        self.x_induce = x_induce  # size (M, D)
+        self.base_gram_induce = self.kernel.base_kernel(
+            x1=x_induce, x2=x_induce
+        )  # k(Z, X) of size (M, M)
+        self.base_gram_induce_train = self.kernel.base_kernel(
+            x1=x_induce, x2=x_train
+        )  # k(Z, X) of size (M, N)
         self.eigenvalues, self.eigenvectors = torch.linalg.eigh(
             (1 / self.x_induce.shape[0]) * self.base_gram_induce.evaluate()
         )
@@ -71,7 +54,7 @@ class PLSOrthonormalBasis(PLSBase, ABC):
         )
 
     @property
-    def approximation_dimension(self):
+    def approximation_dimension(self) -> int:
         """
         The dimensionality of the function space approximation K (number of non-zero eigenvalues).
         :return: The dimensionality of the function space approximation.
@@ -84,20 +67,14 @@ class PLSOrthonormalBasis(PLSBase, ABC):
         noise_only: bool = True,
         seed: Optional[int] = None,
     ) -> torch.Tensor:
-        """
-        Initialise the particles with noise only.
-        :param number_of_particles: The number of particles.
-        :param noise_only: For ONB base, this is always True.
-        :param seed: An optional seed for reproducibility.
-        :return: The initialised particles.
-        """
         if not noise_only:
             raise ValueError("For ONB base, noise_only must be True.")
         return self._initialise_particles_noise(
-            number_of_particles=number_of_particles, seed=seed
-        )  # size (K, P)
+            number_of_particles=number_of_particles,
+            seed=seed,
+        )
 
-    def _calculate_untransformed_train_predictions(
+    def calculate_untransformed_train_prediction_samples(
         self, particles: torch.Tensor
     ) -> torch.Tensor:
         """
@@ -109,13 +86,15 @@ class PLSOrthonormalBasis(PLSBase, ABC):
             self.base_gram_induce_train.T @ self.scaled_eigenvectors @ particles
         )  # k(X, Z) @ V_tilde @ U(t) of size (N, P)
 
-    def calculate_energy_potential(self, particles: torch.Tensor) -> float:
+    def calculate_energy_potential(
+        self, particles: torch.Tensor, cost: torch.Tensor
+    ) -> float:
         """
         Calculates the energy potential of the particles.
         :param particles: Particles of size (M, P).
+        :param cost: The cost of size (P,).
         :return: The average energy potential.
         """
-        cost = self.calculate_cost(particles=particles)  # size (P, )
 
         particle_energy_potential = cost + 1 / 2 * torch.multiply(
             particles,
@@ -128,7 +107,8 @@ class PLSOrthonormalBasis(PLSBase, ABC):
     def _calculate_particle_update(
         self,
         particles: torch.Tensor,
-        step_size: torch.Tensor,
+        cost_derivative: torch.Tensor,
+        step_size: float,
     ) -> torch.Tensor:
         """
         Calculates the update for each particle following the Wasserstein projected Langevin sampling.
@@ -141,9 +121,6 @@ class PLSOrthonormalBasis(PLSBase, ABC):
             cov=torch.eye(particles.shape[0]),
             size=(particles.shape[1],),
         ).T  # e ~ N(0, k(Z, Z)) of size (M, P)
-        cost_derivative = self.calculate_cost_derivative(
-            particles=particles
-        )  # size (N, P)
 
         # - eta *  V_tilde @ k(Z, X) @ d_2 c(Y, k(X, Z) @ V_tilde @ U(t))
         # - eta * Lambda^{-1} @ U(t)

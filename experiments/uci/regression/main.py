@@ -16,6 +16,7 @@ from experiments.constructors import (
 from experiments.data import ExperimentData, ProblemType
 from experiments.loaders import load_pls, load_svgp
 from experiments.metrics import calculate_metrics, concatenate_metrics
+from experiments.plotters import plot_eigenvalues
 from experiments.preprocess import set_up_experiment
 from experiments.runners import (
     learn_subsample_gps,
@@ -26,7 +27,10 @@ from experiments.runners import (
 from experiments.uci.constants import DATASET_SCHEMA_MAPPING, RegressionDatasetSchema
 from src.inducing_point_selectors import ConditionalVarianceInducingPointSelector
 from src.kernels import PLSKernel
-from src.projected_langevin_sampling import PLSRegressionIPB, PLSRegressionONB
+from src.projected_langevin_sampling import ProjectedLangevinSampling
+from src.projected_langevin_sampling.basis import InducingPointBasis, OrthonormalBasis
+from src.projected_langevin_sampling.costs import GaussianCost
+from src.projected_langevin_sampling.link_functions import IdentityLinkFunction
 from src.utils import set_seed
 
 parser = argparse.ArgumentParser(
@@ -162,27 +166,53 @@ def main(
             base_kernel=average_ard_kernel,
             approximation_samples=inducing_points.x,
         )
+        onb_basis = OrthonormalBasis(
+            kernel=pls_kernel,
+            x_induce=inducing_points.x,
+            x_train=experiment_data.train.x,
+        )
+        ipb_basis = InducingPointBasis(
+            kernel=pls_kernel,
+            x_induce=inducing_points.x,
+            y_induce=inducing_points.y,
+            x_train=experiment_data.train.x,
+        )
+        cost = GaussianCost(
+            observation_noise=float(likelihood.noise),
+            y_train=experiment_data.train.y,
+            link_function=IdentityLinkFunction(),
+        )
         pls_dict = {
-            "pls-onb": PLSRegressionONB(
-                kernel=pls_kernel,
-                x_induce=inducing_points.x,
-                y_induce=inducing_points.y,
-                x_train=experiment_data.train.x,
-                y_train=experiment_data.train.y,
-                jitter=pls_config["jitter"],
-                observation_noise=float(likelihood.noise),
+            "pls-onb": ProjectedLangevinSampling(
+                basis=onb_basis,
+                cost=cost,
             ),
-            "pls-ipb": PLSRegressionIPB(
-                kernel=pls_kernel,
-                x_induce=inducing_points.x,
-                y_induce=inducing_points.y,
-                x_train=experiment_data.train.x,
-                y_train=experiment_data.train.y,
-                jitter=pls_config["jitter"],
-                observation_noise=float(likelihood.noise),
+            "pls-ipb": ProjectedLangevinSampling(
+                basis=ipb_basis,
+                cost=cost,
             ),
         }
+        # if experiment_data.train.x.shape[0] < int(kernel_config["subsample_size"]):
+        #     pls_kernel_full = PLSKernel(
+        #         base_kernel=average_ard_kernel,
+        #         approximation_samples=experiment_data.train.x,
+        #     )
+        #     pls_dict["pls-onb-full"] = PLSRegressionONB(
+        #         kernel=pls_kernel_full,
+        #         x_induce=experiment_data.train.x,
+        #         y_induce=experiment_data.train.y,
+        #         x_train=experiment_data.train.x,
+        #         y_train=experiment_data.train.y,
+        #         jitter=pls_config["jitter"],
+        #         observation_noise=float(likelihood.noise),
+        #     )
         for pls_name, pls in pls_dict.items():
+            if isinstance(pls.basis, OrthonormalBasis):
+                plot_eigenvalues(
+                    basis=pls.basis,
+                    save_path=os.path.join(plots_path, f"eigenvalues-{pls_name}.png"),
+                    title=f"Eigenvalues ({dataset_name})",
+                )
             pls_path = os.path.join(models_path, f"{pls_name}.pth")
             set_seed(pls_config["seed"])
             particles = pls.initialise_particles(
@@ -215,7 +245,8 @@ def main(
                         "number_of_observation_noise_searches"
                     ],
                     plot_title=f"{dataset_name}",
-                    metric_to_minimise=pls_config["metric_to_minimise"],
+                    plot_energy_potential_path=plots_path,
+                    metric_to_optimise=pls_config["metric_to_optimise"],
                     early_stopper_patience=pls_config["early_stopper_patience"],
                 )
                 torch.save(

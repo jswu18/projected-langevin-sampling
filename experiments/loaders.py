@@ -4,11 +4,11 @@ import gpytorch
 import torch
 
 from src.gps import ExactGP, svGP
-from src.projected_langevin_sampling.base.base import PLSBase
+from src.projected_langevin_sampling import ProjectedLangevinSampling
 
 
 def load_pls(
-    pls: PLSBase,
+    pls: ProjectedLangevinSampling,
     model_path: str,
 ):
     model_config = torch.load(model_path)
