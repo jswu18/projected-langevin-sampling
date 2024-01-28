@@ -61,7 +61,7 @@ def get_experiment_data(
         seed=seed,
     )
     link_function = SigmoidLinkFunction()
-    y_untransformed = link_function.transform(y)
+    y_untransformed = link_function.transform(y.type(torch.float))
     (
         x_train,
         y_train,
