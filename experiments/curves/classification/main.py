@@ -60,7 +60,8 @@ def get_experiment_data(
         y_curve=y_curve,
         seed=seed,
     )
-    y_untransformed = torch.reciprocal(1 + torch.exp(torch.neg(y_curve)))
+    link_function = SigmoidLinkFunction()
+    y_untransformed = link_function.transform(y)
     (
         x_train,
         y_train,

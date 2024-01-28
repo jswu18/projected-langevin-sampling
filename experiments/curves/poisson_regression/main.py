@@ -48,8 +48,9 @@ def get_experiment_data(
         x=x,
     ).reshape(-1)
     generator = torch.Generator().manual_seed(seed)
-    y = torch.poisson(torch.pow(y_curve, 2), generator=generator).reshape(-1)
-    y_untransformed = torch.pow(y_curve, 2)
+    link_function = SquareLinkFunction()
+    y = torch.poisson(link_function.transform(y_curve), generator=generator).reshape(-1)
+    y_untransformed = link_function.transform(y_curve)
     (
         x_train,
         y_train,
