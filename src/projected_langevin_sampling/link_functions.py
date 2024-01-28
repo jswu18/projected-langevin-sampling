@@ -28,8 +28,11 @@ class ProbitLinkFunction(PLSLinkFunction):
         self.jitter = jitter
 
     def transform(self, y: torch.Tensor) -> torch.Tensor:
+        # https://stats.stackexchange.com/questions/187828/how-are-the-error-function-and-standard-normal-distribution-function-related
         return torch.clip(
-            torch.distributions.Normal(0, 1).cdf(y), self.jitter, 1 - self.jitter
+            (1 + torch.erf(y / torch.sqrt(torch.tensor(2.0)))) / 2,
+            self.jitter,
+            1 - self.jitter,
         )
 
 

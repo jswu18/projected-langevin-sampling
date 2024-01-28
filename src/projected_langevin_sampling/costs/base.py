@@ -35,10 +35,14 @@ class PLSCost(ABC):
     def calculate_cost_derivative(
         self, untransformed_train_prediction_samples: torch.Tensor
     ) -> torch.Tensor:
-        return torch.autograd.functional.jacobian(
-            lambda x: self.calculate_cost(x),
-            untransformed_train_prediction_samples,
-        ).sum(axis=0)
+        return (
+            torch.vmap(
+                torch.func.jacfwd(self.calculate_cost),
+                in_dims=2,
+            )(untransformed_train_prediction_samples[:, None, :])
+            .reshape(untransformed_train_prediction_samples.T.shape)
+            .T
+        )
 
     def sample_observation_noise(
         self,
