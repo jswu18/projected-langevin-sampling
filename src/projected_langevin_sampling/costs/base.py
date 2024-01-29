@@ -32,9 +32,21 @@ class PLSCost(ABC):
     def calculate_cost(self, untransformed_train_prediction_samples) -> torch.Tensor:
         raise NotImplementedError()
 
+    @abstractmethod
     def calculate_cost_derivative(
         self, untransformed_train_prediction_samples: torch.Tensor
     ) -> torch.Tensor:
+        raise NotImplementedError()
+
+    def _calculate_cost_derivative_autograd(
+        self, untransformed_train_prediction_samples: torch.Tensor
+    ) -> torch.Tensor:
+        """
+        Fallback autograd implementation of calculate_cost_derivative.
+
+        :param untransformed_train_prediction_samples: The untransformed train prediction samples of size (N, P).
+        :return: The cost derivative of size (N, P).
+        """
         return (
             torch.vmap(
                 torch.func.jacfwd(self.calculate_cost),

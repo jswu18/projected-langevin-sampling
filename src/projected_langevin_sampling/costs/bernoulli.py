@@ -1,7 +1,10 @@
 import torch
 
 from src.projected_langevin_sampling.costs.base import PLSCost
-from src.projected_langevin_sampling.link_functions import PLSLinkFunction
+from src.projected_langevin_sampling.link_functions import (
+    PLSLinkFunction,
+    SigmoidLinkFunction,
+)
 
 
 class BernoulliCost(PLSCost):
@@ -40,3 +43,26 @@ class BernoulliCost(PLSCost):
             -self.y_train[:, None] * torch.log(train_prediction_samples)
             - (1 - self.y_train[:, None]) * torch.log(1 - train_prediction_samples)
         ).sum(dim=0)
+
+    def _calculate_cost_derivative_sigmoid_link_function(
+        self, untransformed_train_prediction_samples: torch.Tensor
+    ) -> torch.Tensor:
+        train_prediction_samples = self.link_function(
+            untransformed_train_prediction_samples
+        )
+        return -torch.mul(
+            self.y_train[:, None], 1 - train_prediction_samples
+        ) + torch.mul(1 - self.y_train[:, None], train_prediction_samples)
+
+    def calculate_cost_derivative(
+        self,
+        untransformed_train_prediction_samples: torch.Tensor,
+    ) -> torch.Tensor:
+        if isinstance(self.link_function, SigmoidLinkFunction):
+            return self._calculate_cost_derivative_sigmoid_link_function(
+                untransformed_train_prediction_samples=untransformed_train_prediction_samples
+            )
+        else:
+            return self._calculate_cost_derivative_autograd(
+                untransformed_train_prediction_samples=untransformed_train_prediction_samples
+            )

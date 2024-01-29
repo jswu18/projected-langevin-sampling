@@ -2,7 +2,10 @@ import gpytorch
 import torch
 
 from src.projected_langevin_sampling.costs.base import PLSCost
-from src.projected_langevin_sampling.link_functions import PLSLinkFunction
+from src.projected_langevin_sampling.link_functions import (
+    PLSLinkFunction,
+    SquareLinkFunction,
+)
 
 
 class PoissonCost(PLSCost):
@@ -45,3 +48,27 @@ class PoissonCost(PLSCost):
             )
             + train_prediction_samples
         ).sum(dim=0)
+
+    def _calculate_cost_derivative_square_link_function(
+        self, untransformed_train_prediction_samples: torch.Tensor
+    ) -> torch.Tensor:
+        return (
+            -2
+            * torch.divide(
+                self.y_train[:, None], untransformed_train_prediction_samples
+            )
+            + 2 * untransformed_train_prediction_samples
+        )
+
+    def calculate_cost_derivative(
+        self,
+        untransformed_train_prediction_samples: torch.Tensor,
+    ) -> torch.Tensor:
+        if isinstance(self.link_function, SquareLinkFunction):
+            return self._calculate_cost_derivative_square_link_function(
+                untransformed_train_prediction_samples=untransformed_train_prediction_samples
+            )
+        else:
+            return self._calculate_cost_derivative_autograd(
+                untransformed_train_prediction_samples=untransformed_train_prediction_samples
+            )

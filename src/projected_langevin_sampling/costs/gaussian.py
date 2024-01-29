@@ -2,7 +2,10 @@ import gpytorch
 import torch
 
 from src.projected_langevin_sampling.costs.base import PLSCost
-from src.projected_langevin_sampling.link_functions import PLSLinkFunction
+from src.projected_langevin_sampling.link_functions import (
+    IdentityLinkFunction,
+    PLSLinkFunction,
+)
 
 
 class GaussianCost(PLSCost):
@@ -41,6 +44,33 @@ class GaussianCost(PLSCost):
             untransformed_train_prediction_samples
         )
         # (1/sigma^2) * (k(X, Z) @ k(Z, Z)^{-1} @ U(t) - Y) of size (P)
-        return (1 / (2 * self.observation_noise)) * torch.square(
+        # return (1 / (2 * self.observation_noise)) * torch.square(
+        #     train_prediction_samples - self.y_train[:, None]
+        # ).sum(dim=0)
+
+        return (1 / self.observation_noise) * (
             train_prediction_samples - self.y_train[:, None]
-        ).sum(dim=0)
+        )
+
+    def _calculate_cost_derivative_identity_link_function(
+        self, untransformed_train_prediction_samples: torch.Tensor
+    ) -> torch.Tensor:
+        train_prediction_samples = self.link_function(
+            untransformed_train_prediction_samples
+        )
+        return -torch.mul(
+            self.y_train[:, None], 1 - train_prediction_samples
+        ) + torch.mul(1 - self.y_train[:, None], train_prediction_samples)
+
+    def calculate_cost_derivative(
+        self,
+        untransformed_train_prediction_samples: torch.Tensor,
+    ) -> torch.Tensor:
+        if isinstance(self.link_function, IdentityLinkFunction):
+            return self._calculate_cost_derivative_identity_link_function(
+                untransformed_train_prediction_samples=untransformed_train_prediction_samples
+            )
+        else:
+            return self._calculate_cost_derivative_autograd(
+                untransformed_train_prediction_samples=untransformed_train_prediction_samples
+            )
