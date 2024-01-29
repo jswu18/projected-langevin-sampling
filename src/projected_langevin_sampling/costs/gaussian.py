@@ -44,13 +44,9 @@ class GaussianCost(PLSCost):
             untransformed_train_prediction_samples
         )
         # (1/sigma^2) * (k(X, Z) @ k(Z, Z)^{-1} @ U(t) - Y) of size (J)
-        # return (1 / (2 * self.observation_noise)) * torch.square(
-        #     train_prediction_samples - self.y_train[:, None]
-        # ).sum(dim=0)
-
-        return (1 / self.observation_noise) * (
+        return (1 / (2 * self.observation_noise)) * torch.square(
             train_prediction_samples - self.y_train[:, None]
-        )
+        ).sum(dim=0)
 
     def _calculate_cost_derivative_identity_link_function(
         self, untransformed_train_prediction_samples: torch.Tensor
