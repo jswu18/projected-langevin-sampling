@@ -13,7 +13,7 @@ class GaussianCost(PLSCost):
 
     N is the number of training points.
     M is the dimensionality of the function space approximation.
-    P is the number of particles.
+    J is the number of particles.
     D is the dimensionality of the data.
     """
 
@@ -43,7 +43,7 @@ class GaussianCost(PLSCost):
         train_prediction_samples = self.link_function(
             untransformed_train_prediction_samples
         )
-        # (1/sigma^2) * (k(X, Z) @ k(Z, Z)^{-1} @ U(t) - Y) of size (P)
+        # (1/sigma^2) * (k(X, Z) @ k(Z, Z)^{-1} @ U(t) - Y) of size (J)
         # return (1 / (2 * self.observation_noise)) * torch.square(
         #     train_prediction_samples - self.y_train[:, None]
         # ).sum(dim=0)

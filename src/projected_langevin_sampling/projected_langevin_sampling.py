@@ -44,7 +44,7 @@ class ProjectedLangevinSampling:
         Samples observation noise for a given number of particles.
         :param number_of_particles: The number of particles to sample noise for.
         :param seed: An optional seed for reproducibility.
-        :return: A tensor of size (P, ).
+        :return: A tensor of size (J, ).
         """
         return self.cost.sample_observation_noise(
             number_of_particles=number_of_particles,
@@ -64,8 +64,8 @@ class ProjectedLangevinSampling:
     def calculate_cost(self, particles: torch.Tensor) -> torch.Tensor:
         """
         Calculates the cost of the particles.
-        :param particles: The particles of size (M, P).
-        :return: The cost of size (P,).
+        :param particles: The particles of size (M, J).
+        :return: The cost of size (J,).
         """
         untransformed_train_prediction_samples = (
             self.basis.calculate_untransformed_train_prediction_samples(
@@ -99,7 +99,7 @@ class ProjectedLangevinSampling:
     def calculate_energy_potential(self, particles: torch.Tensor) -> float:
         assert (
             particles.shape[0] == self.basis.approximation_dimension
-        ), f"Particles have shape {particles.shape} but requires ({self.basis.approximation_dimension}, P) dimension."
+        ), f"Particles have shape {particles.shape} but requires ({self.basis.approximation_dimension}, J) dimension."
         cost = self.calculate_cost(particles=particles)
         return self.basis.calculate_energy_potential(
             particles=particles,
@@ -115,11 +115,11 @@ class ProjectedLangevinSampling:
     ) -> torch.Tensor:
         """
         Predicts samples for given test points x and applies the output transformation.
-        :param particles: Particles of size (M, P).
+        :param particles: Particles of size (M, J).
         :param x: Test points of size (N*, D).
-        :param observation_noise: A noise tensor of size (N*, P), if None, it is sampled from the observation noise distribution.
-        :param predictive_noise: A noise tensor of size (N*, P), if None, it is sampled from the predictive noise distribution.
-        :return: Predicted samples of size (N*, P).
+        :param observation_noise: A noise tensor of size (N*, J), if None, it is sampled from the observation noise distribution.
+        :param predictive_noise: A noise tensor of size (N*, J), if None, it is sampled from the predictive noise distribution.
+        :return: Predicted samples of size (N*, J).
         """
         untransformed_samples = self.predict_untransformed_samples(
             particles=particles,

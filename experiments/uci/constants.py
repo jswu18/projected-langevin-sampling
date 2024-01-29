@@ -10,6 +10,8 @@ class Dataset(ABC):
 
 
 class BostonDataset(Dataset):
+    # https://www.cs.toronto.edu/~delve/data/boston/bostonDetail.html
+    # https://www.kaggle.com/datasets/schirmerchad/bostonhoustingmlnd
     input_column_names = [
         "crim",
         "zn",
@@ -144,6 +146,7 @@ class YachtDataset(Dataset):
 
 class BreastDataset(Dataset):
     # https://www.kaggle.com/datasets/roustekbio/breast-cancer-csv
+    # https://archive.ics.uci.edu/dataset/15/breast+cancer+wisconsin+original
     input_column_names = [
         "clump_thickness",
         "size_uniformity",
@@ -159,7 +162,8 @@ class BreastDataset(Dataset):
 
 
 class CrabDataset(Dataset):
-    # https://www.kaggle.com/datasets/thanhtinl/crabex
+    # https://www.stats.ox.ac.uk/pub/PRNN/crabs.dat
+    # https://datarepository.wolframcloud.com/resources/Sample-Data-Crab-Measures
     input_column_names = [
         "sp",
         "FL",
@@ -188,6 +192,7 @@ class DiabetesDataset(Dataset):
 
 class HeartDataset(Dataset):
     # https://www.kaggle.com/datasets/johnsmith88/heart-disease-dataset
+    # https://archive.ics.uci.edu/dataset/45/heart+disease
     input_column_names = [
         "age",
         "sex",
@@ -208,6 +213,7 @@ class HeartDataset(Dataset):
 
 class IonosphereDataset(Dataset):
     # https://www.kaggle.com/datasets/prashant111/ionosphere
+    # https://archive.ics.uci.edu/dataset/52/ionosphere
     input_column_names = [
         "column_a",
         "column_b",

@@ -15,8 +15,8 @@ class OrthonormalBasis(PLSBasis):
 
     N is the number of training points.
     M is the number of inducing points.
-    K is the dimensionality of the function space approximation.
-    P is the number of particles.
+    M_k is the dimensionality of the function space approximation.
+    J is the number of particles.
     D is the dimensionality of the data.
     """
 
@@ -41,11 +41,13 @@ class OrthonormalBasis(PLSBasis):
 
         # Remove negative eigenvalues
         positive_eigenvalue_idx = torch.where(self.eigenvalues > 0)[0]
-        self.eigenvalues = self.eigenvalues[positive_eigenvalue_idx].real  # (K,)
-        self.eigenvectors = self.eigenvectors[:, positive_eigenvalue_idx].real  # (M, K)
-        # K is the number of eigenvalues to keep
+        self.eigenvalues = self.eigenvalues[positive_eigenvalue_idx].real  # (M_k,)
+        self.eigenvectors = self.eigenvectors[
+            :, positive_eigenvalue_idx
+        ].real  # (M, M_k)
+        # M_k is the number of eigenvalues to keep
 
-        # Scale eigenvectors (M, K)
+        # Scale eigenvectors (M, M_k)
         self.scaled_eigenvectors = torch.multiply(
             torch.reciprocal(
                 torch.sqrt(self.approximation_dimension * self.eigenvalues)
@@ -56,7 +58,7 @@ class OrthonormalBasis(PLSBasis):
     @property
     def approximation_dimension(self) -> int:
         """
-        The dimensionality of the function space approximation K (number of non-zero eigenvalues).
+        The dimensionality of the function space approximation M_k (number of non-zero eigenvalues).
         :return: The dimensionality of the function space approximation.
         """
         return self.eigenvalues.shape[0]
@@ -79,20 +81,20 @@ class OrthonormalBasis(PLSBasis):
     ) -> torch.Tensor:
         """
         Calculates the untransformed predictions of the particles on the training data used for cost calculations.
-        :param particles: The particles of size (K, P).
-        :return: The untransformed predictions of size (N, P).
+        :param particles: The particles of size (M_k, J).
+        :return: The untransformed predictions of size (N, J).
         """
         return (
             self.base_gram_induce_train.T @ self.scaled_eigenvectors @ particles
-        )  # k(X, Z) @ V_tilde @ U(t) of size (N, P)
+        )  # k(X, Z) @ V_tilde @ U(t) of size (N, J)
 
     def calculate_energy_potential(
         self, particles: torch.Tensor, cost: torch.Tensor
     ) -> float:
         """
         Calculates the energy potential of the particles.
-        :param particles: Particles of size (M, P).
-        :param cost: The cost of size (P,).
+        :param particles: Particles of size (M, J).
+        :param cost: The cost of size (J,).
         :return: The average energy potential.
         """
 
@@ -101,7 +103,7 @@ class OrthonormalBasis(PLSBasis):
             torch.diag(torch.reciprocal(self.eigenvalues)) @ particles,
         ).sum(
             dim=0
-        )  # size (P,)
+        )  # size (J,)
         return particle_energy_potential.mean().item()
 
     def _calculate_particle_update(
@@ -112,20 +114,20 @@ class OrthonormalBasis(PLSBasis):
     ) -> torch.Tensor:
         """
         Calculates the update for each particle following the Wasserstein projected Langevin sampling.
-        :param particles: Particles of size (M, P).
+        :param particles: Particles of size (M, J).
         :param step_size: A step size for the projected Langevin sampling update in the form of a scalar.
-        :return: The update to be applied to the particles of size (M, P).
+        :return: The update to be applied to the particles of size (M, J).
         """
         noise_vector = sample_multivariate_normal(
             mean=torch.zeros(particles.shape[0]),
             cov=torch.eye(particles.shape[0]),
             size=(particles.shape[1],),
-        ).T  # e ~ N(0, k(Z, Z)) of size (M, P)
+        ).T  # e ~ N(0, k(Z, Z)) of size (M, J)
 
         # - eta *  V_tilde @ k(Z, X) @ d_2 c(Y, k(X, Z) @ V_tilde @ U(t))
         # - eta * Lambda^{-1} @ U(t)
         # + sqrt(2 * eta) * e
-        # size (K, P)
+        # size (M_k, J)
         particle_update = (
             -step_size
             * self.scaled_eigenvectors.T
@@ -134,7 +136,7 @@ class OrthonormalBasis(PLSBasis):
             - step_size * torch.diag(torch.reciprocal(self.eigenvalues)) @ particles
             + math.sqrt(2.0 * step_size) * noise_vector
         ).detach()
-        return particle_update.to_dense().detach()  # size (M, P)
+        return particle_update.to_dense().detach()  # size (M, J)
 
     def sample_predictive_noise(
         self,
@@ -144,9 +146,9 @@ class OrthonormalBasis(PLSBasis):
         """
         Calculates the predictive noise for a given input.
 
-        :param particles: Particles of size (M, P)
+        :param particles: Particles of size (M, J)
         :param x: Test points of size (N*, D)
-        :return: The predictive noise of size (N*, P)
+        :return: The predictive noise of size (N*, J)
         """
         # Use additional approximation samples to ensure better OOD predictive behaviour
         gram_x = self.kernel.forward(
@@ -184,7 +186,7 @@ class OrthonormalBasis(PLSBasis):
             mean=torch.zeros(noise_covariance.shape[0]),
             cov=noise_covariance,
             size=(particles.shape[1],),
-        ).T  # (M+N*, P)
+        ).T  # (M+N*, J)
 
     def predict_untransformed_samples(
         self,
@@ -194,16 +196,15 @@ class OrthonormalBasis(PLSBasis):
     ) -> torch.Tensor:
         """
         Predicts samples for given test points x without applying the output transformation.
-        :param particles: Particles of size (M, P).
+        :param particles: Particles of size (M, J).
         :param x: Test points of size (N*, D).
-        :param noise: A noise tensor of size (N*, P), if None, it is sampled from the predictive noise distribution.
-        :return: Predicted samples of size (N*, P).
+        :param noise: A noise tensor of size (N*, J), if None, it is sampled from the predictive noise distribution.
+        :return: Predicted samples of size (N*, J).
         """
         base_gram_x_induce = self.kernel.base_kernel(
             x1=x,
             x2=self.x_induce,
         ).to_dense()
-        # G([Z, x]) ~ N(0, R)
         if noise is None:
             noise = self.sample_predictive_noise(
                 particles=particles,

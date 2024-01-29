@@ -20,12 +20,12 @@ pls:
   minimum_change_in_energy_potential: 0.01
   jitter: 0
   seed: 0
-  metric_to_optimise: mae
+  metric_to_optimise: loss
   initial_particles_noise_only: True
   observation_noise_upper: 1.0e+4
   observation_noise_lower: 1.0e-4
   number_of_observation_noise_searches: 25
-  early_stopper_patience: 1.0e-4
+  early_stopper_patience: 1.0e-2
 svgp:
   seed: 0
   number_of_epochs: 1000
@@ -33,4 +33,4 @@ svgp:
   learning_rate_upper: 1.0e-1
   learning_rate_lower: 1.0e-3
   number_of_learning_rate_searches: 3
-  early_stopper_patience: 1.0e-4
+  early_stopper_patience: 1.0e-2

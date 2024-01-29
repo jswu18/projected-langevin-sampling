@@ -8,7 +8,7 @@ class PLSBasis(ABC):
     """
     N is the number of training points.
     M is the dimensionality of the function space approximation.
-    P is the number of particles.
+    J is the number of particles.
     D is the dimensionality of the data.
     """
 
@@ -30,7 +30,7 @@ class PLSBasis(ABC):
         Initialises the noise for each particle with a standard normal distribution.
         :param number_of_particles: The number of particles to initialise.
         :param seed: An optional seed for reproducibility.
-        :return: A tensor of size (M, P).
+        :return: A tensor of size (M, J).
         """
         generator = None
         if seed is not None:
@@ -43,7 +43,7 @@ class PLSBasis(ABC):
                 number_of_particles,
             ),
             generator=generator,
-        )  # size (M, P)
+        )  # size (M, J)
 
     @abstractmethod
     def initialise_particles(
@@ -60,8 +60,8 @@ class PLSBasis(ABC):
     ) -> torch.Tensor:
         """
         Calculates the untransformed samples of the particles on the training data used for cost calculations.
-        :param particles: The particles of size (M, P).
-        :return: The untransformed predictions of size (N, P).
+        :param particles: The particles of size (M, J).
+        :return: The untransformed predictions of size (N, J).
         """
         raise NotImplementedError
 
@@ -71,9 +71,9 @@ class PLSBasis(ABC):
     ) -> float:
         """
         Calculates the energy potential of the particles.
-        :param particles: Particles of size (M, P).
-        :param cost: The cost of size (P,).
-        :return: The energy potential for each particle of size (P,).
+        :param particles: Particles of size (M, J).
+        :param cost: The cost of size (J,).
+        :return: The energy potential for each particle of size (J,).
         """
         raise NotImplementedError
 
@@ -86,10 +86,10 @@ class PLSBasis(ABC):
     ) -> torch.Tensor:
         """
         Calculates the update for each particle following the Wasserstein projected Langevin sampling.
-        :param particles: Particles of size (M, P).
-        :param cost_derivative: The derivative of the cost function of size (N, P).
+        :param particles: Particles of size (M, J).
+        :param cost_derivative: The derivative of the cost function of size (N, J).
         :param step_size: A step size for the projected Langevin sampling update in the form of a scalar.
-        :return: The update to be applied to the particles of size (M, P).
+        :return: The update to be applied to the particles of size (M, J).
         """
         raise NotImplementedError
 
@@ -101,14 +101,14 @@ class PLSBasis(ABC):
     ) -> torch.Tensor:
         """
         Calculates the update for each particle following the Wasserstein projected Langevin sampling.
-        :param particles: Particles of size (M, P).
-        :param cost_derivative: The derivative of the cost function of size (N, P).
+        :param particles: Particles of size (M, J).
+        :param cost_derivative: The derivative of the cost function of size (N, J).
         :param step_size: A step size for the projected Langevin sampling update in the form of a scalar.
-        :return: The update to be applied to the particles of size (M, P).
+        :return: The update to be applied to the particles of size (M, J).
         """
         assert (
             particles.shape[0] == self.approximation_dimension
-        ), f"Particles have shape {particles.shape} but requires ({self.approximation_dimension}, P) dimension."
+        ), f"Particles have shape {particles.shape} but requires ({self.approximation_dimension}, J) dimension."
         return self._calculate_particle_update(
             particles=particles,
             cost_derivative=cost_derivative,
@@ -123,9 +123,9 @@ class PLSBasis(ABC):
     ):
         """
         Samples the predictive noise for a given input.
-        :param particles: Particles of size (M, P)
+        :param particles: Particles of size (M, J)
         :param x: Test points of size (N*, D)
-        :return: The predictive noise of size (N*, P)
+        :return: The predictive noise of size (N*, J)
         """
         raise NotImplementedError
 
@@ -138,9 +138,9 @@ class PLSBasis(ABC):
     ) -> torch.Tensor:
         """
         Predicts samples for given test points x without applying the output transformation.
-        :param particles: Particles of size (M, P).
+        :param particles: Particles of size (M, J).
         :param x: Test points of size (N*, D).
-        :param noise: A noise tensor of size (N*, P), if None, it is sampled from the predictive noise distribution.
-        :return: Predicted samples of size (N*, P).
+        :param noise: A noise tensor of size (N*, J), if None, it is sampled from the predictive noise distribution.
+        :return: Predicted samples of size (N*, J).
         """
         raise NotImplementedError

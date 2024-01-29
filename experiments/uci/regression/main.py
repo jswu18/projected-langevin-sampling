@@ -177,7 +177,7 @@ def main(
             y_induce=inducing_points.y,
             x_train=experiment_data.train.x,
         )
-        cost = GaussianCost(
+        gaussian_cost = GaussianCost(
             observation_noise=float(likelihood.noise),
             y_train=experiment_data.train.y,
             link_function=IdentityLinkFunction(),
@@ -185,27 +185,27 @@ def main(
         pls_dict = {
             "pls-onb": ProjectedLangevinSampling(
                 basis=onb_basis,
-                cost=cost,
+                cost=gaussian_cost,
             ),
             "pls-ipb": ProjectedLangevinSampling(
                 basis=ipb_basis,
-                cost=cost,
+                cost=gaussian_cost,
             ),
         }
-        # if experiment_data.train.x.shape[0] < int(kernel_config["subsample_size"]):
-        #     pls_kernel_full = PLSKernel(
-        #         base_kernel=average_ard_kernel,
-        #         approximation_samples=experiment_data.train.x,
-        #     )
-        #     pls_dict["pls-onb-full"] = PLSRegressionONB(
-        #         kernel=pls_kernel_full,
-        #         x_induce=experiment_data.train.x,
-        #         y_induce=experiment_data.train.y,
-        #         x_train=experiment_data.train.x,
-        #         y_train=experiment_data.train.y,
-        #         jitter=pls_config["jitter"],
-        #         observation_noise=float(likelihood.noise),
-        #     )
+        if experiment_data.train.x.shape[0] < kernel_config["subsample_size"]:
+            pls_kernel_full = PLSKernel(
+                base_kernel=average_ard_kernel,
+                approximation_samples=experiment_data.train.x,
+            )
+            onb_basis_full = OrthonormalBasis(
+                kernel=pls_kernel_full,
+                x_induce=experiment_data.train.x,
+                x_train=experiment_data.train.x,
+            )
+            pls_dict["pls-onb-full"] = ProjectedLangevinSampling(
+                basis=onb_basis_full,
+                cost=gaussian_cost,
+            )
         for pls_name, pls in pls_dict.items():
             if isinstance(pls.basis, OrthonormalBasis):
                 plot_eigenvalues(

@@ -197,19 +197,19 @@ def main(
             y_train=experiment_data.train.y,
             link_function=SigmoidLinkFunction(),
         )
-        probit_cost = BernoulliCost(
-            y_train=experiment_data.train.y,
-            link_function=ProbitLinkFunction(),
-        )
+        # probit_cost = BernoulliCost(
+        #     y_train=experiment_data.train.y,
+        #     link_function=ProbitLinkFunction(),
+        # )
         pls_dict = {
-            "pls-onb-probit": ProjectedLangevinSampling(
-                basis=onb_basis,
-                cost=probit_cost,
-            ),
-            "pls-ipb-probit": ProjectedLangevinSampling(
-                basis=ipb_basis,
-                cost=probit_cost,
-            ),
+            # "pls-onb-probit": ProjectedLangevinSampling(
+            #     basis=onb_basis,
+            #     cost=probit_cost,
+            # ),
+            # "pls-ipb-probit": ProjectedLangevinSampling(
+            #     basis=ipb_basis,
+            #     cost=probit_cost,
+            # ),
             "pls-onb-sigmoid": ProjectedLangevinSampling(
                 basis=onb_basis,
                 cost=sigmoid_cost,
@@ -219,19 +219,20 @@ def main(
                 cost=sigmoid_cost,
             ),
         }
-        # if experiment_data.train.x.shape[0] < kernel_config["subsample_size"]:
-        #     pls_kernel_full = PLSKernel(
-        #         base_kernel=average_ard_kernel,
-        #         approximation_samples=experiment_data.train.x,
-        #     )
-        #     pls_dict["pls-onb-full"] = PLSClassificationONB(
-        #         kernel=pls_kernel_full,
-        #         x_induce=experiment_data.train.x,
-        #         y_induce=experiment_data.train.y,
-        #         x_train=experiment_data.train.x,
-        #         y_train=experiment_data.train.y,
-        #         jitter=pls_config["jitter"],
-        #     )
+        if experiment_data.train.x.shape[0] < kernel_config["subsample_size"]:
+            pls_kernel_full = PLSKernel(
+                base_kernel=average_ard_kernel,
+                approximation_samples=experiment_data.train.x,
+            )
+            onb_basis_full = OrthonormalBasis(
+                kernel=pls_kernel_full,
+                x_induce=experiment_data.train.x,
+                x_train=experiment_data.train.x,
+            )
+            pls_dict["pls-onb-full"] = ProjectedLangevinSampling(
+                basis=onb_basis_full,
+                cost=sigmoid_cost,
+            )
         for pls_name, pls in pls_dict.items():
             if isinstance(pls.basis, OrthonormalBasis):
                 plot_eigenvalues(
@@ -371,8 +372,8 @@ if __name__ == "__main__":
             results_path=os.path.join(outputs_path, str(data_seed), "results"),
             data_types=["train", "test"],
             model_names=[
-                "pls-onb",
-                "pls-ipb",
+                "pls-onb-sigmoid",
+                "pls-ipb-sigmoid",
                 "svgp-k-z",
                 "svgp-r-z",
             ],

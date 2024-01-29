@@ -25,7 +25,7 @@ pls:
   jitter: 0
   seed: 0
   christmas_colours: False
-  metric_to_optimise: mae
+  metric_to_optimise: loss
   initial_particles_noise_only: True
   observation_noise_upper: 1.0e+4
   observation_noise_lower: 1.0e-4

@@ -13,7 +13,7 @@ class PoissonCost(PLSCost):
 
     N is the number of training points.
     M is the dimensionality of the function space approximation.
-    P is the number of particles.
+    J is the number of particles.
     D is the dimensionality of the data.
     """
 

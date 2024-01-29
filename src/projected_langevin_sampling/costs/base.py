@@ -11,7 +11,7 @@ class PLSCost(ABC):
 
     N is the number of training points.
     M is the dimensionality of the function space approximation.
-    P is the number of particles.
+    J is the number of particles.
     D is the dimensionality of the data.
     """
 
@@ -44,8 +44,8 @@ class PLSCost(ABC):
         """
         Fallback autograd implementation of calculate_cost_derivative.
 
-        :param untransformed_train_prediction_samples: The untransformed train prediction samples of size (N, P).
-        :return: The cost derivative of size (N, P).
+        :param untransformed_train_prediction_samples: The untransformed train prediction samples of size (N, J).
+        :return: The cost derivative of size (N, J).
         """
         return (
             torch.vmap(
@@ -65,7 +65,7 @@ class PLSCost(ABC):
         Samples observation noise for a given number of particles.
         :param number_of_particles: The number of particles to sample noise for.
         :param seed: An optional seed for reproducibility.
-        :return: A tensor of size (P, ).
+        :return: A tensor of size (J, ).
         """
         if self.observation_noise is None:
             return torch.zeros(number_of_particles)

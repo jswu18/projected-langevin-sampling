@@ -16,7 +16,7 @@ class InducingPointBasis(PLSBasis):
 
     N is the number of training points.
     M is the dimensionality of the function space approximation.
-    P is the number of particles.
+    J is the number of particles.
     D is the dimensionality of the data.
     """
 
@@ -60,34 +60,34 @@ class InducingPointBasis(PLSBasis):
         )
         return (
             particle_noise if noise_only else (self.y_induce[:, None] + particle_noise)
-        )  # size (M, P)
+        )  # size (M, J)
 
     def calculate_untransformed_train_prediction_samples(
         self, particles: torch.Tensor
     ) -> torch.Tensor:
         """
         Calculates the untransformed predictions of the particles on the training data used for cost calculations.
-        :param particles: The particles of size (M, P).
-        :return: The untransformed predictions of size (N, P).
+        :param particles: The particles of size (M, J).
+        :return: The untransformed predictions of size (N, J).
         """
         return gpytorch.solve(
             lhs=self.base_gram_induce_train.to_dense().T,
             input=self.base_gram_induce,
             rhs=particles,
-        )  #  k(X, Z) @ k(Z, Z)^{-1} @ U(t) of size (N, P)
+        )  #  k(X, Z) @ k(Z, Z)^{-1} @ U(t) of size (N, J)
 
     def calculate_energy_potential(
         self, particles: torch.Tensor, cost: torch.Tensor
     ) -> float:
         """
         Calculates the energy potential of the particles.
-        :param particles: Particles of size (M, P).
-        :param cost: The cost of size (P,).
-        :return: The energy potential for each particle of size (P,).
+        :param particles: Particles of size (M, J).
+        :param cost: The cost of size (J,).
+        :return: The energy potential for each particle of size (J,).
         """
         inverse_base_gram_induce_particles = gpytorch.solve(
             self.base_gram_induce, particles
-        )  # k(Z, Z)^{-1} @ U(t) of size (M, P)
+        )  # k(Z, Z)^{-1} @ U(t) of size (M, J)
 
         # cost + M/2 * (k(Z, Z)^{-1} @ particle)^T (k(Z, Z)^{-1} @ particle)
         particle_energy_potential = (
@@ -95,7 +95,7 @@ class InducingPointBasis(PLSBasis):
             + self.approximation_dimension
             / 2
             * torch.square(inverse_base_gram_induce_particles).sum(dim=0)
-        )  # size (P,)
+        )  # size (J,)
         return particle_energy_potential.mean().item()
 
     def _calculate_particle_update(
@@ -106,24 +106,24 @@ class InducingPointBasis(PLSBasis):
     ) -> torch.Tensor:
         """
         Calculates the update for each particle following the Wasserstein projected Langevin sampling.
-        :param particles: Particles of size (M, P).
-        :param cost_derivative: The cost derivative of size (N, P).
+        :param particles: Particles of size (M, J).
+        :param cost_derivative: The cost derivative of size (N, J).
         :param step_size: A step size for the projected Langevin sampling update in the form of a scalar.
-        :return: The update to be applied to the particles of size (M, P).
+        :return: The update to be applied to the particles of size (M, J).
         """
         inverse_base_gram_particle_vector = gpytorch.solve(
             self.base_gram_induce, particles
-        )  # k(Z, Z)^{-1} @ U(t) of size (M, P)
+        )  # k(Z, Z)^{-1} @ U(t) of size (M, J)
         noise_vector = sample_multivariate_normal(
             mean=torch.zeros(particles.shape[0]),
             cov=self.base_gram_induce,
             size=(particles.shape[1],),
-        ).T  # e ~ N(0, k(Z, Z)) of size (M, P)
+        ).T  # e ~ N(0, k(Z, Z)) of size (M, J)
 
         # - eta * k(Z, X) @ d_2 c(Y, k(X, Z) @ k(Z, Z)^{-1} @ U(t))
         # - eta * M * k(Z, Z)^{-1} @ U(t)
         # + sqrt(2 * eta) * e
-        # size (M, P)
+        # size (M, J)
         particle_update = (
             -step_size * self.base_gram_induce_train @ cost_derivative
             - step_size
@@ -131,7 +131,7 @@ class InducingPointBasis(PLSBasis):
             * inverse_base_gram_particle_vector
             + math.sqrt(2.0 * step_size) * noise_vector
         ).detach()
-        return particle_update.to_dense().detach()  # size (M, P)
+        return particle_update.to_dense().detach()  # size (M, J)
 
     def sample_predictive_noise(
         self,
@@ -141,9 +141,9 @@ class InducingPointBasis(PLSBasis):
         """
         Calculates the predictive noise for a given input.
         G([Z, x]) ~ N(0, r([Z, x], [Z, x]))
-        :param particles: Particles of size (M, P)
+        :param particles: Particles of size (M, J)
         :param x: Test points of size (N*, D)
-        :return: The predictive noise of size (N*, P)
+        :return: The predictive noise of size (N*, J)
         """
         # zx = torch.concatenate((self.x_induce, x), dim=0)  # (M+N*, D)
         # noise_covariance = self.kernel.forward(
@@ -183,7 +183,7 @@ class InducingPointBasis(PLSBasis):
             mean=torch.zeros(noise_covariance.shape[0]),
             cov=noise_covariance,
             size=(particles.shape[1],),
-        ).T  # (M+N*, P)
+        ).T  # (M+N*, J)
 
     def predict_untransformed_samples(
         self,
@@ -193,10 +193,10 @@ class InducingPointBasis(PLSBasis):
     ) -> torch.Tensor:
         """
         Predicts samples for given test points x without applying the output transformation.
-        :param particles: Particles of size (M, P).
+        :param particles: Particles of size (M, J).
         :param x: Test points of size (N*, D).
-        :param noise: A noise tensor of size (N*, P), if None, it is sampled from the predictive noise distribution.
-        :return: Predicted samples of size (N*, P).
+        :param noise: A noise tensor of size (N*, J), if None, it is sampled from the predictive noise distribution.
+        :return: Predicted samples of size (N*, J).
         """
 
         # Use additional approximation samples to calculate the gram matrices to ensure better OOD predictive behaviour
@@ -221,4 +221,4 @@ class InducingPointBasis(PLSBasis):
                 input=gram_induce,
                 rhs=(particles - noise[: self.approximation_dimension, :]),
             )
-        )  # size (N*, P)
+        )  # size (N*, J)
