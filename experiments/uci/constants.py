@@ -122,15 +122,15 @@ class ProteinDataset(Dataset):
     output_column_name = "rmsd"
 
 
-class WineDataset(Dataset):
+class WineQualityDataset(Dataset):
     input_column_names = [
-        "fixed" "acidity",
-        "volatile" "acidity",
-        "citric" "acid",
-        "residual" "sugar",
+        "fixed acidity",
+        "volatile acidity",
+        "citric acid",
+        "residual sugar",
         "chlorides",
-        "free" "sulfur" "dioxide",
-        "total" "sulfur" "dioxide",
+        "free sulfur dioxide",
+        "total sulfur dioxide",
         "density",
         "pH",
         "sulphates",
@@ -253,6 +253,25 @@ class IonosphereDataset(Dataset):
     output_column_name = "column_ai"
 
 
+class MushroomsDataset(Dataset):
+    # https://archive.ics.uci.edu/dataset/373/drug+consumption+quantified
+    input_column_names = [
+        "age",
+        "gender",
+        "education",
+        "country",
+        "ethnicity",
+        "nscore",
+        "escore",
+        "oscore",
+        "ascore",
+        "cscore",
+        "impulsive",
+        "ss",
+    ]
+    output_column_name = "mushrooms"
+
+
 class RiceDataset(Dataset):
     # https://archive.ics.uci.edu/dataset/545/rice+cammeo+and+osmancik
     input_column_names = [
@@ -331,6 +350,30 @@ class SpamDataset(Dataset):
     output_column_name = "spam"
 
 
+class WineColourDataset(Dataset):
+    input_column_names = [
+        "fixed acidity",
+        "volatile acidity",
+        "citric acid",
+        "residual sugar",
+        "chlorides",
+        "free sulfur dioxide",
+        "total sulfur dioxide",
+        "density",
+        "pH",
+        "sulphates",
+        "alcohol",
+    ]
+    output_column_name = "colour"
+
+
+class YeastDataset(Dataset):
+    # https://archive.ics.uci.edu/dataset/110/yeast
+    # Only using CYT and NUC classes for binary classification
+    input_column_names = ["mcg", "gvh", "alm", "mit", "erl", "pox", "vac", "nuc"]
+    output_column_name = "class"
+
+
 class RegressionDatasetSchema(str, enum.Enum):
     boston = "boston"
     concrete = "concrete"
@@ -338,7 +381,7 @@ class RegressionDatasetSchema(str, enum.Enum):
     energy_heating = "energy_heating"
     kin8nm = "kin8nm"
     power = "power"
-    wine = "wine"
+    wine_quality = "wine_quality"
     yacht = "yacht"
 
 
@@ -348,7 +391,10 @@ class ClassificationDatasetSchema(str, enum.Enum):
     diabetes = "diabetes"
     heart = "heart"
     ionosphere = "ionosphere"
+    mushrooms = "mushrooms"
     rice = "rice"
+    wine_colour = "wine_colour"
+    yeast = "yeast"
 
 
 DATASET_SCHEMA_MAPPING = {
@@ -358,12 +404,15 @@ DATASET_SCHEMA_MAPPING = {
     RegressionDatasetSchema.energy_heating: EnergyHeatingDataset,
     RegressionDatasetSchema.kin8nm: Kin8nmDataset,
     RegressionDatasetSchema.power: PowerDataset,
-    RegressionDatasetSchema.wine: WineDataset,
+    RegressionDatasetSchema.wine_quality: WineQualityDataset,
     RegressionDatasetSchema.yacht: YachtDataset,
     ClassificationDatasetSchema.breast: BreastDataset,
     ClassificationDatasetSchema.crab: CrabDataset,
     ClassificationDatasetSchema.diabetes: DiabetesDataset,
     ClassificationDatasetSchema.heart: HeartDataset,
     ClassificationDatasetSchema.ionosphere: IonosphereDataset,
+    ClassificationDatasetSchema.mushrooms: MushroomsDataset,
     ClassificationDatasetSchema.rice: RiceDataset,
+    ClassificationDatasetSchema.wine_colour: WineColourDataset,
+    ClassificationDatasetSchema.yeast: YeastDataset,
 }

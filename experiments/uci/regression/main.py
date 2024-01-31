@@ -19,10 +19,10 @@ from experiments.metrics import calculate_metrics, concatenate_metrics
 from experiments.plotters import plot_eigenvalues
 from experiments.preprocess import set_up_experiment
 from experiments.runners import (
-    learn_subsample_gps,
-    select_inducing_points,
-    train_pls,
-    train_svgp,
+    exact_gp_runner,
+    inducing_points_runner,
+    train_pls_runner,
+    train_svgp_runner,
 )
 from experiments.uci.constants import DATASET_SCHEMA_MAPPING, RegressionDatasetSchema
 from src.inducing_point_selectors import ConditionalVarianceInducingPointSelector
@@ -120,7 +120,7 @@ def main(
             )
             experiment_data.save(experiment_data_path)
 
-        subsample_gp_models = learn_subsample_gps(
+        subsample_gp_models = exact_gp_runner(
             experiment_data=experiment_data,
             kernel=gpytorch.kernels.ScaleKernel(
                 gpytorch.kernels.RBFKernel(
@@ -144,7 +144,7 @@ def main(
         if os.path.exists(inducing_points_path):
             inducing_points = torch.load(inducing_points_path)
         else:
-            inducing_points = select_inducing_points(
+            inducing_points = inducing_points_runner(
                 seed=inducing_points_config["seed"],
                 inducing_point_selector=ConditionalVarianceInducingPointSelector(),
                 data=experiment_data.train,
@@ -183,14 +183,14 @@ def main(
             link_function=IdentityLinkFunction(),
         )
         pls_dict = {
-            "pls-onb": ProjectedLangevinSampling(
-                basis=onb_basis,
-                cost=gaussian_cost,
-            ),
-            "pls-ipb": ProjectedLangevinSampling(
-                basis=ipb_basis,
-                cost=gaussian_cost,
-            ),
+            # "pls-onb": ProjectedLangevinSampling(
+            #     basis=onb_basis,
+            #     cost=gaussian_cost,
+            # ),
+            # "pls-ipb": ProjectedLangevinSampling(
+            #     basis=ipb_basis,
+            #     cost=gaussian_cost,
+            # ),
         }
         if experiment_data.train.x.shape[0] < kernel_config["subsample_size"]:
             pls_kernel_full = PLSKernel(
@@ -201,6 +201,7 @@ def main(
                 kernel=pls_kernel_full,
                 x_induce=experiment_data.train.x,
                 x_train=experiment_data.train.x,
+                eigenvalue_threshold=1e-3,
             )
             pls_dict["pls-onb-full"] = ProjectedLangevinSampling(
                 basis=onb_basis_full,
@@ -226,7 +227,7 @@ def main(
                     model_path=pls_path,
                 )
             else:
-                particles, best_lr, number_of_epochs = train_pls(
+                particles, best_lr, number_of_epochs = train_pls_runner(
                     pls=pls,
                     particles=particles,
                     particle_name=pls_name,
@@ -268,60 +269,60 @@ def main(
                 results_path=results_path,
                 plots_path=plots_path,
             )
-        for kernel_name, kernel in zip(["k", "r"], [average_ard_kernel, pls_kernel]):
-            model_name = f"svgp-{kernel_name}"
-            svgp_model_path = os.path.join(models_path, f"{model_name}.pth")
-            if os.path.exists(svgp_model_path):
-                svgp, _, _ = load_svgp(
-                    model_path=svgp_model_path,
-                    x_induce=inducing_points.x,
-                    mean=gpytorch.means.ConstantMean(),
-                    kernel=deepcopy(kernel),
-                    likelihood=gpytorch.likelihoods.GaussianLikelihood(),
-                    learn_inducing_locations=False,
-                )
-            else:
-                svgp, losses, best_learning_rate = train_svgp(
-                    model_name=model_name,
-                    experiment_data=experiment_data,
-                    inducing_points=inducing_points,
-                    mean=gpytorch.means.ConstantMean(),
-                    kernel=deepcopy(kernel),
-                    likelihood=gpytorch.likelihoods.GaussianLikelihood(),
-                    seed=svgp_config["seed"],
-                    number_of_epochs=svgp_config["number_of_epochs"],
-                    batch_size=svgp_config["batch_size"],
-                    learning_rate_upper=svgp_config["learning_rate_upper"],
-                    learning_rate_lower=svgp_config["learning_rate_lower"],
-                    number_of_learning_rate_searches=svgp_config[
-                        "number_of_learning_rate_searches"
-                    ],
-                    is_fixed=True,
-                    observation_noise=float(likelihood.noise),
-                    early_stopper_patience=svgp_config["early_stopper_patience"],
-                    models_path=os.path.join(
-                        models_path, f"{model_name}-kernel-iterations"
-                    ),
-                    plot_title=f"{dataset_name}",
-                    plot_loss_path=plots_path,
-                )
-                torch.save(
-                    {
-                        "model": svgp.state_dict(),
-                        "losses": losses,
-                        "best_learning_rate": best_learning_rate,
-                    },
-                    os.path.join(models_path, f"{model_name}.pth"),
-                )
-            set_seed(svgp_config["seed"])
-            calculate_metrics(
-                model=svgp,
-                model_name=model_name,
-                dataset_name=dataset_name,
-                experiment_data=experiment_data,
-                results_path=results_path,
-                plots_path=plots_path,
-            )
+        # for kernel_name, kernel in zip(["k", "r"], [average_ard_kernel, pls_kernel]):
+        #     model_name = f"svgp-{kernel_name}"
+        #     svgp_model_path = os.path.join(models_path, f"{model_name}.pth")
+        #     if os.path.exists(svgp_model_path):
+        #         svgp, _, _ = load_svgp(
+        #             model_path=svgp_model_path,
+        #             x_induce=inducing_points.x,
+        #             mean=gpytorch.means.ConstantMean(),
+        #             kernel=deepcopy(kernel),
+        #             likelihood=gpytorch.likelihoods.GaussianLikelihood(),
+        #             learn_inducing_locations=False,
+        #         )
+        #     else:
+        #         svgp, losses, best_learning_rate = train_svgp(
+        #             model_name=model_name,
+        #             experiment_data=experiment_data,
+        #             inducing_points=inducing_points,
+        #             mean=gpytorch.means.ConstantMean(),
+        #             kernel=deepcopy(kernel),
+        #             likelihood=gpytorch.likelihoods.GaussianLikelihood(),
+        #             seed=svgp_config["seed"],
+        #             number_of_epochs=svgp_config["number_of_epochs"],
+        #             batch_size=svgp_config["batch_size"],
+        #             learning_rate_upper=svgp_config["learning_rate_upper"],
+        #             learning_rate_lower=svgp_config["learning_rate_lower"],
+        #             number_of_learning_rate_searches=svgp_config[
+        #                 "number_of_learning_rate_searches"
+        #             ],
+        #             is_fixed=True,
+        #             observation_noise=float(likelihood.noise),
+        #             early_stopper_patience=svgp_config["early_stopper_patience"],
+        #             models_path=os.path.join(
+        #                 models_path, f"{model_name}-kernel-iterations"
+        #             ),
+        #             plot_title=f"{dataset_name}",
+        #             plot_loss_path=plots_path,
+        #         )
+        #         torch.save(
+        #             {
+        #                 "model": svgp.state_dict(),
+        #                 "losses": losses,
+        #                 "best_learning_rate": best_learning_rate,
+        #             },
+        #             os.path.join(models_path, f"{model_name}.pth"),
+        #         )
+        #     set_seed(svgp_config["seed"])
+        #     calculate_metrics(
+        #         model=svgp,
+        #         model_name=model_name,
+        #         dataset_name=dataset_name,
+        #         experiment_data=experiment_data,
+        #         results_path=results_path,
+        #         plots_path=plots_path,
+        #     )
 
 
 if __name__ == "__main__":
@@ -350,8 +351,9 @@ if __name__ == "__main__":
             data_types=["train", "test"],
             model_names=[
                 "pls-onb",
-                "pls-ipb",
-                "svgp-k",
+                "pls-onb-full",
+                # "pls-ipb",
+                # "svgp-k",
                 "svgp-r",
             ],
             datasets=list(RegressionDatasetSchema.__members__.keys()),

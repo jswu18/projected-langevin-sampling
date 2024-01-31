@@ -11,7 +11,7 @@ from torch.profiler import ProfilerActivity, profile, record_function
 
 from experiments.curves.curves import CURVE_FUNCTIONS
 from experiments.data import Data, ExperimentData, ProblemType
-from experiments.runners import select_inducing_points
+from experiments.runners import inducing_points_runner
 from experiments.utils import create_directory
 from src.gps import svGP
 from src.inducing_point_selectors import ConditionalVarianceInducingPointSelector
@@ -48,7 +48,7 @@ def get_experiment_data(
     return experiment_data
 
 
-def train_pls(
+def train_pls_for_profiler(
     pls_kernel: PLSKernel,
     inducing_points: Data,
     experiment_data: ExperimentData,
@@ -83,7 +83,7 @@ def train_pls(
         particles += particle_update
 
 
-def train_svgp(
+def train_svgp_for_profiler(
     train_data: Data,
     inducing_points: Data,
     kernel: gpytorch.kernels.Kernel,
@@ -126,6 +126,7 @@ def train_svgp(
 
 def parse_profiler(profiler: profile):
     df = pd.DataFrame({e.key: e.__dict__ for e in profiler.key_averages()}).T
+    print(profiler.key_averages().table(sort_by="cpu_time_total"))
     return pd.DataFrame(
         [
             [
@@ -150,7 +151,7 @@ def profile_pls(
 ) -> pd.DataFrame:
     with profile(activities=[ProfilerActivity.CPU], record_shapes=True) as prof:
         with record_function("model_training"):
-            train_pls(
+            train_pls_for_profiler(
                 pls_kernel=pls_kernel,
                 inducing_points=inducing_points,
                 experiment_data=experiment_data,
@@ -179,7 +180,7 @@ def profile_svgp(
 ) -> pd.DataFrame:
     with profile(activities=[ProfilerActivity.CPU], record_shapes=True) as prof:
         with record_function("model_training"):
-            train_svgp(
+            train_svgp_for_profiler(
                 number_of_epochs=number_of_epochs,
                 kernel=kernel,
                 train_data=experiment_data.train,
@@ -235,7 +236,7 @@ def run_experiment(
         inducing_points = torch.load(inducing_points_path)
         print(f"Loaded inducing points from {inducing_points_path=}")
     else:
-        inducing_points = select_inducing_points(
+        inducing_points = inducing_points_runner(
             seed=seed,
             inducing_point_selector=ConditionalVarianceInducingPointSelector(),
             data=experiment_data.train,

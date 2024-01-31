@@ -23,12 +23,12 @@ from experiments.plotters import (
 )
 from experiments.preprocess import split_regression_data_intervals
 from experiments.runners import (
-    animate_pls_1d_particles,
-    learn_subsample_gps,
-    plot_pls_1d_particles,
-    select_inducing_points,
-    train_pls,
-    train_svgp,
+    animate_pls_1d_particles_runner,
+    exact_gp_runner,
+    inducing_points_runner,
+    plot_pls_1d_particles_runner,
+    train_pls_runner,
+    train_svgp_runner,
 )
 from experiments.utils import create_directory
 from src.inducing_point_selectors import ConditionalVarianceInducingPointSelector
@@ -134,7 +134,7 @@ def main(
     )
     subsample_gp_model_path = os.path.join(models_path, "subsample_gp")
     subsample_gp_data_path = os.path.join(data_path, "subsample_gp")
-    subsample_gp_models = learn_subsample_gps(
+    subsample_gp_models = exact_gp_runner(
         experiment_data=experiment_data,
         kernel=gpytorch.kernels.ScaleKernel(
             gpytorch.kernels.RBFKernel(ard_num_dims=experiment_data.train.x.shape[1])
@@ -156,7 +156,7 @@ def main(
     likelihood = construct_average_gaussian_likelihood(
         likelihoods=[model.likelihood for model in subsample_gp_models]
     )
-    inducing_points = select_inducing_points(
+    inducing_points = inducing_points_runner(
         seed=inducing_points_config["seed"],
         inducing_point_selector=ConditionalVarianceInducingPointSelector(),
         data=experiment_data.train,
@@ -208,7 +208,7 @@ def main(
             seed=pls_config["seed"],
             noise_only=pls_config["initial_particles_noise_only"],
         )
-        plot_pls_1d_particles(
+        plot_pls_1d_particles_runner(
             pls=pls,
             particles=particles,
             particle_name=f"{pls_name}-initial",
@@ -222,7 +222,7 @@ def main(
                 model_path=pls_path,
             )
         else:
-            particles, best_lr, number_of_epochs = train_pls(
+            particles, best_lr, number_of_epochs = train_pls_runner(
                 pls=pls,
                 particles=particles,
                 particle_name=pls_name,
@@ -254,7 +254,7 @@ def main(
                 },
                 pls_path,
             )
-        plot_pls_1d_particles(
+        plot_pls_1d_particles_runner(
             pls=pls,
             particles=particles,
             particle_name=f"{pls_name}-learned",
@@ -262,7 +262,7 @@ def main(
             plot_particles_path=plot_curve_path,
             plot_title=plot_title,
         )
-        animate_pls_1d_particles(
+        animate_pls_1d_particles_runner(
             pls=pls,
             number_of_particles=pls_config["number_of_particles"],
             particle_name=pls_name,
@@ -293,7 +293,7 @@ def main(
                 learn_inducing_locations=False,
             )
         else:
-            svgp, losses, best_learning_rate = train_svgp(
+            svgp, losses, best_learning_rate = train_svgp_runner(
                 model_name=model_name,
                 experiment_data=experiment_data,
                 inducing_points=inducing_points,

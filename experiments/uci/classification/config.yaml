@@ -7,6 +7,7 @@ kernel:
   number_of_iterations: 5
   number_of_epochs: 50000
   subsample_size: 1000
+  early_stopper_patience: 1.0
 inducing_points:
   seed: 0
   inducing_points_factor: 1
@@ -14,7 +15,7 @@ inducing_points:
 pls:
   number_of_particles: 100
   simulation_duration: 2.5e-1
-  maximum_number_of_steps: 1.0e+7
+  maximum_number_of_steps: 1.0e+6
   number_of_step_searches: 5
   step_size_upper: 1.0e-1
   minimum_change_in_energy_potential: 0.01

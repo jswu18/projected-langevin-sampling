@@ -16,10 +16,10 @@ from experiments.metrics import calculate_metrics, concatenate_metrics
 from experiments.plotters import plot_eigenvalues
 from experiments.preprocess import set_up_experiment
 from experiments.runners import (
-    learn_subsample_gps,
-    select_inducing_points,
-    train_pls,
-    train_svgp,
+    exact_gp_runner,
+    inducing_points_runner,
+    train_pls_runner,
+    train_svgp_runner,
 )
 from experiments.uci.constants import (
     DATASET_SCHEMA_MAPPING,
@@ -136,7 +136,7 @@ def main(
         )
         y_train_labels = experiment_data.train.y
         experiment_data.train.y = likelihood.transformed_targets
-        subsample_gp_models = learn_subsample_gps(
+        subsample_gp_models = exact_gp_runner(
             experiment_data=experiment_data,
             kernel=gpytorch.kernels.ScaleKernel(
                 gpytorch.kernels.RBFKernel(
@@ -156,6 +156,7 @@ def main(
             plot_1d_subsample_path=None,
             plot_loss_path=plots_path,
             number_of_classes=likelihood.num_classes,
+            early_stopper_patience=kernel_config["early_stopper_patience"],
         )
         experiment_data.train.y = y_train_labels
         average_ard_kernel = construct_average_ard_kernel(
@@ -164,7 +165,7 @@ def main(
         if os.path.exists(inducing_points_path):
             inducing_points = torch.load(inducing_points_path)
         else:
-            inducing_points = select_inducing_points(
+            inducing_points = inducing_points_runner(
                 seed=inducing_points_config["seed"],
                 inducing_point_selector=ConditionalVarianceInducingPointSelector(),
                 data=experiment_data.train,
@@ -210,29 +211,30 @@ def main(
             #     basis=ipb_basis,
             #     cost=probit_cost,
             # ),
-            "pls-onb-sigmoid": ProjectedLangevinSampling(
+            "pls-onb": ProjectedLangevinSampling(
                 basis=onb_basis,
                 cost=sigmoid_cost,
             ),
-            "pls-ipb-sigmoid": ProjectedLangevinSampling(
-                basis=ipb_basis,
-                cost=sigmoid_cost,
-            ),
+            # "pls-ipb": ProjectedLangevinSampling(
+            #     basis=ipb_basis,
+            #     cost=sigmoid_cost,
+            # ),
         }
-        if experiment_data.train.x.shape[0] < kernel_config["subsample_size"]:
-            pls_kernel_full = PLSKernel(
-                base_kernel=average_ard_kernel,
-                approximation_samples=experiment_data.train.x,
-            )
-            onb_basis_full = OrthonormalBasis(
-                kernel=pls_kernel_full,
-                x_induce=experiment_data.train.x,
-                x_train=experiment_data.train.x,
-            )
-            pls_dict["pls-onb-full"] = ProjectedLangevinSampling(
-                basis=onb_basis_full,
-                cost=sigmoid_cost,
-            )
+        # if experiment_data.train.x.shape[0] < kernel_config["subsample_size"]:
+        #     pls_kernel_full = PLSKernel(
+        #         base_kernel=average_ard_kernel,
+        #         approximation_samples=experiment_data.train.x,
+        #     )
+        #     onb_basis_full = OrthonormalBasis(
+        #         kernel=pls_kernel_full,
+        #         x_induce=experiment_data.train.x,
+        #         x_train=experiment_data.train.x,
+        #         eigenvalue_threshold = 1e-3,
+        #     )
+        #     pls_dict["pls-onb-full"] = ProjectedLangevinSampling(
+        #         basis=onb_basis_full,
+        #         cost=sigmoid_cost,
+        #     )
         for pls_name, pls in pls_dict.items():
             if isinstance(pls.basis, OrthonormalBasis):
                 plot_eigenvalues(
@@ -253,7 +255,7 @@ def main(
                     model_path=pls_path,
                 )
             else:
-                particles, best_lr, number_of_epochs = train_pls(
+                particles, best_lr, number_of_epochs = train_pls_runner(
                     pls=pls,
                     particles=particles,
                     particle_name=pls_name,
@@ -292,7 +294,16 @@ def main(
                 results_path=results_path,
                 plots_path=plots_path,
             )
-        for kernel_name, kernel in zip(["k", "r"], [average_ard_kernel, pls_kernel]):
+        for kernel_name, kernel in zip(
+            [
+                # "k",
+                "r",
+            ],
+            [
+                # average_ard_kernel,
+                pls_kernel,
+            ],
+        ):
             model_name = f"svgp-{kernel_name}-z"
             svgp_model_path = os.path.join(models_path, f"{model_name}.pth")
             if os.path.exists(svgp_model_path):
@@ -305,7 +316,7 @@ def main(
                     learn_inducing_locations=False,
                 )
             else:
-                svgp, losses, best_learning_rate = train_svgp(
+                svgp, losses, best_learning_rate = train_svgp_runner(
                     model_name=model_name,
                     experiment_data=experiment_data,
                     inducing_points=inducing_points,
@@ -372,9 +383,10 @@ if __name__ == "__main__":
             results_path=os.path.join(outputs_path, str(data_seed), "results"),
             data_types=["train", "test"],
             model_names=[
-                "pls-onb-sigmoid",
-                "pls-ipb-sigmoid",
-                "svgp-k-z",
+                "pls-onb",
+                "pls-onb-full"
+                # "pls-ipb-sigmoid",
+                # "svgp-k-z",
                 "svgp-r-z",
             ],
             datasets=list(ClassificationDatasetSchema.__members__.keys()),

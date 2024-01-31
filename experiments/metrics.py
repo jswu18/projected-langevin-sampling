@@ -9,6 +9,7 @@ import torch
 from experiments.data import ExperimentData, ProblemType
 from experiments.plotters import plot_true_versus_predicted
 from experiments.utils import create_directory
+from src.conformalise import ConformaliseBase
 from src.gps import ExactGP, svGP
 from src.projected_langevin_sampling import ProjectedLangevinSampling
 from src.utils import set_seed
@@ -71,6 +72,21 @@ def calculate_nll(
         ).item()
     else:
         raise ValueError(f"Prediction type {type(prediction)} not supported")
+
+
+def calculate_average_interval_width(
+    model: ConformaliseBase,
+    x: torch.Tensor,
+    coverage: float,
+    y_std: float,
+) -> float:
+    return (
+        y_std
+        * model.calculate_average_interval_width(
+            x=x,
+            coverage=coverage,
+        ).item()
+    )
 
 
 def calculate_metrics(

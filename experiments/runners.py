@@ -8,11 +8,9 @@ import numpy as np
 import sklearn
 import torch
 from sklearn.neighbors import NearestNeighbors
-from torch.utils.data import DataLoader, TensorDataset
 from tqdm import tqdm
 
 from experiments.data import Data, ExperimentData, ProblemType
-from experiments.early_stopper import EarlyStopper
 from experiments.loaders import load_ard_exact_gp_model, load_svgp
 from experiments.metrics import calculate_mae, calculate_mse, calculate_nll
 from experiments.plotters import (
@@ -24,52 +22,17 @@ from experiments.plotters import (
     plot_energy_potentials,
     plot_losses,
 )
+from experiments.trainers import train_exact_gp, train_pls, train_svgp
 from experiments.utils import create_directory
 from src.bisection_search import LogBisectionSearch
-from src.gps import ExactGP, svGP
+from src.gps import svGP
 from src.inducing_point_selectors import InducingPointSelector
-from src.kernels import PLSKernel
 from src.projected_langevin_sampling import ProjectedLangevinSampling
 from src.samplers import sample_point
 from src.utils import set_seed
 
 
-def _train_exact_gp(
-    data: Data,
-    mean: gpytorch.means.Mean,
-    kernel: gpytorch.kernels.Kernel,
-    seed: int,
-    number_of_epochs: int,
-    learning_rate: float,
-    likelihood: gpytorch.likelihoods.Likelihood,
-) -> (ExactGP, List[float]):
-    set_seed(seed)
-    model = ExactGP(
-        mean=mean,
-        kernel=kernel,
-        x=data.x,
-        y=data.y,
-        likelihood=likelihood,
-    )
-    likelihood = model.likelihood
-    model.train()
-    likelihood.train()
-    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-    mll = gpytorch.mlls.ExactMarginalLogLikelihood(likelihood, model)
-    epochs_iter = tqdm(range(number_of_epochs), desc="Exact GP Epoch")
-    losses = []
-    for _ in epochs_iter:
-        optimizer.zero_grad()
-        output = model(data.x)
-        loss = -mll(output, data.y).sum()
-        losses.append(loss.item())
-        loss.backward()
-        optimizer.step()
-    model.eval()
-    return model, losses
-
-
-def select_inducing_points(
+def inducing_points_runner(
     seed: int,
     inducing_point_selector: InducingPointSelector,
     data: Data,
@@ -98,7 +61,7 @@ def select_inducing_points(
     )
 
 
-def _load_subsample_data(
+def load_subsample_data(
     data: Data,
     subsample_size: int,
 ):
@@ -120,7 +83,7 @@ def _load_subsample_data(
     )
 
 
-def learn_subsample_gps(
+def exact_gp_runner(
     experiment_data: ExperimentData,
     kernel: gpytorch.kernels.Kernel,
     likelihood: gpytorch.likelihoods.Likelihood,
@@ -134,6 +97,7 @@ def learn_subsample_gps(
     plot_1d_subsample_path: str = None,
     plot_loss_path: str = None,
     number_of_classes: int = 1,
+    early_stopper_patience: Optional[float] = None,
 ) -> List[gpytorch.models.GP]:
     create_directory(model_path)
     create_directory(data_path)
@@ -166,11 +130,11 @@ def learn_subsample_gps(
                 kernel=deepcopy(kernel),
             )
         else:
-            data = _load_subsample_data(
+            data = load_subsample_data(
                 data=experiment_data.train,
                 subsample_size=subsample_size,
             )
-            model, losses = _train_exact_gp(
+            model, losses = train_exact_gp(
                 data=data,
                 mean=mean,
                 kernel=deepcopy(kernel),
@@ -178,6 +142,7 @@ def learn_subsample_gps(
                 number_of_epochs=number_of_epochs,
                 learning_rate=learning_rate,
                 likelihood=likelihood,
+                early_stopper_patience=early_stopper_patience,
             )
             torch.save(
                 {
@@ -216,7 +181,7 @@ def learn_subsample_gps(
     return models
 
 
-def plot_pls_1d_particles(
+def plot_pls_1d_particles_runner(
     pls: ProjectedLangevinSampling,
     particles: torch.Tensor,
     particle_name: str,
@@ -274,7 +239,7 @@ def plot_pls_1d_particles(
         )
 
 
-def animate_pls_1d_particles(
+def animate_pls_1d_particles_runner(
     pls: ProjectedLangevinSampling,
     number_of_particles: int,
     particle_name: str,
@@ -325,7 +290,7 @@ def animate_pls_1d_particles(
         )
 
 
-def train_pls(
+def train_pls_runner(
     pls: ProjectedLangevinSampling,
     particle_name: str,
     experiment_data: ExperimentData,
@@ -362,27 +327,17 @@ def train_pls(
         number_of_step_searches,
     )
     particles_out = particles.detach().clone()
-    for i, step_size in enumerate(
-        tqdm(
-            step_sizes,
-            desc=f"PLS Step Size Search {particle_name}",
-        )
-    ):
+    for i, step_size in enumerate(step_sizes):
         number_of_epochs = int(simulation_duration / step_size)
-        particles_i = particles.detach().clone()
-        energy_potentials = []
-        early_stopper = EarlyStopper(patience=early_stopper_patience)
         set_seed(seed)
-        for _ in range(number_of_epochs):
-            particle_update = pls.calculate_particle_update(
-                particles=particles_i,
-                step_size=step_size,
-            )
-            particles_i += particle_update
-            energy_potential = pls.calculate_energy_potential(particles=particles_i)
-            if early_stopper.should_stop(loss=energy_potential, step_size=step_size):
-                break
-            energy_potentials.append(energy_potential)
+        particles_i, energy_potentials = train_pls(
+            pls=pls,
+            particles=particles.detach().clone(),
+            number_of_epochs=number_of_epochs,
+            step_size=step_size,
+            early_stopper_patience=early_stopper_patience,
+            tqdm_desc=f"PLS Step Size Search {i+1} of {number_of_step_searches} for {particle_name} ({step_size=})",
+        )
         if energy_potentials and np.isfinite(particles_i).all():
             energy_potentials_history[step_size] = energy_potentials
             prediction = pls.predict(
@@ -474,7 +429,6 @@ def train_pls(
             observation_noise_upper=observation_noise_upper,
             observation_noise_lower=observation_noise_lower,
             number_of_searches=number_of_observation_noise_searches,
-            y_std=experiment_data.y_std,
         )
     if energy_potentials_history and plot_energy_potential_path is not None:
         create_directory(plot_energy_potential_path)
@@ -498,7 +452,6 @@ def pls_observation_noise_search(
     observation_noise_upper: float,
     observation_noise_lower: float,
     number_of_searches: int,
-    y_std: float,
 ) -> float:
     bisection_search = LogBisectionSearch(
         lower=observation_noise_lower,
@@ -539,84 +492,7 @@ def pls_observation_noise_search(
     return bisection_search.current
 
 
-def _train_svgp(
-    train_data: Data,
-    inducing_points: Data,
-    mean: gpytorch.means.Mean,
-    kernel: gpytorch.kernels.Kernel,
-    likelihood: Union[
-        gpytorch.likelihoods.GaussianLikelihood,
-        gpytorch.likelihoods.BernoulliLikelihood,
-    ],
-    seed: int,
-    number_of_epochs: int,
-    batch_size: int,
-    learning_rate: float,
-    learn_inducing_locations: bool,
-    learn_kernel_parameters: bool,
-    early_stopper_patience: float,
-    likelihood_noise: Optional[float] = None,
-) -> (ExactGP, List[float]):
-    set_seed(seed)
-    model = svGP(
-        mean=mean,
-        kernel=kernel,
-        x_induce=inducing_points.x,
-        likelihood=likelihood,
-        learn_inducing_locations=learn_inducing_locations,
-    )
-    early_stopper = EarlyStopper(patience=early_stopper_patience)
-    all_params = set(model.parameters())
-    if not learn_kernel_parameters:
-        if isinstance(model.kernel, PLSKernel):
-            all_params -= {model.kernel.base_kernel.base_kernel.raw_lengthscale}
-            all_params -= {model.kernel.base_kernel.raw_outputscale}
-        else:
-            all_params -= {model.kernel.base_kernel.raw_lengthscale}
-            all_params -= {model.kernel.raw_outputscale}
-    if likelihood_noise is not None:
-        model.likelihood.noise_covar.noise.data.fill_(likelihood_noise)
-    model.train()
-    model.likelihood.train()
-
-    optimizer = torch.optim.SGD(
-        [
-            {"params": list(all_params)},
-        ],
-        lr=learning_rate,
-    )
-    mll = gpytorch.mlls.VariationalELBO(
-        model.likelihood, model, num_data=train_data.x.shape[0]
-    )
-
-    train_dataset = TensorDataset(train_data.x, train_data.y)
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-
-    epochs_iter = tqdm(
-        range(number_of_epochs),
-        desc=f"svGP Epoch ({learn_kernel_parameters=}, {learn_inducing_locations=}, {learning_rate=})",
-    )
-    losses = []
-    for _ in epochs_iter:
-        try:
-            for x_batch, y_batch in train_loader:
-                optimizer.zero_grad()
-                loss = -mll(model(x_batch), y_batch)
-                loss.backward()
-                optimizer.step()
-            loss = -mll(model(train_data.x), train_data.y).item()
-            if early_stopper.should_stop(loss=loss, step_size=learning_rate):
-                break
-            losses.append(loss)
-        except ValueError as e:
-            print(e)
-            print("Continuing...")
-            return None, None
-    model.eval()
-    return model, losses
-
-
-def train_svgp(
+def train_svgp_runner(
     model_name: str,
     experiment_data: ExperimentData,
     inducing_points: Data,
@@ -668,7 +544,7 @@ def train_svgp(
                 learn_inducing_locations=False if is_fixed else True,
             )
         else:
-            model, losses = _train_svgp(
+            model, losses = train_svgp(
                 train_data=experiment_data.train,
                 inducing_points=inducing_points,
                 mean=deepcopy(mean),
