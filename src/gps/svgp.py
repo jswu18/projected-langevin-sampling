@@ -6,6 +6,11 @@ from gpytorch.models import ApproximateGP
 
 
 class svGP(ApproximateGP):
+    """
+    A sparse variational Gaussian Process model following:
+    https://docs.gpytorch.ai/en/stable/examples/04_Variational_and_Approximate_GPs/SVGP_Regression_CUDA.html
+    """
+
     def __init__(
         self,
         mean: gpytorch.means.Mean,
@@ -17,6 +22,14 @@ class svGP(ApproximateGP):
         ],
         learn_inducing_locations: bool = False,
     ):
+        """
+        Constructor for the sparse variational Gaussian Process model.
+        :param mean: The GP mean function.
+        :param kernel: The GP kernel function.
+        :param x_induce: The inducing points of shape (M, D).
+        :param likelihood: The GP likelihood function. Either Gaussian or Bernoulli for regression or classification.
+        :param learn_inducing_locations: Whether to learn the inducing points.
+        """
         variational_distribution = gpytorch.variational.CholeskyVariationalDistribution(
             x_induce.size(0)
         )

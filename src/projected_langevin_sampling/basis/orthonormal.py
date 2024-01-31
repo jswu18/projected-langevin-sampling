@@ -40,7 +40,8 @@ class OrthonormalBasis(PLSBasis):
             (1 / self.x_induce.shape[0]) * self.base_gram_induce.evaluate()
         )
 
-        # Remove negative eigenvalues
+        # Remove eigenvalues and eigenvectors below the threshold. By default, this will
+        # remove all negative eigenvalues and corresponding eigenvectors.
         desired_eigenvalue_idx = torch.where(self.eigenvalues > eigenvalue_threshold)[0]
         self.eigenvalues = self.eigenvalues[desired_eigenvalue_idx].real  # (M_k,)
         self.eigenvectors = self.eigenvectors[
@@ -73,6 +74,13 @@ class OrthonormalBasis(PLSBasis):
         noise_only: bool = True,
         seed: Optional[int] = None,
     ) -> torch.Tensor:
+        """
+        Initialises the particles for the projected Langevin sampling with noise only.
+        :param number_of_particles: The number of particles to initialise.
+        :param noise_only: Whether to initialise the particles with noise only. For ONB base, this must be True.
+        :param seed: An optional seed for reproducibility.
+        :return: A tensor of size (M_k, J).
+        """
         if not noise_only:
             raise ValueError("For ONB base, noise_only must be True.")
         return self._initialise_particles_noise(
@@ -99,7 +107,7 @@ class OrthonormalBasis(PLSBasis):
         Calculates the energy potential of the particles.
         :param particles: Particles of size (M, J).
         :param cost: The cost of size (J,).
-        :return: The average energy potential.
+        :return: The average energy potential of the particles.
         """
 
         particle_energy_potential = cost + 1 / 2 * torch.multiply(

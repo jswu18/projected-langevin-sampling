@@ -5,6 +5,9 @@ import torch
 
 class PLSLinkFunction(ABC):
     """
+    A base class for the link function of the projected Langevin sampling. This is used to transform the prediction
+    samples to the output space.
+
     N is the number of training points.
     M is the dimensionality of the function space approximation.
     J is the number of particles.
@@ -13,6 +16,11 @@ class PLSLinkFunction(ABC):
 
     @abstractmethod
     def transform(self, y: torch.Tensor) -> torch.Tensor:
+        """
+        Transforms the prediction samples to the output space.
+        :param y: The prediction samples of size (N, J).
+        :return: The transformed prediction samples of size (N, J).
+        """
         raise NotImplementedError
 
     def __call__(self, *args, **kwargs):
@@ -22,6 +30,7 @@ class PLSLinkFunction(ABC):
 class ProbitLinkFunction(PLSLinkFunction):
     """
     The probit link function. This is the inverse CDF of the standard normal distribution.
+    This transform can be used for binary classification where the output space is {0, 1}.
     """
 
     def __init__(self, jitter: float = 1e-10):
@@ -39,6 +48,7 @@ class ProbitLinkFunction(PLSLinkFunction):
 class IdentityLinkFunction(PLSLinkFunction):
     """
     The identity link function.
+    This transform can be used for regression where the output space is R.
     """
 
     def transform(self, y: torch.Tensor) -> torch.Tensor:
@@ -48,6 +58,7 @@ class IdentityLinkFunction(PLSLinkFunction):
 class SigmoidLinkFunction(PLSLinkFunction):
     """
     The sigmoid link function.
+    This transform can be used for binary classification where the output space is {0, 1}.
     """
 
     def __init__(self, jitter: float = 1e-10):
@@ -62,6 +73,7 @@ class SigmoidLinkFunction(PLSLinkFunction):
 class SquareLinkFunction(PLSLinkFunction):
     """
     The square link function.
+    This transform can be used for regression where the output space is R+.
     """
 
     def transform(self, y: torch.Tensor) -> torch.Tensor:

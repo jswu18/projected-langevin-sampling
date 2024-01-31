@@ -6,9 +6,11 @@ import torch
 
 class PLSKernel(gpytorch.kernels.Kernel):
     """
-    Decorates a base kernel with a projected Langevin sampling kernel such that
+    Wraps a base kernel with a projected Langevin sampling kernel such that
     K(x1, x2) = 1 / N * sum_{i=1}^N K_b(x1, z_i) * K_b(x2, z_i)
     where K_b is the base kernel and z_i are the approximation samples.
+    This is defined as kernel r in the paper, while the base kernel is kernel
+    k in the paper.
     """
 
     is_stationary = False

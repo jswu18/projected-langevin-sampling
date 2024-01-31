@@ -26,6 +26,13 @@ class ConformalisePLS(ConformaliseBase):
         coverage: float,
         x: torch.Tensor,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Returns uncalibrated coverage predictions for a given input and coverage percentage by
+        taking the quantiles of the particle predictions.
+        :param coverage: The coverage percentage.
+        :param x: Input data of shape (N, D).
+        :return: Tuple of lower and upper bounds of shape (1, N).
+        """
         samples = self.pls.predict_samples(
             x=x,
             particles=self.particles,
@@ -41,6 +48,11 @@ class ConformalisePLS(ConformaliseBase):
         self,
         x: torch.Tensor,
     ) -> torch.Tensor:
+        """
+        Returns median predictions for a given input by taking the median of the particle particle predictions.
+        :param x: Input data of shape (N, D).
+        :return: Median predictions of shape (1, N).
+        """
         samples = self.pls.predict_samples(
             x=x,
             particles=self.particles,

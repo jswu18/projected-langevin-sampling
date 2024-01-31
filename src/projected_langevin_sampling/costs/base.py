@@ -8,6 +8,9 @@ from src.projected_langevin_sampling.link_functions import PLSLinkFunction
 
 class PLSCost(ABC):
     """
+    A base class for the cost function of the projected Langevin sampling.
+    Methods pertaining to the cost function are implemented here such as calculating the cost,
+    calculating the cost derivative, and transforming the prediction samples to the output space.
 
     N is the number of training points.
     M is the dimensionality of the function space approximation.
@@ -18,6 +21,11 @@ class PLSCost(ABC):
     def __init__(
         self, link_function: PLSLinkFunction, observation_noise: Optional[float] = None
     ):
+        """
+        Constructor for the base class of the cost function.
+        :param link_function: The link function to transform the prediction samples to the output space.
+        :param observation_noise: Optional observation noise, depends on the cost function.
+        """
         self.observation_noise = observation_noise
         self.link_function = link_function
 
@@ -26,16 +34,33 @@ class PLSCost(ABC):
         self,
         prediction_samples: torch.Tensor,
     ) -> torch.distributions.Distribution:
+        """
+        Constructs the predictive distribution from the prediction samples.
+        :param prediction_samples: The prediction samples of size (N, J).
+        :return: The predictive distribution.
+        """
         raise NotImplementedError()
 
     @abstractmethod
     def calculate_cost(self, untransformed_train_prediction_samples) -> torch.Tensor:
+        """
+        Calculates the cost current particles. This method takes the untransformed train prediction
+        samples calculated with the current particles. This is implemented in the basis class of PLS.
+        :param untransformed_train_prediction_samples: The untransformed train prediction samples of size (N, J).
+        :return: The cost of size (J,) for each particle.
+        """
         raise NotImplementedError()
 
     @abstractmethod
     def calculate_cost_derivative(
         self, untransformed_train_prediction_samples: torch.Tensor
     ) -> torch.Tensor:
+        """
+        Calculates the cost derivative of the untransformed train prediction samples. These are the prediction samples
+        before being transformed by the link function.
+        :param untransformed_train_prediction_samples: The untransformed train prediction samples of size (N, J).
+        :return: The cost derivative of size (N, J).
+        """
         raise NotImplementedError()
 
     def _calculate_cost_derivative_autograd(
@@ -43,7 +68,6 @@ class PLSCost(ABC):
     ) -> torch.Tensor:
         """
         Fallback autograd implementation of calculate_cost_derivative.
-
         :param untransformed_train_prediction_samples: The untransformed train prediction samples of size (N, J).
         :return: The cost derivative of size (N, J).
         """
@@ -84,6 +108,13 @@ class PLSCost(ABC):
         untransformed_samples: torch.Tensor,
         observation_noise: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
+        """
+        The link function applied to the untransformed samples plus observation noise. This is the prediction samples
+        in the output space.
+        :param untransformed_samples: The untransformed samples of size (N, J).
+        :param observation_noise: Optional observation noise matrix of size (J,). If None, observation noise is sampled.
+        :return: The prediction samples of size (N, J).
+        """
         if observation_noise is None:
             observation_noise = self.sample_observation_noise(
                 number_of_particles=untransformed_samples.shape[1]

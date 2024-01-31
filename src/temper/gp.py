@@ -8,6 +8,10 @@ from src.temper.base import TemperBase
 
 
 class TemperGP(TemperBase):
+    """
+    Temper the predictive variance of a Gaussian Process.
+    """
+
     def __init__(
         self,
         gp: Union[ExactGP, svGP],
@@ -23,6 +27,12 @@ class TemperGP(TemperBase):
     def _untempered_predict(
         self, x: torch.Tensor
     ) -> gpytorch.distributions.MultivariateNormal:
+        """
+        Predict the untempered predictive distribution. This is the predictive
+        distribution of the Gaussian Process.
+        :param x: Input data of shape (N, D).
+        :return: The predictive distribution.
+        """
         prediction = self.gp.likelihood(self.gp(x))
         assert isinstance(prediction, gpytorch.distributions.MultivariateNormal)
         return prediction

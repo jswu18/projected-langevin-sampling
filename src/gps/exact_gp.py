@@ -3,6 +3,11 @@ import torch
 
 
 class ExactGP(gpytorch.models.ExactGP):
+    """
+    An exact Gaussian Process model following:
+    https://docs.gpytorch.ai/en/v1.6.0/examples/01_Exact_GPs/Simple_GP_Regression.html
+    """
+
     def __init__(
         self,
         mean: gpytorch.means.Mean,

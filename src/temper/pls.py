@@ -7,6 +7,11 @@ from src.temper.base import TemperBase
 
 
 class TemperPLS(TemperBase):
+    """
+    Temper the predictive variance of a Projected Langevin Sampling model.
+    The model must use a Gaussian cost function, implying a regression task.
+    """
+
     def __init__(
         self,
         x_calibration: torch.Tensor,
@@ -25,6 +30,12 @@ class TemperPLS(TemperBase):
     def _untempered_predict(
         self, x: torch.Tensor
     ) -> gpytorch.distributions.MultivariateNormal:
+        """
+        Predict the untempered predictive distribution. This is the predictive
+        distribution of the Projected Langevin Sampling model.
+        :param x: Input data of shape (N, D).
+        :return: The predictive distribution.
+        """
         prediction_distribution = self.pls(
             x=x,
             particles=self.particles,

@@ -7,6 +7,16 @@ from src.projected_langevin_sampling.costs.base import PLSCost
 
 
 class ProjectedLangevinSampling:
+    """
+    A class for the projected Langevin sampling. This class contains the basis and cost defining the function space
+    approximation and the desired output space respectively.
+
+    N is the number of training points.
+    M is the dimensionality of the function space approximation.
+    J is the number of particles.
+    D is the dimensionality of the data.
+    """
+
     def __init__(
         self,
         basis: PLSBasis,
@@ -77,6 +87,13 @@ class ProjectedLangevinSampling:
         )
 
     def calculate_cost_derivative(self, particles: torch.Tensor) -> torch.Tensor:
+        """
+        Calculates the cost derivative of the particles. Prediction samples are calculated with the current particles
+        in the function space approximation. The cost derivative is then calculated with these function space prediction
+        samples.
+        :param particles: The particles of size (M, J).
+        :return: The cost derivative of size (N, J).
+        """
         untransformed_train_prediction_samples = (
             self.basis.calculate_untransformed_train_prediction_samples(
                 particles=particles,
@@ -89,6 +106,14 @@ class ProjectedLangevinSampling:
     def calculate_particle_update(
         self, particles: torch.Tensor, step_size: float
     ) -> torch.Tensor:
+        """
+        Calculates the update for each particle following the gradient flow. The update is calculated by first
+        calculating the cost derivative and then applying the update rule defined in the basis of the function
+        space approximation.
+        :param particles:
+        :param step_size:
+        :return:
+        """
         cost_derivative = self.calculate_cost_derivative(particles=particles)
         return self.basis.calculate_particle_update(
             particles=particles,
@@ -97,6 +122,11 @@ class ProjectedLangevinSampling:
         )
 
     def calculate_energy_potential(self, particles: torch.Tensor) -> float:
+        """
+        Calculates the energy potential of the particles.
+        :param particles: Particles of size (M, J).
+        :return: The average energy potential of the particles.
+        """
         assert (
             particles.shape[0] == self.basis.approximation_dimension
         ), f"Particles have shape {particles.shape} but requires ({self.basis.approximation_dimension}, J) dimension."

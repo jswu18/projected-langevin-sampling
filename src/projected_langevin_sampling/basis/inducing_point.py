@@ -11,8 +11,9 @@ from src.samplers import sample_multivariate_normal
 
 class InducingPointBasis(PLSBasis):
     """
-    A Non-orthonormal basis (IP) approximation.
-    The base class for projected Langevin sampling with particles on a function space approximated by a set of M inducing points.
+    A Non-orthonormal basis approximation of the function space using inducing points (IP).
+    The base class for projected Langevin sampling with particles on a function space
+    approximated by a set of M inducing points.
 
     N is the number of training points.
     M is the dimensionality of the function space approximation.
@@ -54,6 +55,13 @@ class InducingPointBasis(PLSBasis):
         noise_only: bool = True,
         seed: Optional[int] = None,
     ) -> torch.Tensor:
+        """
+        Initialises the particles for the projected Langevin sampling.
+        :param number_of_particles: The number of particles to initialise.
+        :param noise_only: Whether to initialise the particles with noise only or to add the inducing point values.
+        :param seed: An optional seed for reproducibility.
+        :return: A tensor of size (M, J).
+        """
         particle_noise = self._initialise_particles_noise(
             number_of_particles=number_of_particles,
             seed=seed,
@@ -83,7 +91,7 @@ class InducingPointBasis(PLSBasis):
         Calculates the energy potential of the particles.
         :param particles: Particles of size (M, J).
         :param cost: The cost of size (J,).
-        :return: The energy potential for each particle of size (J,).
+        :return: The average energy potential of the particles.
         """
         inverse_base_gram_induce_particles = gpytorch.solve(
             self.base_gram_induce, particles
@@ -145,11 +153,6 @@ class InducingPointBasis(PLSBasis):
         :param x: Test points of size (N*, D)
         :return: The predictive noise of size (N*, J)
         """
-        # zx = torch.concatenate((self.x_induce, x), dim=0)  # (M+N*, D)
-        # noise_covariance = self.kernel.forward(
-        #     x1=zx,
-        #     x2=zx,
-        # )  # (M+N*, M+N*)
         gram_x = self.kernel.forward(
             x1=x,
             x2=x,

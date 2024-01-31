@@ -6,6 +6,11 @@ import torch
 
 class PLSBasis(ABC):
     """
+    A base class for the basis of the projected Langevin sampling.
+    Methods pertaining to the basis are implemented here such as initialising the particles,
+    calculating the energy potential, calculating the particle update, and producing the predictive samples
+    from the particles within the basis (i.e. pre transformation to the output space).
+
     N is the number of training points.
     M is the dimensionality of the function space approximation.
     J is the number of particles.
@@ -52,6 +57,13 @@ class PLSBasis(ABC):
         noise_only: bool = True,
         seed: Optional[int] = None,
     ) -> torch.Tensor:
+        """
+        Initialises the particles for the projected Langevin sampling.
+        :param number_of_particles: The number of particles to initialise.
+        :param noise_only: Whether to initialise the particles with noise only.
+        :param seed: An optional seed for reproducibility.
+        :return: A tensor of size (M, J).
+        """
         raise NotImplementedError
 
     @abstractmethod
@@ -73,7 +85,7 @@ class PLSBasis(ABC):
         Calculates the energy potential of the particles.
         :param particles: Particles of size (M, J).
         :param cost: The cost of size (J,).
-        :return: The energy potential for each particle of size (J,).
+        :return: The average energy potential of the particles.
         """
         raise NotImplementedError
 
@@ -85,7 +97,7 @@ class PLSBasis(ABC):
         step_size: float,
     ) -> torch.Tensor:
         """
-        Calculates the update for each particle following the Wasserstein projected Langevin sampling.
+        Calculates the update for each particle following the Projected Langevin sampling.
         :param particles: Particles of size (M, J).
         :param cost_derivative: The derivative of the cost function of size (N, J).
         :param step_size: A step size for the projected Langevin sampling update in the form of a scalar.
