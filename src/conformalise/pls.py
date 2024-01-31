@@ -6,7 +6,7 @@ from src.conformalise.base import ConformaliseBase
 from src.projected_langevin_sampling import ProjectedLangevinSampling
 
 
-class ConformaliseGradientFlow(ConformaliseBase):
+class ConformalisePLS(ConformaliseBase):
     def __init__(
         self,
         x_calibration: torch.Tensor,

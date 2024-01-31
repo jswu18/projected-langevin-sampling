@@ -6,7 +6,7 @@ from src.projected_langevin_sampling.costs import GaussianCost
 from src.temper.base import TemperBase
 
 
-class TemperGradientFlow(TemperBase):
+class TemperPLS(TemperBase):
     def __init__(
         self,
         x_calibration: torch.Tensor,
