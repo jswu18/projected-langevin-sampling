@@ -25,12 +25,14 @@ from experiments.runners import (
     train_svgp_runner,
 )
 from experiments.uci.constants import DATASET_SCHEMA_MAPPING, RegressionDatasetSchema
+from src.conformalise import ConformalisePLS
 from src.inducing_point_selectors import ConditionalVarianceInducingPointSelector
 from src.kernels import PLSKernel
 from src.projected_langevin_sampling import ProjectedLangevinSampling
 from src.projected_langevin_sampling.basis import InducingPointBasis, OrthonormalBasis
 from src.projected_langevin_sampling.costs import GaussianCost
 from src.projected_langevin_sampling.link_functions import IdentityLinkFunction
+from src.temper import TemperGP, TemperPLS
 from src.utils import set_seed
 
 parser = argparse.ArgumentParser(
@@ -51,8 +53,13 @@ parser.add_argument(
 def get_experiment_data(
     seed: int,
     train_data_percentage: float,
+    validation_data_percentage: float,
     dataset_name: str,
 ) -> ExperimentData:
+    assert train_data_percentage + validation_data_percentage <= 1.0, (
+        f"{train_data_percentage=} and {validation_data_percentage=} "
+        "should sum to less than or equal to 1.0."
+    )
     df = pd.read_csv(
         os.path.join("experiments", "uci", "datasets", f"{dataset_name}.csv")
     )
@@ -73,6 +80,7 @@ def get_experiment_data(
         x=x,
         y=y,
         train_data_percentage=train_data_percentage,
+        validation_data_percentage=validation_data_percentage,
         normalise=True,
     )
     return experiment_data
@@ -113,6 +121,7 @@ def main(
         experiment_data = get_experiment_data(
             seed=data_seed,
             train_data_percentage=data_config["train_data_percentage"],
+            validation_data_percentage=data_config["validation_data_percentage"],
             dataset_name=dataset_name,
         )
         experiment_data.save(experiment_data_path)
@@ -226,11 +235,6 @@ def main(
                     "minimum_change_in_energy_potential"
                 ],
                 seed=pls_config["seed"],
-                observation_noise_upper=pls_config["observation_noise_upper"],
-                observation_noise_lower=pls_config["observation_noise_lower"],
-                number_of_observation_noise_searches=pls_config[
-                    "number_of_observation_noise_searches"
-                ],
                 plot_title=f"{dataset_name}",
                 plot_energy_potential_path=plots_path,
                 metric_to_optimise=pls_config["metric_to_optimise"],
@@ -247,9 +251,14 @@ def main(
             )
         set_seed(pls_config["seed"])
         calculate_metrics(
-            model=pls,
+            model=TemperPLS(
+                pls=pls,
+                particles=particles,
+                x_calibration=experiment_data.validation.x,
+                y_calibration=experiment_data.validation.y,
+            ),
             particles=particles,
-            model_name=pls_name,
+            model_name=f"{pls_name}-temper",
             dataset_name=dataset_name,
             experiment_data=experiment_data,
             results_path=results_path,
@@ -300,8 +309,12 @@ def main(
         )
     set_seed(svgp_config["seed"])
     calculate_metrics(
-        model=svgp,
-        model_name=model_name,
+        model=TemperGP(
+            gp=svgp,
+            x_calibration=experiment_data.validation.x,
+            y_calibration=experiment_data.validation.y,
+        ),
+        model_name=f"{model_name}-temper",
         dataset_name=dataset_name,
         experiment_data=experiment_data,
         results_path=results_path,
@@ -336,9 +349,9 @@ if __name__ == "__main__":
             results_path=os.path.join(outputs_path, str(data_seed), "results"),
             data_types=["train", "test"],
             model_names=[
-                "pls-onb",
-                "pls-onb-full",
-                "svgp",
+                "pls-onb-temper",
+                "pls-onb-full-temper",
+                "svgp-temper",
             ],
             datasets=list(RegressionDatasetSchema.__members__.keys()),
             metrics=["mae", "mse", "nll"],

@@ -348,7 +348,8 @@ if __name__ == "__main__":
             data_types=["train", "test"],
             model_names=[
                 "pls-onb",
-                "pls-onb-full" "svgp-r",
+                "pls-onb-full",
+                "svgp-r",
             ],
             datasets=list(ClassificationDatasetSchema.__members__.keys()),
             metrics=["mae", "mse", "nll", "acc", "auc", "f1"],

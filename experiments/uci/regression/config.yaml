@@ -1,5 +1,6 @@
 data:
-  train_data_percentage: 0.9
+  train_data_percentage: 0.8
+  validation_data_percentage: 0.1
 kernel:
   seed: 0
   learning_rate: 0.01
@@ -23,9 +24,6 @@ pls:
   seed: 0
   metric_to_optimise: loss
   initial_particles_noise_only: True
-  observation_noise_upper: 1.0e+4
-  observation_noise_lower: 1.0e-4
-  number_of_observation_noise_searches: 25
   early_stopper_patience: 1.0e-2
 svgp:
   seed: 0

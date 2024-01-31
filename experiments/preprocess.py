@@ -158,6 +158,7 @@ def set_up_experiment(
     y: torch.Tensor,
     train_data_percentage: float,
     normalise: bool = True,
+    validation_data_percentage: Optional[float] = 0,
 ) -> ExperimentData:
     (
         x_train,
@@ -167,15 +168,32 @@ def set_up_experiment(
     ) = train_test_split(
         x,
         y,
-        test_size=1 - train_data_percentage,
+        test_size=1 - (train_data_percentage + validation_data_percentage),
         random_state=seed,
     )
+    if validation_data_percentage > 0:
+        (
+            x_train,
+            x_validation,
+            y_train,
+            y_validation,
+        ) = train_test_split(
+            x_train,
+            y_train,
+            test_size=validation_data_percentage
+            / (validation_data_percentage + train_data_percentage),
+            random_state=seed,
+        )
+    else:
+        x_validation, y_validation = None, None
     if normalise:
         y_mean = torch.mean(y_train)
         y_std = torch.std(y_train)
         y = (y - y_mean) / y_std
         y_train = (y_train - y_mean) / y_std
         y_test = (y_test - y_mean) / y_std
+        if y_validation is not None:
+            y_validation = (y_validation - y_mean) / y_std
     else:
         y_mean = 0.0
         y_std = 1.0
@@ -184,6 +202,13 @@ def set_up_experiment(
         problem_type=problem_type,
         full=Data(x=torch.tensor(x), y=torch.tensor(y), name="full"),
         train=Data(x=torch.tensor(x_train), y=torch.tensor(y_train), name="train"),
+        validation=Data(
+            x=torch.tensor(x_validation),
+            y=torch.tensor(y_validation),
+            name="validation",
+        )
+        if validation_data_percentage > 0
+        else None,
         test=Data(x=torch.tensor(x_test), y=torch.tensor(y_test), name="test"),
         y_mean=y_mean,
         y_std=y_std,

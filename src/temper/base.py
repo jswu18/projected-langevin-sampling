@@ -36,7 +36,7 @@ class TemperBase(ABC):
         prediction = self._untempered_predict(x=x)
         return gpytorch.distributions.MultivariateNormal(
             mean=prediction.mean,
-            covariance_matrix=prediction.lazy_covariance_matrix * self.scale,
+            covariance_matrix=prediction.covariance_matrix * self.scale,
         )
 
     def __call__(self, x: torch.Tensor) -> gpytorch.distributions.MultivariateNormal:
