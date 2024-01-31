@@ -99,6 +99,9 @@ def exact_gp_runner(
     plot_loss_path: str = None,
     number_of_classes: int = 1,
 ) -> List[gpytorch.models.GP]:
+    """
+    Trains an exact GP on the full data or a subsample of the data, depending on the training data size.
+    """
     create_directory(model_path)
     create_directory(data_path)
     models = []

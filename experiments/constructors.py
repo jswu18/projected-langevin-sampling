@@ -9,6 +9,11 @@ import torch
 def construct_average_gaussian_likelihood(
     likelihoods: List[gpytorch.likelihoods.GaussianLikelihood],
 ) -> gpytorch.likelihoods.GaussianLikelihood:
+    """
+    Construct an average Gaussian likelihood from a list of Gaussian likelihoods.
+    :param likelihoods: A list of Gaussian likelihoods.
+    :return: An average Gaussian likelihood.
+    """
     average_likelihood = gpytorch.likelihoods.GaussianLikelihood()
     average_likelihood.noise = torch.tensor(
         np.array([likelihood.noise.detach().numpy() for likelihood in likelihoods])
@@ -19,6 +24,11 @@ def construct_average_gaussian_likelihood(
 def construct_average_ard_kernel(
     kernels: List[gpytorch.kernels.Kernel],
 ) -> gpytorch.kernels.Kernel:
+    """
+    Construct an ARD kernel with average parameters from a list of ARD kernels.
+    :param kernels: A list of ARD kernels.
+    :return: An average ARD kernel.
+    """
     kernel = gpytorch.kernels.ScaleKernel(
         gpytorch.kernels.RBFKernel(ard_num_dims=kernels[0].base_kernel.ard_num_dims)
     )

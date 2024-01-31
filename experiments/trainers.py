@@ -1,4 +1,4 @@
-from typing import List, Optional, Union
+from typing import List, Optional, Tuple, Union
 
 import gpytorch
 import torch
@@ -22,7 +22,7 @@ def train_exact_gp(
     learning_rate: float,
     likelihood: gpytorch.likelihoods.Likelihood,
     early_stopper_patience: float,
-) -> (ExactGP, List[float]):
+) -> Tuple[ExactGP, List[float]]:
     set_seed(seed)
     model = ExactGP(
         mean=mean,
@@ -68,7 +68,7 @@ def train_svgp(
     learn_kernel_parameters: bool,
     early_stopper_patience: float,
     likelihood_noise: Optional[float] = None,
-) -> (ExactGP, List[float]):
+) -> Tuple[Optional[svGP], Optional[List[float]]]:
     set_seed(seed)
     model = svGP(
         mean=mean,
@@ -135,7 +135,7 @@ def train_pls(
     step_size: float,
     early_stopper_patience: float,
     tqdm_desc: Optional[str] = None,
-):
+) -> Tuple[torch.Tensor, List[float]]:
     energy_potentials = []
     early_stopper = EarlyStopper(patience=early_stopper_patience)
     for _ in tqdm(

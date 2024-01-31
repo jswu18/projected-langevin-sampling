@@ -10,7 +10,7 @@ from src.projected_langevin_sampling import ProjectedLangevinSampling
 def load_pls(
     pls: ProjectedLangevinSampling,
     model_path: str,
-):
+) -> Tuple[ProjectedLangevinSampling, torch.Tensor, float, int]:
     model_config = torch.load(model_path)
     particles = model_config["particles"]
     pls.observation_noise = model_config["observation_noise"]
