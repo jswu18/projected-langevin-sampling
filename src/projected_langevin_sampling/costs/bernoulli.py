@@ -22,7 +22,7 @@ class BernoulliCost(PLSCost):
         link_function: PLSLinkFunction,
     ):
         super().__init__(link_function=link_function)
-        self.y_train = y_train
+        self.y_train = y_train.type(torch.double)
 
     def predict(
         self,
@@ -39,10 +39,9 @@ class BernoulliCost(PLSCost):
         train_prediction_samples = self.link_function(
             untransformed_train_prediction_samples
         )
-        return (
-            -self.y_train[:, None] * torch.log(train_prediction_samples)
-            - (1 - self.y_train[:, None]) * torch.log(1 - train_prediction_samples)
-        ).sum(dim=0)
+        return -torch.log(train_prediction_samples).T @ self.y_train - torch.log(
+            1 - train_prediction_samples
+        ).T @ (1 - self.y_train)
 
     def _calculate_cost_derivative_sigmoid_link_function(
         self, untransformed_train_prediction_samples: torch.Tensor

@@ -43,10 +43,14 @@ class GaussianCost(PLSCost):
         train_prediction_samples = self.link_function(
             untransformed_train_prediction_samples
         )
+
+        # (J, N)
+        errors = (train_prediction_samples - self.y_train[:, None]).T
+
         # (1/sigma^2) * (k(X, Z) @ k(Z, Z)^{-1} @ U(t) - Y) of size (J)
-        return (1 / (2 * self.observation_noise)) * torch.square(
-            train_prediction_samples - self.y_train[:, None]
-        ).sum(dim=0)
+        return (1 / (2 * self.observation_noise)) * torch.vmap(
+            lambda x: x @ x,
+        )(errors)
 
     def _calculate_cost_derivative_identity_link_function(
         self, untransformed_train_prediction_samples: torch.Tensor
