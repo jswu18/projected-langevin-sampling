@@ -25,6 +25,7 @@ class OrthonormalBasis(PLSBasis):
         kernel: PLSKernel,
         x_induce: torch.Tensor,
         x_train: torch.Tensor,
+        eigenvalue_threshold: float = 0.0,
     ):
         self.kernel = kernel
 
@@ -40,12 +41,15 @@ class OrthonormalBasis(PLSBasis):
         )
 
         # Remove negative eigenvalues
-        positive_eigenvalue_idx = torch.where(self.eigenvalues > 0)[0]
-        self.eigenvalues = self.eigenvalues[positive_eigenvalue_idx].real  # (M_k,)
+        desired_eigenvalue_idx = torch.where(self.eigenvalues > eigenvalue_threshold)[0]
+        self.eigenvalues = self.eigenvalues[desired_eigenvalue_idx].real  # (M_k,)
         self.eigenvectors = self.eigenvectors[
-            :, positive_eigenvalue_idx
+            :, desired_eigenvalue_idx
         ].real  # (M, M_k)
         # M_k is the number of eigenvalues to keep
+        print(
+            f"Number of eigenvalues kept: {self.eigenvalues.shape[0]} out of {x_induce.shape[0]}"
+        )
 
         # Scale eigenvectors (M, M_k)
         self.scaled_eigenvectors = torch.multiply(
