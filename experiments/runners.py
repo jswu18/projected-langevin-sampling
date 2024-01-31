@@ -92,12 +92,12 @@ def exact_gp_runner(
     number_of_epochs: int,
     learning_rate: float,
     number_of_iterations: int,
+    early_stopper_patience: float,
     model_path: str,
     data_path: str,
     plot_1d_subsample_path: str = None,
     plot_loss_path: str = None,
     number_of_classes: int = 1,
-    early_stopper_patience: Optional[float] = None,
 ) -> List[gpytorch.models.GP]:
     create_directory(model_path)
     create_directory(data_path)

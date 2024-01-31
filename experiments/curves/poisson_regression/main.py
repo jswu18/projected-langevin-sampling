@@ -151,6 +151,7 @@ def main(
         number_of_epochs=kernel_config["number_of_epochs"],
         learning_rate=kernel_config["learning_rate"],
         number_of_iterations=kernel_config["number_of_iterations"],
+        early_stopper_patience=kernel_config["early_stopper_patience"],
         model_path=subsample_gp_model_path,
         data_path=subsample_gp_data_path,
         plot_1d_subsample_path=None,

@@ -11,6 +11,7 @@ kernel:
   number_of_iterations: 10
   number_of_epochs: 2000
   subsample_size: 2000
+  early_stopper_patience: 1.0
 inducing_points:
   seed: 0
   inducing_points_factor: 1
