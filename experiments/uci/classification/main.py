@@ -28,12 +28,9 @@ from experiments.uci.constants import (
 from src.inducing_point_selectors import ConditionalVarianceInducingPointSelector
 from src.kernels import PLSKernel
 from src.projected_langevin_sampling import ProjectedLangevinSampling
-from src.projected_langevin_sampling.basis import InducingPointBasis, OrthonormalBasis
+from src.projected_langevin_sampling.basis import OrthonormalBasis
 from src.projected_langevin_sampling.costs import BernoulliCost
-from src.projected_langevin_sampling.link_functions import (
-    ProbitLinkFunction,
-    SigmoidLinkFunction,
-)
+from src.projected_langevin_sampling.link_functions import SigmoidLinkFunction
 from src.utils import set_seed
 
 parser = argparse.ArgumentParser(
