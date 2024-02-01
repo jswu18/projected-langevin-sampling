@@ -27,7 +27,7 @@ export PYTHONPATH=$PWD
 This section demonstrates an example usage of the codebase. We will go through a full example of PLS for a simple 1D regression task. Our demo will involve the following steps:
 
 1. <b>Data Generation</b>: generating some noisy data following a sin function,
-2. <b>Inducing Point Selection</b>: selecting inducing points for our model using an ARD kernel,
+2. <b>Inducing Points Selection</b>: selecting inducing points for our model using an ARD kernel,
 3. <b>The Projected Langevin Sampling Model</b>: constructing our PLS model and initialising the particles,
 4. <b>Function Space Gradient Flow</b>: performing the function space gradient flow to update the particles, and
 5. <b>Tempering</b>: calibrating the model variance with a validation set.
@@ -97,7 +97,7 @@ plt.show()
   <img src="examples/train_data.png" width="100%" />
 </p>
 
-### 2. Inducing Point Selection
+### 2. Inducing Points Selection
 We now select the inducing points for our model. 
 In this example, we use the greedy selection method from [ Burt et al. (2020)](https://jmlr.org/papers/volume21/19-1015/19-1015.pdf). 
 We do this by constructing an ARD kernel with the `gpytorch` library. For our example, we manually set the lengthscale and outputscale of the kernel. 
