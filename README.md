@@ -94,7 +94,7 @@ ax.legend()
 plt.show()
 ```
 <p align="center">
-  <img src="examples/train_data.png" width="50%" />
+  <img src="examples/train_data.png" width="100%" />
 </p>
 
 ### 2. Inducing Point Selection
@@ -135,7 +135,7 @@ ax.legend()
 plt.show()
 ```
 <p align="center">
-  <img src="examples/inducing_data.png" width="50%" />
+  <img src="examples/inducing_data.png" width="100%" />
 </p>
 
 
@@ -209,7 +209,7 @@ ax.legend()
 plt.show()
 ```
 <p align="center">
-  <img src="examples/initial_particles.png" width="50%" />
+  <img src="examples/initial_particles.png" width="100%" />
 </p>
 
 ### 4. Function Space Gradient Flow
@@ -236,7 +236,7 @@ plt.ylabel("Log Energy Potential")
 plt.show()
 ```
 <p align="center">
-  <img src="examples/log_energy_potential.png" width="50%" />
+  <img src="examples/log_energy_potential.png" width="100%" />
 </p>
 
 Seeing that our energy potential has converged, we can visualise the updated particles below:
@@ -255,7 +255,7 @@ ax.legend()
 plt.show()
 ```
 <p align="center">
-  <img src="examples/learned_particles.png" width="50%" />
+  <img src="examples/learned_particles.png" width="100%" />
 </p>
 
 
@@ -302,7 +302,7 @@ plt.legend()
 plt.show()
 ```
 <p align="center">
-  <img src="examples/tempered_pls.png" width="50%" />
+  <img src="examples/tempered_pls.png" width="100%" />
 </p>
 
 We see that although we initialised the observation noise incorrectly, the tempering step is able to reasonably reduce the observation noise in our tempered prediction. We have now completed a full example of PLS for a simple 1D regression task!
