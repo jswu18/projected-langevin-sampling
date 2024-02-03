@@ -1,5 +1,14 @@
 # Projected Langevin Sampling for Function Space Gradient Flows
 
+We propose a scalable inference algorithm for Bayes posteriors defined on a reproducing kernel Hilbert space (RKHS). 
+Given a likelihood function and a Gaussian random element representing the prior, we obtain the corresponding Bayes posterior measure $\pi^*$ as the stationary distribution of an RKHS-valued Langevin diffusion. 
+We approximate the infinite-dimensional Langevin diffusion via a projection onto the first $M$ components of the Kosambi–Karhunen–Loeve expansion. 
+Exploiting the thus obtained approximate posterior for these $M$ components, we perform inference for $\pi^*$ by relying on the law of total probability and a sufficiency assumption.
+The resulting method scales as $\mathcal{O}(M^3 + JM^2)$, where $J$ is the number of samples produced from the posterior measure $\pi^*$. 
+Interestingly, the algorithm as a special case recovers the posterior arising from the sparse variational Gaussian process (SVGP) [(Titsias, 2009)](http://proceedings.mlr.press/v5/titsias09a/titsias09a.pdf) – owed to the fact that the sufficiency assumption underlies both methods. 
+However, whereas the SVGP posterior is parametrically constrained to be a Gaussian process, our method is based on a variational family that can freely explore the space of all probability measures on $\mathbb{R}^M$ . 
+Due to this additional flexibility, we can show that our method is provably close to the optimal $M$-dimensional variational approximation of the Bayesian posterior $\pi^*$ for convex and Lipschitz continuous negative log likelihoods and indeed coincides with SVGP for a Gaussian likelihood.
+
 ## Environment Installation
 
 To set up the Python environment for this project, please follow the instructions below:
@@ -99,7 +108,7 @@ plt.show()
 
 ### 2. Inducing Points Selection
 We now select the inducing points for our model. 
-In this example, we use the greedy selection method from [ Burt et al. (2020)](https://jmlr.org/papers/volume21/19-1015/19-1015.pdf). 
+In this example, we use the greedy selection method from [Burt et al. (2020)](https://jmlr.org/papers/volume21/19-1015/19-1015.pdf). 
 We do this by constructing an ARD kernel with the `gpytorch` library. For our example, we manually set the lengthscale and outputscale of the kernel. 
 
 ```python
