@@ -77,6 +77,7 @@ def plot_1d_data(
     title: str = None,
     color: str = "tab:blue",
     alpha: float = 0.3,
+    s: int = 10,
 ) -> Tuple[plt.Figure, plt.Axes]:
     if data.name in _DATA_COLORS:
         color = _DATA_COLORS[data.name]
@@ -89,7 +90,7 @@ def plot_1d_data(
             label=data.name,
             alpha=alpha,
             color=color,
-            s=10,
+            s=s,
         )
     ax.set_xlabel("x")
     ax.set_ylabel("y")
@@ -115,6 +116,7 @@ def plot_1d_experiment_data(
     title: str = None,
     is_sample_untransformed: bool = False,
     alpha: float = 0.3,
+    s: int = 10,
 ) -> Tuple[plt.Figure, plt.Axes]:
     for data in [
         experiment_data.train,
@@ -135,6 +137,7 @@ def plot_1d_experiment_data(
                 save_path=None,
                 title=None,
                 alpha=alpha,
+                s=s,
             )
     if not is_sample_untransformed and experiment_data.full.y_untransformed is not None:
         ax.plot(
@@ -190,7 +193,7 @@ def plot_1d_pls_prediction(
     predicted_distribution: Optional[torch.distributions.Distribution] = None,
     title: str = None,
     is_sample_untransformed: bool = False,
-    max_particles_to_plot: int = 10,
+    max_particles_to_plot: int = 50,
 ):
     fig, ax = plt.subplots(figsize=(5, 3), layout="constrained")
     if not is_sample_untransformed:
@@ -486,17 +489,18 @@ def animate_1d_pls_predictions(
     title: str,
     save_path: str,
     christmas_colours: bool = False,
-    animation_duration: int = 15,
-    max_particles_to_plot: int = 10,
-    fps=15,
+    animation_duration: int = 10,
+    max_particles_to_plot: int = 50,
+    fps: int = 15,
 ) -> None:
     number_of_particles = min(number_of_particles, max_particles_to_plot)
-    fig, ax = plt.subplots(figsize=(5, 3), layout="constrained")
+    fig, ax = plt.subplots(figsize=(6, 4), layout="constrained")
     fig, ax = plot_1d_experiment_data(
         fig=fig,
         ax=ax,
         experiment_data=experiment_data,
         alpha=0.1,
+        s=30,
     )
     plt.xlim(x.min(), x.max())
     ax.autoscale(enable=False)  # turn off autoscale before plotting particles
@@ -525,7 +529,7 @@ def animate_1d_pls_predictions(
             x.reshape(-1),
             predicted_samples[:, i].reshape(-1),
             color="black" if not christmas_colours else ["green", "red", "blue"][i % 3],
-            alpha=0.3,
+            alpha=0.2,
             zorder=1,
             label="particle" if i == 0 else None,
         )[0]
@@ -599,37 +603,102 @@ def animate_1d_pls_untransformed_predictions(
     title: str,
     save_path: str,
     christmas_colours: bool = False,
-    animation_duration: int = 15,
-    max_particles_to_plot: int = 10,
-    fps=15,
+    animation_duration: int = 10,
+    max_particles_to_plot: int = 50,
+    fps: int = 15,
+    number_of_bins: int = 50,
 ) -> None:
-    number_of_particles = min(number_of_particles, max_particles_to_plot)
-    plt.xlim(x.min(), x.max())
-    ax.autoscale(enable=False, axis="x")  # turn off autoscale before plotting particles
+    fig, ax = plt.subplots(3, 1, figsize=(6, 9), layout="constrained")
+    fig, ax[0] = plot_1d_experiment_data(
+        fig=fig,
+        ax=ax[0],
+        experiment_data=experiment_data,
+        alpha=0.1,
+        s=30,
+    )
+    ax[0].set_xlim(x.min(), x.max())
+    ax[1].set_xlim(x.min(), x.max())
+    ax[0].autoscale(
+        enable=False, axis="x"
+    )  # turn off autoscale before plotting particles
+    ax[1].autoscale(
+        enable=False, axis="x"
+    )  # turn off autoscale before plotting particles
     particles = pls.initialise_particles(
         number_of_particles=number_of_particles,
         seed=seed,
         noise_only=initial_particles_noise_only,
     )
-    predicted_untransformed_samples = pls.predict_untransformed_samples(
+    predictive_noise = pls.sample_predictive_noise(
         x=experiment_data.full.x,
         particles=particles,
     ).detach()
-    samples_plotted = [
-        ax.plot(
+    observation_noise = pls.sample_observation_noise(
+        number_of_particles=number_of_particles,
+        seed=seed,
+    ).detach()
+    predicted_samples = pls.predict_samples(
+        x=experiment_data.full.x,
+        particles=particles,
+        predictive_noise=predictive_noise,
+        observation_noise=observation_noise,
+    ).detach()
+    transformed_samples_plotted = [
+        ax[0].plot(
             x.reshape(-1),
-            predicted_untransformed_samples[:, i].reshape(-1),
+            predicted_samples[:, i].reshape(-1),
             color="black" if not christmas_colours else ["green", "red", "blue"][i % 3],
-            alpha=0.3,
+            alpha=0.2,
             zorder=1,
             label="particle" if i == 0 else None,
         )[0]
-        for i in range(predicted_untransformed_samples.shape[-1])
+        for i in range(min(max_particles_to_plot, predicted_samples.shape[-1]))
     ]
-    fig.legend(
-        loc="outside lower center",
-        ncols=4,
+    predicted_untransformed_samples = pls.predict_untransformed_samples(
+        x=experiment_data.full.x,
+        particles=particles,
+        noise=predictive_noise,
+    ).detach()
+    untransformed_samples_plotted = [
+        ax[1].plot(
+            x.reshape(-1),
+            predicted_untransformed_samples[:, i].reshape(-1),
+            color="black" if not christmas_colours else ["green", "red", "blue"][i % 3],
+            alpha=0.2,
+            zorder=1,
+            label="particle" if i == 0 else None,
+        )[0]
+        for i in range(min(max_particles_to_plot, predicted_samples.shape[-1]))
+    ]
+    max_train_idx = torch.argmax(experiment_data.train.y)
+    max_full_idx = torch.where(
+        experiment_data.full.x == experiment_data.train.x[max_train_idx]
+    )[0]
+    ax[1].axvline(
+        x=experiment_data.train.x[max_train_idx].item(),
+        color="tab:red",
+        label="cross section",
+        linewidth=3,
+        alpha=0.75,
     )
+    histogram_data = predicted_untransformed_samples[max_full_idx, :]
+    counts, bins = np.histogram(
+        histogram_data,
+        bins=number_of_bins,
+    )
+    histogram = ax[2].stairs(
+        counts,
+        bins,
+        color="tab:red",
+        alpha=0.75,
+        fill=True,
+    )
+    ax[2].set_ylim(0, 1.5 * max(counts))
+    ax[2].autoscale(enable=False, axis="y")  # turn off autoscale
+    ax[2].set_xlabel(f"$f(x)$ bin")
+    ax[2].set_ylabel("count")
+    ax[0].legend(loc="upper right")
+    ax[1].legend(loc="upper right")
 
     class ParticleWrapper:
         """
@@ -660,17 +729,40 @@ def animate_1d_pls_untransformed_predictions(
                     step_size=step_size,
                 )
             )
+        _predicted_samples = pls.predict_samples(
+            x=experiment_data.full.x,
+            particles=particle_wrapper.particles,
+            predictive_noise=predictive_noise,
+            observation_noise=observation_noise,
+        ).detach()
+        for i in range(min(max_particles_to_plot, _predicted_samples.shape[-1])):
+            transformed_samples_plotted[i].set_data(
+                (x, _predicted_samples[:, i].reshape(-1))
+            )
         _predicted_untransformed_samples = pls.predict_untransformed_samples(
             x=experiment_data.full.x,
             particles=particle_wrapper.particles,
+            noise=predictive_noise,
         ).detach()
-        for i in range(_predicted_untransformed_samples.shape[-1]):
-            samples_plotted[i].set_data(
+        for i in range(
+            min(max_particles_to_plot, _predicted_untransformed_samples.shape[-1])
+        ):
+            untransformed_samples_plotted[i].set_data(
                 (x, _predicted_untransformed_samples[:, i].reshape(-1))
             )
-        ax.set_title(f"{title} (t={step_size * particle_wrapper.num_updates:.2e})")
+        _histogram_data = _predicted_untransformed_samples[max_full_idx, :]
+        _counts, _ = np.histogram(
+            _histogram_data,
+            bins=bins,
+        )
+        histogram.set_data(_counts, bins)
+        ax[0].set_title(f"$f(x)^2$ (t={step_size * particle_wrapper.num_updates:.2e})")
+        ax[1].set_title(f"$f(x)$ (t={step_size * particle_wrapper.num_updates:.2e})")
+        ax[2].set_title(
+            f"Histogram at $f(x={experiment_data.train.x[max_train_idx].item():.2f}) (t={step_size * particle_wrapper.num_updates:.2e})$"
+        )
         progress_bar.update(n=1)
-        return (samples_plotted[0],)
+        return (transformed_samples_plotted[0],)
 
     ani = animation.FuncAnimation(
         fig, animate, repeat=True, frames=number_of_frames, interval=50
@@ -703,15 +795,16 @@ def animate_1d_gp_predictions(
     learn_inducing_locations: bool,
     learn_kernel_parameters: bool,
     christmas_colours: bool = False,
-    animation_duration: int = 15,
-    fps=15,
+    animation_duration: int = 10,
+    fps: int = 15,
 ) -> None:
-    fig, ax = plt.subplots(figsize=(5, 3), layout="constrained")
+    fig, ax = plt.subplots(figsize=(6, 4), layout="constrained")
     fig, ax = plot_1d_experiment_data(
         fig=fig,
         ax=ax,
         experiment_data=experiment_data,
         alpha=0.1,
+        s=30,
     )
     if not learn_inducing_locations:
         for i in range(inducing_points.x.shape[0]):

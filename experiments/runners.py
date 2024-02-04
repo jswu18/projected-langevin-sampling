@@ -146,6 +146,7 @@ def exact_gp_runner(
                 learning_rate=learning_rate,
                 likelihood=likelihood,
                 early_stopper_patience=early_stopper_patience,
+                model_name=model_name,
             )
             torch.save(
                 {
@@ -250,30 +251,31 @@ def animate_pls_1d_particles_runner(
     seed: int,
     best_lr: float,
     number_of_epochs: int,
-    animate_1d_path: str,
     plot_title: str = None,
-    animate_1d_untransformed_path: str = None,
+    animate_1d_path: Optional[str] = None,
+    animate_1d_untransformed_path: Optional[str] = None,
     christmas_colours: bool = False,
     initial_particles_noise_only: bool = False,
 ):
     if best_lr is None:
         return
-    animate_1d_pls_predictions(
-        pls=pls,
-        seed=seed,
-        number_of_particles=number_of_particles,
-        initial_particles_noise_only=initial_particles_noise_only,
-        step_size=best_lr,
-        number_of_epochs=number_of_epochs,
-        experiment_data=experiment_data,
-        x=experiment_data.full.x,
-        title=plot_title,
-        save_path=os.path.join(
-            animate_1d_path,
-            f"{particle_name}.gif",
-        ),
-        christmas_colours=christmas_colours,
-    )
+    if animate_1d_path is not None:
+        animate_1d_pls_predictions(
+            pls=pls,
+            seed=seed,
+            number_of_particles=number_of_particles,
+            initial_particles_noise_only=initial_particles_noise_only,
+            step_size=best_lr,
+            number_of_epochs=number_of_epochs,
+            experiment_data=experiment_data,
+            x=experiment_data.full.x,
+            title=plot_title,
+            save_path=os.path.join(
+                animate_1d_path,
+                f"{particle_name}.gif",
+            ),
+            christmas_colours=christmas_colours,
+        )
     if animate_1d_untransformed_path is not None:
         animate_1d_pls_untransformed_predictions(
             pls=pls,
@@ -286,7 +288,7 @@ def animate_pls_1d_particles_runner(
             x=experiment_data.full.x,
             title=plot_title,
             save_path=os.path.join(
-                animate_1d_path,
+                animate_1d_untransformed_path,
                 f"untransformed-{particle_name}.gif",
             ),
             christmas_colours=christmas_colours,

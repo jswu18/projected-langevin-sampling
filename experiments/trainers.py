@@ -22,7 +22,9 @@ def train_exact_gp(
     learning_rate: float,
     likelihood: gpytorch.likelihoods.Likelihood,
     early_stopper_patience: float,
+    model_name: Optional[str] = None,
 ) -> Tuple[ExactGP, List[float]]:
+    model_name = model_name if model_name is not None else "Exact GP"
     set_seed(seed)
     model = ExactGP(
         mean=mean,
@@ -36,7 +38,7 @@ def train_exact_gp(
     likelihood.train()
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
     mll = gpytorch.mlls.ExactMarginalLogLikelihood(likelihood, model)
-    epochs_iter = tqdm(range(number_of_epochs), desc="Exact GP Epoch")
+    epochs_iter = tqdm(range(number_of_epochs), desc=f"{model_name} epoch")
     losses = []
     early_stopper = EarlyStopper(patience=early_stopper_patience)
     for _ in epochs_iter:

@@ -273,9 +273,9 @@ def main(
             seed=pls_config["seed"],
             best_lr=best_lr,
             number_of_epochs=number_of_epochs,
-            animate_1d_path=plot_curve_path,
             plot_title=plot_title,
-            animate_1d_untransformed_path=None,
+            animate_1d_path=None,
+            animate_1d_untransformed_path=plot_curve_path,
             christmas_colours=pls_config["christmas_colours"]
             if "christmas_colours" in pls_config
             else False,
