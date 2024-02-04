@@ -1,5 +1,7 @@
 # Projected Langevin Sampling for Function Space Gradient Flows
 
+## Abstract
+
 We propose a scalable inference algorithm for Bayes posteriors defined on a reproducing kernel Hilbert space (RKHS). 
 Given a likelihood function and a Gaussian random element representing the prior, we obtain the corresponding Bayes posterior measure $\pi^\*$ as the stationary distribution of an RKHS-valued Langevin diffusion. 
 We approximate the infinite-dimensional Langevin diffusion via a projection onto the first $M$ components of the Kosambi–Karhunen–Loeve expansion. 
@@ -8,6 +10,27 @@ The resulting method scales as $\mathcal{O}(M^3 + JM^2)$, where $J$ is the numbe
 Interestingly, the algorithm as a special case recovers the posterior arising from the sparse variational Gaussian process (SVGP) [(Titsias, 2009)](http://proceedings.mlr.press/v5/titsias09a/titsias09a.pdf) – owed to the fact that the sufficiency assumption underlies both methods. 
 However, whereas the SVGP posterior is parametrically constrained to be a Gaussian process, our method is based on a variational family that can freely explore the space of all probability measures on $\mathbb{R}^M$ . 
 Due to this additional flexibility, we can show that our method is provably close to the optimal $M$-dimensional variational approximation of the Bayesian posterior $\pi^*$ for convex and Lipschitz continuous negative log likelihoods and indeed coincides with SVGP for a Gaussian likelihood.
+
+## Visualisations
+To motivate the use of the Projected Langevin Sampling (PLS) algorithm, we provide some visualisations of the algorithm for different 1D tasks.
+In the regression and classification visualisations below, we see that the particles are randomly initialised, but quickly converge to the data:
+
+<figure class="image" align="center">
+  <img src="examples/regression.gif" width="25%">
+  <img src="examples/classification.gif" width="25%">
+
+[//]: # (  <figcaption> Projected Langevin Sampling for a 1D regression task)
+  </figcaption> 
+</figure>
+
+Unlike variational inference which is restricts the model approximation class, PLS is a much more flexible framework. In the example below, we show that PLS can perfectly model a bimodal posterior with synthetic data for Poisson regression from an unknown rate function modelled as $f^2$. Variational approaches such as SVGP are limited by their Gaussian assumptions, making it difficult to model such data.
+
+<figure class="image" align="center">
+  <img src="examples/poisson_regression.gif" width="25%">
+
+[//]: # (  <figcaption> Projected Langevin Sampling for a 1D Poission regression task)
+  </figcaption> 
+</figure>
 
 ## Environment Installation
 
@@ -103,7 +126,7 @@ ax.legend()
 plt.show()
 ```
 <p align="center">
-  <img src="examples/train_data.png" width="100%" />
+  <img src="examples/train_data.png" width="50%" />
 </p>
 
 ### 2. Inducing Points Selection
@@ -144,7 +167,7 @@ ax.legend()
 plt.show()
 ```
 <p align="center">
-  <img src="examples/inducing_data.png" width="100%" />
+  <img src="examples/inducing_data.png" width="50%" />
 </p>
 
 
@@ -218,7 +241,7 @@ ax.legend()
 plt.show()
 ```
 <p align="center">
-  <img src="examples/initial_particles.png" width="100%" />
+  <img src="examples/initial_particles.png" width="50%" />
 </p>
 
 ### 4. Function Space Gradient Flow
@@ -245,7 +268,7 @@ plt.ylabel("Log Energy Potential")
 plt.show()
 ```
 <p align="center">
-  <img src="examples/log_energy_potential.png" width="100%" />
+  <img src="examples/log_energy_potential.png" width="50%" />
 </p>
 
 Seeing that our energy potential has converged, we can visualise the updated particles below:
@@ -264,7 +287,7 @@ ax.legend()
 plt.show()
 ```
 <p align="center">
-  <img src="examples/learned_particles.png" width="100%" />
+  <img src="examples/learned_particles.png" width="50%" />
 </p>
 
 
@@ -311,7 +334,7 @@ plt.legend()
 plt.show()
 ```
 <p align="center">
-  <img src="examples/tempered_pls.png" width="100%" />
+  <img src="examples/tempered_pls.png" width="50%" />
 </p>
 
 We see that although we initialised the observation noise incorrectly, the tempering step is able to reasonably reduce the observation noise in our tempered prediction. We have now completed a full example of PLS for a simple 1D regression task!
