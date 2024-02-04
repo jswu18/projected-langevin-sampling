@@ -15,22 +15,16 @@ Due to this additional flexibility, we can show that our method is provably clos
 To motivate the use of the Projected Langevin Sampling (PLS) algorithm, we provide some visualisations of the algorithm for different 1D tasks.
 In the regression and classification visualisations below, we see that the particles are randomly initialised, but quickly converge to the data:
 
-<figure class="image" align="center">
-  <img src="examples/regression.gif" width="25%">
-  <img src="examples/classification.gif" width="25%">
-
-[//]: # (  <figcaption> Projected Langevin Sampling for a 1D regression task)
-  </figcaption> 
-</figure>
+<p align="center">
+  <img src="examples/regression.gif" width="49%" />
+  <img src="examples/classification.gif" width="49%" />
+</p>
 
 Unlike variational inference which is restricts the model approximation class, PLS is a much more flexible framework. In the example below, we show that PLS can perfectly model a bimodal posterior with synthetic data for Poisson regression from an unknown rate function modelled as $f^2$. Variational approaches such as SVGP are limited by their Gaussian assumptions, making it difficult to model such data.
 
-<figure class="image" align="center">
-  <img src="examples/poisson_regression.gif" width="25%">
-
-[//]: # (  <figcaption> Projected Langevin Sampling for a 1D Poission regression task)
-  </figcaption> 
-</figure>
+<p align="center">
+  <img src="examples/poisson_regression.gif" width="50%" />
+</p>
 
 ## Environment Installation
 
