@@ -21,9 +21,11 @@ class ProjectedLangevinSampling:
         self,
         basis: PLSBasis,
         cost: PLSCost,
+        name: Optional[str] = None,
     ):
         self.basis = basis
         self.cost = cost
+        self.name: str = name if name is not None else "pls"
 
     @property
     def observation_noise(self) -> float:
