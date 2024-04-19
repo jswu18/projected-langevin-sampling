@@ -4,6 +4,7 @@ data:
   sigma_true: 0.2
   number_of_test_intervals: 1
   total_number_of_intervals: 12
+  validation_data_percentage: 0.1
 kernel:
   seed: 0
   learning_rate: 0.01

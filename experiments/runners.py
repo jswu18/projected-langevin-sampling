@@ -25,6 +25,7 @@ from experiments.plotters import (
 from experiments.trainers import train_exact_gp, train_pls, train_svgp
 from experiments.utils import create_directory
 from src.bisection_search import LogBisectionSearch
+from src.conformalise import ConformalisePLS
 from src.gps import svGP
 from src.inducing_point_selectors import InducingPointSelector
 from src.projected_langevin_sampling import ProjectedLangevinSampling
@@ -186,7 +187,7 @@ def exact_gp_runner(
 
 
 def plot_pls_1d_particles_runner(
-    pls: ProjectedLangevinSampling,
+    pls: Union[ProjectedLangevinSampling, ConformalisePLS],
     particles: torch.Tensor,
     particle_name: str,
     experiment_data: ExperimentData,
@@ -194,14 +195,23 @@ def plot_pls_1d_particles_runner(
     plot_title: str = None,
 ) -> None:
     create_directory(plot_particles_path)
-    predicted_distribution = pls.predict(
-        x=experiment_data.full.x,
-        particles=particles,
-    )
-    predicted_samples = pls.predict_samples(
-        x=experiment_data.full.x,
-        particles=particles,
-    ).detach()
+    if isinstance(pls, ProjectedLangevinSampling):
+        predicted_distribution = pls.predict(
+            x=experiment_data.full.x,
+            particles=particles,
+        )
+    elif isinstance(pls, ConformalisePLS):
+        predicted_distribution = pls.predict(
+            x=experiment_data.full.x,
+        )
+    else:
+        raise TypeError(f"Unknown PLS type: {type(pls)}")
+    predicted_samples = None
+    if isinstance(pls, ProjectedLangevinSampling):
+        predicted_samples = pls.predict_samples(
+            x=experiment_data.full.x,
+            particles=particles,
+        ).detach()
     plot_1d_pls_prediction(
         experiment_data=experiment_data,
         x=experiment_data.full.x,
@@ -230,17 +240,18 @@ def plot_pls_1d_particles_runner(
             ),
             is_sample_untransformed=True,
         )
-        plot_1d_pls_prediction_histogram(
-            experiment_data=experiment_data,
-            x=experiment_data.full.x,
-            predicted_samples=predicted_samples,
-            untransformed_predicted_samples=untransformed_predicted_samples,
-            title=f"{plot_title}" if plot_title is not None else None,
-            save_path=os.path.join(
-                plot_particles_path,
-                f"particles-histogram-{particle_name}.png",
-            ),
-        )
+        if predicted_samples is not None:
+            plot_1d_pls_prediction_histogram(
+                experiment_data=experiment_data,
+                x=experiment_data.full.x,
+                predicted_samples=predicted_samples,
+                untransformed_predicted_samples=untransformed_predicted_samples,
+                title=f"{plot_title}" if plot_title is not None else None,
+                save_path=os.path.join(
+                    plot_particles_path,
+                    f"particles-histogram-{particle_name}.png",
+                ),
+            )
 
 
 def animate_pls_1d_particles_runner(

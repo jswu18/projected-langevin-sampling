@@ -9,6 +9,7 @@ from torch.utils.data import DataLoader, TensorDataset
 from tqdm import tqdm
 
 from experiments.data import Data, ExperimentData, ProblemType
+from src.conformalise import ConformaliseGP
 from src.gps import ExactGP, svGP
 from src.kernels import PLSKernel
 from src.projected_langevin_sampling import ProjectedLangevinSampling
@@ -123,22 +124,23 @@ def plot_1d_experiment_data(
         experiment_data.validation,
         experiment_data.test,
     ]:
-        if data is not None:
-            fig, ax = plot_1d_data(
-                fig=fig,
-                ax=ax,
-                data=data
-                if not is_sample_untransformed
-                else Data(
-                    x=data.x,
-                    y=data.y_untransformed,
-                    name=data.name,
-                ),
-                save_path=None,
-                title=None,
-                alpha=alpha,
-                s=s,
-            )
+        if data is None:
+            continue
+        fig, ax = plot_1d_data(
+            fig=fig,
+            ax=ax,
+            data=data
+            if not is_sample_untransformed
+            else Data(
+                x=data.x,
+                y=data.y_untransformed,
+                name=data.name,
+            ),
+            save_path=None,
+            title=None,
+            alpha=alpha,
+            s=s,
+        )
     if not is_sample_untransformed and experiment_data.full.y_untransformed is not None:
         ax.plot(
             experiment_data.full.x,
@@ -187,8 +189,8 @@ def plot_1d_particle(
 def plot_1d_pls_prediction(
     experiment_data: ExperimentData,
     x: torch.Tensor,
-    predicted_samples: torch.Tensor,
     save_path: str,
+    predicted_samples: Optional[torch.Tensor] = None,
     y_name: Optional[str] = None,
     predicted_distribution: Optional[torch.distributions.Distribution] = None,
     title: str = None,
@@ -234,14 +236,15 @@ def plot_1d_pls_prediction(
             )
         else:
             raise TypeError
-    for i in range(min(predicted_samples.shape[1], max_particles_to_plot)):
-        fig, ax = plot_1d_particle(
-            fig=fig,
-            ax=ax,
-            x=x,
-            y=predicted_samples[:, i],
-            add_label=i == 0,
-        )
+    if predicted_samples is not None:
+        for i in range(min(predicted_samples.shape[1], max_particles_to_plot)):
+            fig, ax = plot_1d_particle(
+                fig=fig,
+                ax=ax,
+                x=x,
+                y=predicted_samples[:, i],
+                add_label=i == 0,
+            )
     if y_name is not None:
         ax.set_ylabel(y_name)
     if title is not None:
@@ -343,7 +346,7 @@ def plot_losses(
 
 
 def plot_1d_gp_prediction_and_inducing_points(
-    model: Union[ExactGP, svGP],
+    model: Union[ExactGP, svGP, ConformaliseGP],
     experiment_data: ExperimentData,
     title: str,
     save_path: str,
