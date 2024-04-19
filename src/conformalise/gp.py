@@ -20,6 +20,10 @@ class ConformaliseGP(ConformaliseBase):
             y_calibration=y_calibration,
         )
 
+    @property
+    def likelihood(self):
+        return self.gp.likelihood
+
     def _predict_uncalibrated_coverage(
         self,
         x: torch.Tensor,
