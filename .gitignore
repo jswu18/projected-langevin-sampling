@@ -6,6 +6,7 @@ __pycache__
 
 # IDE
 .idea
+.vscode
 
 # Notebooks
 *ipynb_checkpoints
