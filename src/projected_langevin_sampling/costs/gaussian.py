@@ -82,9 +82,9 @@ class GaussianCost(PLSCost):
         train_prediction_samples = self.link_function(
             untransformed_train_prediction_samples
         )
-        return -torch.mul(
-            self.y_train[:, None], 1 - train_prediction_samples
-        ) + torch.mul(1 - self.y_train[:, None], train_prediction_samples)
+        return (1 / self.observation_noise) * (
+            train_prediction_samples - self.y_train[:, None]
+        )
 
     def calculate_cost_derivative(
         self,
