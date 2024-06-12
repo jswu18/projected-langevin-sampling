@@ -1,6 +1,6 @@
 import argparse
 import os
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 import gpytorch
 import matplotlib.pyplot as plt
@@ -312,8 +312,8 @@ def plot_df(
     x_axis: str,
     x_axis_name: str,
     save_path: str,
-    df_pls: Optional[pd.DataFrame] = None,
-    df_svgp: Optional[pd.DataFrame] = None,
+    df_pls: pd.DataFrame | None = None,
+    df_svgp: pd.DataFrame | None = None,
 ):
     def _plot_df(fig, ax, df):
         df_mean = (

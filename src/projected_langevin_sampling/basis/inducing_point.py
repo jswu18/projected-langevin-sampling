@@ -1,5 +1,4 @@
 import math
-from typing import Optional
 
 import gpytorch
 import torch
@@ -40,6 +39,10 @@ class InducingPointBasis(PLSBasis):
         self.base_gram_induce_train = self.kernel.base_kernel(
             x1=x_induce, x2=x_train
         )  # k(Z, X) of size (M, N)
+        if torch.cuda.is_available():
+            self.gram_induce = self.gram_induce.to(device="cuda")
+            self.base_gram_induce = self.base_gram_induce.to(device="cuda")
+            self.base_gram_induce_train = self.base_gram_induce_train.to(device="cuda")
 
     @property
     def approximation_dimension(self) -> int:
@@ -49,11 +52,11 @@ class InducingPointBasis(PLSBasis):
         """
         return self.x_induce.shape[0]
 
-    def initialise_particles(
+    def _initialise_particles(
         self,
         number_of_particles: int,
         noise_only: bool = True,
-        seed: Optional[int] = None,
+        seed: int | None = None,
     ) -> torch.Tensor:
         """
         Initialises the particles for the projected Langevin sampling.
@@ -192,7 +195,7 @@ class InducingPointBasis(PLSBasis):
         self,
         particles: torch.Tensor,
         x: torch.Tensor,
-        noise: torch.Tensor = None,
+        noise: torch.Tensor | None = None,
     ) -> torch.Tensor:
         """
         Predicts samples for given test points x without applying the output transformation.

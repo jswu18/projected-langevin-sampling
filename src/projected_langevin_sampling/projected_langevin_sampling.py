@@ -1,5 +1,3 @@
-from typing import Optional
-
 import torch
 
 from src.projected_langevin_sampling.basis.base import PLSBasis
@@ -21,7 +19,7 @@ class ProjectedLangevinSampling:
         self,
         basis: PLSBasis,
         cost: PLSCost,
-        name: Optional[str] = None,
+        name: str | None = None,
     ):
         self.basis = basis
         self.cost = cost
@@ -39,7 +37,7 @@ class ProjectedLangevinSampling:
         self,
         number_of_particles: int,
         noise_only: bool = True,
-        seed: Optional[int] = None,
+        seed: int | None = None,
     ) -> torch.Tensor:
         return self.basis.initialise_particles(
             number_of_particles=number_of_particles,
@@ -50,7 +48,7 @@ class ProjectedLangevinSampling:
     def sample_observation_noise(
         self,
         number_of_particles: int,
-        seed: Optional[int] = None,
+        seed: int | None = None,
     ) -> torch.Tensor:
         """
         Samples observation noise for a given number of particles.
@@ -142,8 +140,8 @@ class ProjectedLangevinSampling:
         self,
         particles: torch.Tensor,
         x: torch.Tensor,
-        predictive_noise: torch.Tensor = None,
-        observation_noise: torch.Tensor = None,
+        predictive_noise: torch.Tensor | None = None,
+        observation_noise: torch.Tensor | None = None,
     ) -> torch.Tensor:
         """
         Predicts samples for given test points x and applies the output transformation.
@@ -179,8 +177,8 @@ class ProjectedLangevinSampling:
         self,
         x: torch.Tensor,
         particles: torch.Tensor,
-        predictive_noise: Optional[torch.Tensor] = None,
-        observation_noise: Optional[torch.Tensor] = None,
+        predictive_noise: torch.Tensor | None = None,
+        observation_noise: torch.Tensor | None = None,
     ) -> torch.distributions.Distribution:
         prediction_samples = self.predict_samples(
             particles=particles,
@@ -194,8 +192,8 @@ class ProjectedLangevinSampling:
         self,
         x: torch.Tensor,
         particles: torch.Tensor,
-        predictive_noise: Optional[torch.Tensor] = None,
-        observation_noise: Optional[torch.Tensor] = None,
+        predictive_noise: torch.Tensor | None = None,
+        observation_noise: torch.Tensor | None = None,
     ) -> torch.distributions.Distribution:
         return self.predict(
             x=x,

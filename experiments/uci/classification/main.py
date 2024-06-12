@@ -192,21 +192,6 @@ def main(
             cost=cost,
         ),
     }
-    if experiment_data.train.x.shape[0] < kernel_config["subsample_size"]:
-        pls_kernel_full = PLSKernel(
-            base_kernel=average_ard_kernel,
-            approximation_samples=experiment_data.train.x,
-        )
-        onb_basis_full = OrthonormalBasis(
-            kernel=pls_kernel_full,
-            x_induce=experiment_data.train.x,
-            x_train=experiment_data.train.x,
-            eigenvalue_threshold=1e-3,
-        )
-        pls_dict["pls-onb-full"] = ProjectedLangevinSampling(
-            basis=onb_basis_full,
-            cost=cost,
-        )
     for pls_name, pls in pls_dict.items():
         if isinstance(pls.basis, OrthonormalBasis):
             plot_eigenvalues(
@@ -240,8 +225,6 @@ def main(
                     "minimum_change_in_energy_potential"
                 ],
                 seed=pls_config["seed"],
-                observation_noise_upper=pls_config["observation_noise_upper"],
-                observation_noise_lower=pls_config["observation_noise_lower"],
                 plot_title=f"{dataset_name}",
                 plot_energy_potential_path=plots_path,
                 metric_to_optimise=pls_config["metric_to_optimise"],
@@ -348,7 +331,6 @@ if __name__ == "__main__":
             data_types=["train", "test"],
             model_names=[
                 "pls-onb",
-                "pls-onb-full",
                 "svgp-r",
             ],
             datasets=list(ClassificationDatasetSchema.__members__.keys()),

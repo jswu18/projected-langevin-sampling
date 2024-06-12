@@ -43,6 +43,12 @@ parser = argparse.ArgumentParser(
     description="Main script for toy binary classification experiments."
 )
 parser.add_argument("--config_path", type=str)
+parser.add_argument(
+    "--include_gif",
+    type=bool,
+    default=False,
+    help="Indicate whether to include GIFs in the output.",
+)
 
 
 def get_experiment_data(
@@ -129,6 +135,7 @@ def main(
     pls_config: Dict[str, Any],
     svgp_config: Dict[str, Any],
     outputs_path: str,
+    include_gif: bool,
 ) -> None:
     experiment_data = get_experiment_data(
         curve_function=curve_function,
@@ -296,6 +303,7 @@ def main(
             plot_particles_path=plot_curve_path,
             plot_title=plot_title,
         )
+    if include_gif:
         animate_pls_1d_particles_runner(
             pls=pls,
             number_of_particles=pls_config["number_of_particles"],
@@ -408,4 +416,5 @@ if __name__ == "__main__":
             pls_config=loaded_config["pls"],
             svgp_config=loaded_config["svgp"],
             outputs_path=outputs_path,
+            include_gif=args.include_gif,
         )

@@ -16,7 +16,7 @@ class Curve(ABC):
         return (curve - curve.mean()) / curve.std()
 
     def regression(
-        self, x: torch.Tensor, sigma_true: float, seed: int = None
+        self, x: torch.Tensor, sigma_true: float, seed: int | None = None
     ) -> torch.Tensor:
         if seed is not None:
             generator = torch.Generator().manual_seed(seed)
@@ -29,7 +29,7 @@ class Curve(ABC):
         ).reshape(-1)
 
     @staticmethod
-    def classification(y_curve: torch.Tensor, seed: int = None) -> torch.Tensor:
+    def classification(y_curve: torch.Tensor, seed: int | None = None) -> torch.Tensor:
         if seed is not None:
             generator = torch.Generator().manual_seed(seed)
         else:

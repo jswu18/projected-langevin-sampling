@@ -1,5 +1,5 @@
 import os
-from typing import List, Optional, Union
+from typing import List, Union
 
 import gpytorch
 import pandas as pd
@@ -81,13 +81,10 @@ def calculate_average_interval_width(
     coverage: float,
     y_std: float,
 ) -> float:
-    return (
-        y_std
-        * model.calculate_average_interval_width(
-            x=x,
-            coverage=coverage,
-        ).item()
-    )
+    return model.calculate_average_interval_width(
+        x=x,
+        coverage=coverage,
+    ).item()
 
 
 def calculate_metrics(
@@ -99,13 +96,18 @@ def calculate_metrics(
     dataset_name: str,
     results_path: str,
     plots_path: str,
-    particles: Optional[torch.Tensor] = None,
+    particles: torch.Tensor | None = None,
 ):
     create_directory(os.path.join(results_path, model_name))
     for data in [
         experiment_data.train,
         experiment_data.test,
     ]:
+        experiment_data.train.x.cpu()
+        experiment_data.train.y.cpu()
+        experiment_data.test.x.cpu()
+        experiment_data.test.y.cpu()
+
         set_seed(0)
         if isinstance(model, svGP) or isinstance(model, ExactGP):
             prediction = model.likelihood(model(data.x))
@@ -141,8 +143,8 @@ def calculate_metrics(
         )
         if experiment_data.problem_type == ProblemType.CLASSIFICATION:
             acc = sklearn.metrics.accuracy_score(
-                y_true=data.y.detach().numpy(),
-                y_pred=prediction.probs.round().detach().numpy(),
+                y_true=data.y.cpu().detach().numpy(),
+                y_pred=prediction.probs.round().cpu().detach().numpy(),
             )
             pd.DataFrame(
                 [[acc]],
@@ -153,8 +155,8 @@ def calculate_metrics(
                 index_label="dataset",
             )
             auc = sklearn.metrics.roc_auc_score(
-                y_true=data.y.detach().numpy(),
-                y_score=prediction.probs.detach().numpy(),
+                y_true=data.y.cpu().detach().numpy(),
+                y_score=prediction.probs.cpu().detach().numpy(),
             )
             pd.DataFrame(
                 [[auc]],
@@ -165,8 +167,8 @@ def calculate_metrics(
                 index_label="dataset",
             )
             f1 = sklearn.metrics.f1_score(
-                y_true=data.y.detach().numpy(),
-                y_pred=prediction.probs.round().detach().numpy(),
+                y_true=data.y.cpu().detach().numpy(),
+                y_pred=prediction.probs.round().cpu().detach().numpy(),
             )
             pd.DataFrame(
                 [[f1]],
@@ -177,25 +179,25 @@ def calculate_metrics(
                 index_label="dataset",
             )
 
-            if isinstance(model, ConformaliseBase):
-                average_interval_width = calculate_average_interval_width(
-                    model=model,
-                    x=data.x,
-                    coverage=0.95,
-                    y_std=experiment_data.y_std,
-                )
-                pd.DataFrame(
-                    [[average_interval_width]],
-                    columns=[model_name],
-                    index=[dataset_name],
-                ).to_csv(
-                    os.path.join(
-                        results_path,
-                        model_name,
-                        f"average_interval_width_{data.name}.csv",
-                    ),
-                    index_label="dataset",
-                )
+        if isinstance(model, ConformaliseBase):
+            average_interval_width = calculate_average_interval_width(
+                model=model,
+                x=data.x,
+                coverage=0.95,
+                y_std=experiment_data.y_std,
+            )
+            pd.DataFrame(
+                [[average_interval_width]],
+                columns=[model_name],
+                index=[dataset_name],
+            ).to_csv(
+                os.path.join(
+                    results_path,
+                    model_name,
+                    f"average_interval_width_{data.name}.csv",
+                ),
+                index_label="dataset",
+            )
 
         create_directory(os.path.join(plots_path, model_name))
         plot_true_versus_predicted(

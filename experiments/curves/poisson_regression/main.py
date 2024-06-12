@@ -34,6 +34,12 @@ parser = argparse.ArgumentParser(
     description="Main script for toy Poisson regression experiments."
 )
 parser.add_argument("--config_path", type=str)
+parser.add_argument(
+    "--include_gif",
+    type=bool,
+    default=False,
+    help="Indicate whether to include GIFs in the output.",
+)
 
 
 def get_experiment_data(
@@ -116,6 +122,7 @@ def main(
     inducing_points_config: Dict[str, Any],
     pls_config: Dict[str, Any],
     outputs_path: str,
+    include_gif: bool,
 ) -> None:
     experiment_data = get_experiment_data(
         curve_function=curve_function,
@@ -265,22 +272,23 @@ def main(
             plot_particles_path=plot_curve_path,
             plot_title=plot_title,
         )
-        animate_pls_1d_particles_runner(
-            pls=pls,
-            number_of_particles=pls_config["number_of_particles"],
-            particle_name=pls_name,
-            experiment_data=experiment_data,
-            seed=pls_config["seed"],
-            best_lr=best_lr,
-            number_of_epochs=number_of_epochs,
-            plot_title=plot_title,
-            animate_1d_path=None,
-            animate_1d_untransformed_path=plot_curve_path,
-            christmas_colours=pls_config["christmas_colours"]
-            if "christmas_colours" in pls_config
-            else False,
-            initial_particles_noise_only=pls_config["initial_particles_noise_only"],
-        )
+        if include_gif:
+            animate_pls_1d_particles_runner(
+                pls=pls,
+                number_of_particles=pls_config["number_of_particles"],
+                particle_name=pls_name,
+                experiment_data=experiment_data,
+                seed=pls_config["seed"],
+                best_lr=best_lr,
+                number_of_epochs=number_of_epochs,
+                plot_title=plot_title,
+                animate_1d_path=None,
+                animate_1d_untransformed_path=plot_curve_path,
+                christmas_colours=pls_config["christmas_colours"]
+                if "christmas_colours" in pls_config
+                else False,
+                initial_particles_noise_only=pls_config["initial_particles_noise_only"],
+            )
 
 
 if __name__ == "__main__":
@@ -297,4 +305,5 @@ if __name__ == "__main__":
             inducing_points_config=loaded_config["inducing_points"],
             pls_config=loaded_config["pls"],
             outputs_path=outputs_path,
+            include_gif=args.include_gif,
         )

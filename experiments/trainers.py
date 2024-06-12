@@ -1,4 +1,4 @@
-from typing import List, Optional, Tuple, Union
+from typing import List, Tuple, Union
 
 import gpytorch
 import torch
@@ -22,7 +22,7 @@ def train_exact_gp(
     learning_rate: float,
     likelihood: gpytorch.likelihoods.Likelihood,
     early_stopper_patience: float,
-    model_name: Optional[str] = None,
+    model_name: str | None = None,
 ) -> Tuple[ExactGP, List[float]]:
     model_name = model_name if model_name is not None else "Exact GP"
     set_seed(seed)
@@ -69,8 +69,8 @@ def train_svgp(
     learn_inducing_locations: bool,
     learn_kernel_parameters: bool,
     early_stopper_patience: float,
-    likelihood_noise: Optional[float] = None,
-) -> Tuple[Optional[svGP], Optional[List[float]]]:
+    likelihood_noise: float | None = None,
+) -> Tuple[svGP | None, List[float] | None]:
     set_seed(seed)
     model = svGP(
         mean=mean,
@@ -102,6 +102,9 @@ def train_svgp(
     mll = gpytorch.mlls.VariationalELBO(
         model.likelihood, model, num_data=train_data.x.shape[0]
     )
+    if torch.cuda.is_available():
+        model = model.cuda()
+        mll = mll.cuda()
 
     train_dataset = TensorDataset(train_data.x, train_data.y)
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
@@ -136,7 +139,7 @@ def train_pls(
     number_of_epochs: int,
     step_size: float,
     early_stopper_patience: float,
-    tqdm_desc: Optional[str] = None,
+    tqdm_desc: str | None = None,
 ) -> Tuple[torch.Tensor, List[float]]:
     energy_potentials = []
     early_stopper = EarlyStopper(patience=early_stopper_patience)

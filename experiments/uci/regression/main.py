@@ -26,6 +26,7 @@ from experiments.runners import (
 )
 from experiments.uci.constants import DATASET_SCHEMA_MAPPING, RegressionDatasetSchema
 from src.conformalise import ConformalisePLS
+from src.conformalise.gp import ConformaliseGP
 from src.inducing_point_selectors import ConditionalVarianceInducingPointSelector
 from src.kernels import PLSKernel
 from src.projected_langevin_sampling import ProjectedLangevinSampling
@@ -187,21 +188,6 @@ def main(
             cost=gaussian_cost,
         ),
     }
-    if experiment_data.train.x.shape[0] < kernel_config["subsample_size"]:
-        pls_kernel_full = PLSKernel(
-            base_kernel=average_ard_kernel,
-            approximation_samples=experiment_data.train.x,
-        )
-        onb_basis_full = OrthonormalBasis(
-            kernel=pls_kernel_full,
-            x_induce=experiment_data.train.x,
-            x_train=experiment_data.train.x,
-            eigenvalue_threshold=1e-3,
-        )
-        pls_dict["pls-onb-full"] = ProjectedLangevinSampling(
-            basis=onb_basis_full,
-            cost=gaussian_cost,
-        )
     for pls_name, pls in pls_dict.items():
         if isinstance(pls.basis, OrthonormalBasis):
             plot_eigenvalues(
@@ -251,6 +237,16 @@ def main(
             )
         set_seed(pls_config["seed"])
         calculate_metrics(
+            model=pls,
+            particles=particles,
+            model_name=pls_name,
+            dataset_name=dataset_name,
+            experiment_data=experiment_data,
+            results_path=results_path,
+            plots_path=plots_path,
+        )
+        set_seed(pls_config["seed"])
+        calculate_metrics(
             model=TemperPLS(
                 pls=pls,
                 particles=particles,
@@ -259,6 +255,21 @@ def main(
             ),
             particles=particles,
             model_name=f"{pls_name}-temper",
+            dataset_name=dataset_name,
+            experiment_data=experiment_data,
+            results_path=results_path,
+            plots_path=plots_path,
+        )
+        set_seed(pls_config["seed"])
+        calculate_metrics(
+            model=ConformalisePLS(
+                pls=pls,
+                particles=particles,
+                x_calibration=experiment_data.validation.x,
+                y_calibration=experiment_data.validation.y,
+            ),
+            particles=particles,
+            model_name=f"{pls_name}-conformalise",
             dataset_name=dataset_name,
             experiment_data=experiment_data,
             results_path=results_path,
@@ -309,6 +320,15 @@ def main(
         )
     set_seed(svgp_config["seed"])
     calculate_metrics(
+        model=svgp,
+        model_name=model_name,
+        dataset_name=dataset_name,
+        experiment_data=experiment_data,
+        results_path=results_path,
+        plots_path=plots_path,
+    )
+    set_seed(svgp_config["seed"])
+    calculate_metrics(
         model=TemperGP(
             gp=svgp,
             x_calibration=experiment_data.validation.x,
@@ -317,6 +337,19 @@ def main(
         model_name=f"{model_name}-temper",
         dataset_name=dataset_name,
         experiment_data=experiment_data,
+        results_path=results_path,
+        plots_path=plots_path,
+    )
+    set_seed(svgp_config["seed"])
+    calculate_metrics(
+        model=ConformaliseGP(
+            gp=svgp,
+            x_calibration=experiment_data.validation.x,
+            y_calibration=experiment_data.validation.y,
+        ),
+        experiment_data=experiment_data,
+        model_name=f"{model_name}-conformalise",
+        dataset_name=dataset_name,
         results_path=results_path,
         plots_path=plots_path,
     )
@@ -349,9 +382,12 @@ if __name__ == "__main__":
             results_path=os.path.join(outputs_path, str(data_seed), "results"),
             data_types=["train", "test"],
             model_names=[
+                "pls-onb",
                 "pls-onb-temper",
-                "pls-onb-full-temper",
+                "pls-onb-conformalise",
+                "svgp",
                 "svgp-temper",
+                "svgp-conformalise",
             ],
             datasets=list(RegressionDatasetSchema.__members__.keys()),
             metrics=["mae", "mse", "nll"],

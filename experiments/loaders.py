@@ -21,6 +21,8 @@ def load_pls(
         best_lr = model_config["best_lr"]
     if "number_of_epochs" in model_config:
         number_of_epochs = model_config["number_of_epochs"]
+    if torch.cuda.is_available():
+        particles = particles.to(device="cuda")
     return pls, particles, best_lr, number_of_epochs
 
 

@@ -20,7 +20,7 @@ class MockBasis(PLSBasis):
         self,
         number_of_particles: int,
         noise_only: bool = True,
-        seed: Optional[int] = None,
+        seed: int | None = None,
     ) -> torch.Tensor:
         """
         Initialises the particles for the projected Langevin sampling.
@@ -84,7 +84,7 @@ class MockBasis(PLSBasis):
         self,
         particles: torch.Tensor,
         x: torch.Tensor,
-        noise: torch.Tensor = None,
+        noise: torch.Tensor | None = None,
     ) -> torch.Tensor:
         """
         Predicts samples for given test points x without applying the output transformation.

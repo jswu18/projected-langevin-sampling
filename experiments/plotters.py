@@ -1,4 +1,4 @@
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Tuple, Union
 
 import gpytorch
 import matplotlib.animation as animation
@@ -32,10 +32,13 @@ def plot_1d_gp_prediction(
     ax: plt.Axes,
     x: torch.Tensor,
     mean: torch.Tensor,
-    variance: Optional[torch.Tensor] = None,
-    save_path: str = None,
-    title: str = None,
+    variance: torch.Tensor | None = None,
+    save_path: str | None = None,
+    title: str | None = None,
 ) -> Tuple[plt.Figure, plt.Axes]:
+    x = x.cpu()
+    mean = mean.cpu()
+    variance = variance.cpu() if variance is not None else None
     if variance is not None:
         stdev = torch.sqrt(variance)
         ax.fill_between(
@@ -74,8 +77,8 @@ def plot_1d_data(
     fig: plt.Figure,
     ax: plt.Axes,
     data: Data,
-    save_path: str = None,
-    title: str = None,
+    save_path: str | None = None,
+    title: str | None = None,
     color: str = "tab:blue",
     alpha: float = 0.3,
     s: int = 10,
@@ -86,8 +89,8 @@ def plot_1d_data(
         alpha = _DATA_TRANSPARENCY[data.name]
     if data.y is not None:
         ax.scatter(
-            data.x,
-            data.y,
+            data.x.cpu(),
+            data.y.cpu(),
             label=data.name,
             alpha=alpha,
             color=color,
@@ -113,8 +116,8 @@ def plot_1d_experiment_data(
     fig: plt.Figure,
     ax: plt.Axes,
     experiment_data: ExperimentData,
-    save_path: str = None,
-    title: str = None,
+    save_path: str | None = None,
+    title: str | None = None,
     is_sample_untransformed: bool = False,
     alpha: float = 0.3,
     s: int = 10,
@@ -143,8 +146,10 @@ def plot_1d_experiment_data(
         )
     if not is_sample_untransformed and experiment_data.full.y_untransformed is not None:
         ax.plot(
-            experiment_data.full.x,
-            experiment_data.full.y_untransformed.reshape(experiment_data.full.x.shape),
+            experiment_data.full.x.cpu(),
+            experiment_data.full.y_untransformed.reshape(
+                experiment_data.full.x.shape
+            ).cpu(),
             label="latent",
             color="midnightblue",
             linestyle=(0, (3, 1, 1, 1, 1, 1)),
@@ -154,7 +159,7 @@ def plot_1d_experiment_data(
         ax.set_ylim([0, 1])
     if experiment_data.problem_type == ProblemType.POISSON_REGRESSION:
         ax.set_ylim(bottom=0)
-    ax.set_xlim([min(experiment_data.full.x), max(experiment_data.full.x)])
+    ax.set_xlim([min(experiment_data.full.x.cpu()), max(experiment_data.full.x.cpu())])
     if title is not None:
         ax.set_title(title)
     if save_path is not None:
@@ -174,8 +179,8 @@ def plot_1d_particle(
     alpha: float = 0.2,
 ) -> Tuple[plt.Figure, plt.Axes]:
     ax.plot(
-        x.reshape(-1),
-        y.reshape(-1),
+        x.cpu().reshape(-1),
+        y.cpu().reshape(-1),
         color="black",
         alpha=alpha,
         zorder=0,
@@ -190,10 +195,10 @@ def plot_1d_pls_prediction(
     experiment_data: ExperimentData,
     x: torch.Tensor,
     save_path: str,
-    predicted_samples: Optional[torch.Tensor] = None,
-    y_name: Optional[str] = None,
-    predicted_distribution: Optional[torch.distributions.Distribution] = None,
-    title: str = None,
+    predicted_samples: torch.Tensor | None = None,
+    y_name: str | None = None,
+    predicted_distribution: torch.distributions.Distribution | None = None,
+    title: str | None = None,
     is_sample_untransformed: bool = False,
     max_particles_to_plot: int = 50,
 ):
@@ -265,7 +270,7 @@ def plot_1d_pls_prediction_histogram(
     predicted_samples: torch.Tensor,
     untransformed_predicted_samples: torch.Tensor,
     save_path: str,
-    title: str = None,
+    title: str | None = None,
     number_of_bins: int = 50,
 ):
     fig, ax = plt.subplots(1, 2, figsize=(10, 3), layout="constrained")
@@ -282,7 +287,7 @@ def plot_1d_pls_prediction_histogram(
         ax[0].set_title(f"$f(x)$")
     ax[0].set_xlabel("$x$")
     ax[0].set_ylabel("$f(x)$")
-    ax[0].set_xlim([min(x), max(x)])
+    ax[0].set_xlim([min(x).cpu(), max(x).cpu()])
     max_train_idx = torch.argmax(experiment_data.train.y)
     max_full_idx = torch.where(
         experiment_data.full.x == experiment_data.train.x[max_train_idx]
@@ -298,7 +303,7 @@ def plot_1d_pls_prediction_histogram(
 
     histogram_data = untransformed_predicted_samples[max_full_idx, :]
     ax[1].hist(
-        histogram_data,
+        histogram_data.cpu(),
         bins=number_of_bins,
         color="tab:red",
         alpha=0.75,
@@ -350,7 +355,7 @@ def plot_1d_gp_prediction_and_inducing_points(
     experiment_data: ExperimentData,
     title: str,
     save_path: str,
-    inducing_points: Data = None,
+    inducing_points: Data | None = None,
 ):
     fig, ax = plt.subplots(figsize=(5, 3), layout="constrained")
     fig, ax = plot_1d_experiment_data(
@@ -361,7 +366,7 @@ def plot_1d_gp_prediction_and_inducing_points(
     if inducing_points is not None:
         for i in range(inducing_points.x.shape[0]):
             plt.axvline(
-                x=inducing_points.x[i],
+                x=inducing_points.x[i].cpu(),
                 color="black",
                 alpha=0.2,
                 label="induce" if i == 0 else None,
@@ -373,14 +378,14 @@ def plot_1d_gp_prediction_and_inducing_points(
         fig, ax = plot_1d_gp_prediction(
             fig=fig,
             ax=ax,
-            x=experiment_data.full.x,
+            x=experiment_data.full.x.cpu(),
             mean=prediction.mean.detach(),
             variance=prediction.variance.detach(),
         )
     elif isinstance(model.likelihood, gpytorch.likelihoods.BernoulliLikelihood):
         ax.plot(
-            experiment_data.full.x.reshape(-1),
-            prediction.mean.detach().reshape(-1),
+            experiment_data.full.x.reshape(-1).cpu(),
+            prediction.mean.detach().reshape(-1).cpu(),
             label="prediction",
             zorder=0,
             color="black",
@@ -443,17 +448,17 @@ def plot_true_versus_predicted(
     fig, ax = plt.subplots(figsize=(13, 13), layout="constrained")
     if error_bar:
         _, _, bars = plt.errorbar(
-            y_true.detach().numpy(),
-            y_pred.mean.detach().numpy(),
-            yerr=1.96 * y_pred.stddev.detach().numpy(),
+            y_true.cpu().detach().numpy(),
+            y_pred.mean.cpu().detach().numpy(),
+            yerr=1.96 * y_pred.stddev.cpu().detach().numpy(),
             fmt="o",
             elinewidth=0.5,
         )
         [bar.set_alpha(0.5) for bar in bars]
     else:
         plt.scatter(
-            y_true.detach().numpy(),
-            y_pred.mean.detach().numpy(),
+            y_true.cpu().detach().numpy(),
+            y_pred.mean.cpu().detach().numpy(),
             marker="o",
         )
     ax.set_xlabel("true")
@@ -463,8 +468,8 @@ def plot_true_versus_predicted(
     else:
         ax.set_title(title)
     axis_lims = [
-        min(y_true.min().item(), y_pred.mean.min().item()),
-        max(y_true.max().item(), y_pred.mean.max().item()),
+        min(y_true.min().cpu().item(), y_pred.mean.min().cpu().item()),
+        max(y_true.max().cpu().item(), y_pred.mean.max().cpu().item()),
     ]
     plt.plot(axis_lims, axis_lims, color="gray", label="target", linestyle="dashed")
     plt.xlim(axis_lims)
@@ -505,7 +510,7 @@ def animate_1d_pls_predictions(
         alpha=0.1,
         s=30,
     )
-    plt.xlim(x.min(), x.max())
+    plt.xlim(x.min().cpu(), x.max().cpu())
     ax.autoscale(enable=False)  # turn off autoscale before plotting particles
 
     particles = pls.initialise_particles(
@@ -529,8 +534,8 @@ def animate_1d_pls_predictions(
     ).detach()
     samples_plotted = [
         ax.plot(
-            x.reshape(-1),
-            predicted_samples[:, i].reshape(-1),
+            x.reshape(-1).cpu(),
+            predicted_samples[:, i].reshape(-1).cpu(),
             color="black" if not christmas_colours else ["green", "red", "blue"][i % 3],
             alpha=0.2,
             zorder=1,
@@ -576,7 +581,9 @@ def animate_1d_pls_predictions(
             observation_noise=observation_noise,
         ).detach()
         for i in range(_predicted_samples.shape[-1]):
-            samples_plotted[i].set_data((x, _predicted_samples[:, i].reshape(-1)))
+            samples_plotted[i].set_data(
+                (x.cpu(), _predicted_samples[:, i].reshape(-1).cpu())
+            )
         ax.set_title(f"{title} (t={step_size * particle_wrapper.num_updates:.2e})")
         progress_bar.update(n=1)
         return (samples_plotted[0],)
@@ -619,8 +626,8 @@ def animate_1d_pls_untransformed_predictions(
         alpha=0.1,
         s=30,
     )
-    ax[0].set_xlim(x.min(), x.max())
-    ax[1].set_xlim(x.min(), x.max())
+    ax[0].set_xlim(x.min().cpu(), x.max().cpu())
+    ax[1].set_xlim(x.min().cpu(), x.max().cpu())
     ax[0].autoscale(
         enable=False, axis="x"
     )  # turn off autoscale before plotting particles
@@ -648,8 +655,8 @@ def animate_1d_pls_untransformed_predictions(
     ).detach()
     transformed_samples_plotted = [
         ax[0].plot(
-            x.reshape(-1),
-            predicted_samples[:, i].reshape(-1),
+            x.reshape(-1).cpu(),
+            predicted_samples[:, i].reshape(-1).cpu(),
             color="black" if not christmas_colours else ["green", "red", "blue"][i % 3],
             alpha=0.2,
             zorder=1,
@@ -664,8 +671,8 @@ def animate_1d_pls_untransformed_predictions(
     ).detach()
     untransformed_samples_plotted = [
         ax[1].plot(
-            x.reshape(-1),
-            predicted_untransformed_samples[:, i].reshape(-1),
+            x.reshape(-1).cpu(),
+            predicted_untransformed_samples[:, i].reshape(-1).cpu(),
             color="black" if not christmas_colours else ["green", "red", "blue"][i % 3],
             alpha=0.2,
             zorder=1,
@@ -678,7 +685,7 @@ def animate_1d_pls_untransformed_predictions(
         experiment_data.full.x == experiment_data.train.x[max_train_idx]
     )[0]
     ax[1].axvline(
-        x=experiment_data.train.x[max_train_idx].item(),
+        x=experiment_data.train.x[max_train_idx].cpu().item(),
         color="tab:red",
         label="cross section",
         linewidth=3,
@@ -686,7 +693,7 @@ def animate_1d_pls_untransformed_predictions(
     )
     histogram_data = predicted_untransformed_samples[max_full_idx, :]
     counts, bins = np.histogram(
-        histogram_data,
+        histogram_data.cpu(),
         bins=number_of_bins,
     )
     histogram = ax[2].stairs(
@@ -740,7 +747,7 @@ def animate_1d_pls_untransformed_predictions(
         ).detach()
         for i in range(min(max_particles_to_plot, _predicted_samples.shape[-1])):
             transformed_samples_plotted[i].set_data(
-                (x, _predicted_samples[:, i].reshape(-1))
+                (x.cpu(), _predicted_samples[:, i].reshape(-1).cpu())
             )
         _predicted_untransformed_samples = pls.predict_untransformed_samples(
             x=experiment_data.full.x,
@@ -751,11 +758,11 @@ def animate_1d_pls_untransformed_predictions(
             min(max_particles_to_plot, _predicted_untransformed_samples.shape[-1])
         ):
             untransformed_samples_plotted[i].set_data(
-                (x, _predicted_untransformed_samples[:, i].reshape(-1))
+                (x.cpu(), _predicted_untransformed_samples[:, i].reshape(-1).cpu())
             )
         _histogram_data = _predicted_untransformed_samples[max_full_idx, :]
         _counts, _ = np.histogram(
-            _histogram_data,
+            _histogram_data.cpu(),
             bins=bins,
         )
         histogram.set_data(_counts, bins)
@@ -812,13 +819,13 @@ def animate_1d_gp_predictions(
     if not learn_inducing_locations:
         for i in range(inducing_points.x.shape[0]):
             plt.axvline(
-                x=inducing_points.x[i],
+                x=inducing_points.x[i].cpu(),
                 color="black",
                 alpha=0.2,
                 label="induce" if i == 0 else None,
                 zorder=1,
             )
-    plt.xlim(experiment_data.full.x.min(), experiment_data.full.x.max())
+    plt.xlim(experiment_data.full.x.min().cpu(), experiment_data.full.x.max().cpu())
     ax.autoscale(enable=False)  # turn off autoscale before plotting particles
 
     set_seed(seed)
@@ -830,9 +837,6 @@ def animate_1d_gp_predictions(
         learn_inducing_locations=learn_inducing_locations,
     )
     model.train()
-    if torch.cuda.is_available():
-        model = model.cuda()
-    model.train()
     all_params = set(model.parameters())
 
     if not learn_kernel_parameters:
@@ -842,9 +846,6 @@ def animate_1d_gp_predictions(
         else:
             all_params -= {model.kernel.base_kernel.raw_lengthscale}
             all_params -= {model.kernel.raw_outputscale}
-    model.likelihood.train()
-    if torch.cuda.is_available():
-        model.likelihood = model.likelihood.cuda()
     model.likelihood.train()
 
     optimizer = torch.optim.SGD(
@@ -856,6 +857,8 @@ def animate_1d_gp_predictions(
     mll = gpytorch.mlls.VariationalELBO(
         model.likelihood, model, num_data=experiment_data.train.x.shape[0]
     )
+    if torch.cuda.is_available():
+        mll = mll.cuda()
 
     train_dataset = TensorDataset(experiment_data.train.x, experiment_data.train.y)
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
@@ -865,24 +868,24 @@ def animate_1d_gp_predictions(
     if isinstance(model.likelihood, gpytorch.likelihoods.GaussianLikelihood):
         stdev_prediction = torch.sqrt(prediction.variance.detach())
         fill = ax.fill_between(
-            experiment_data.full.x.reshape(-1),
-            (mean_prediction - 1.96 * stdev_prediction).reshape(-1),
-            (mean_prediction + 1.96 * stdev_prediction).reshape(-1),
+            experiment_data.full.x.reshape(-1).cpu(),
+            (mean_prediction - 1.96 * stdev_prediction).reshape(-1).cpu(),
+            (mean_prediction + 1.96 * stdev_prediction).reshape(-1).cpu(),
             facecolor=(0.9, 0.9, 0.9),
             label="95% error",
             zorder=0,
         )
         mean_line = ax.plot(
-            experiment_data.full.x.reshape(-1),
-            mean_prediction.reshape(-1),
+            experiment_data.full.x.reshape(-1).cpu(),
+            mean_prediction.reshape(-1).cpu(),
             label="mean",
             color="black",
             zorder=0,
         )[0]
     elif isinstance(model.likelihood, gpytorch.likelihoods.BernoulliLikelihood):
         mean_line = ax.plot(
-            experiment_data.full.x.reshape(-1),
-            mean_prediction.reshape(-1),
+            experiment_data.full.x.reshape(-1).cpu(),
+            mean_prediction.reshape(-1).cpu(),
             label="mean",
             zorder=0,
             color="black",
@@ -923,17 +926,23 @@ def animate_1d_gp_predictions(
             path = fill.get_paths()[0]
             verts = path.vertices
             verts[1 : experiment_data.full.x.shape[0] + 1, 1] = (
-                _mean_prediction - 1.96 * _stdev_prediction
-            ).reshape(-1)
+                (_mean_prediction - 1.96 * _stdev_prediction).reshape(-1).cpu()
+            )
             verts[experiment_data.full.x.shape[0] + 2 : -1, 1] = list(
-                (_mean_prediction + 1.96 * _stdev_prediction).reshape(-1)
+                (_mean_prediction + 1.96 * _stdev_prediction).reshape(-1).cpu()
             )[::-1]
             mean_line.set_data(
-                (experiment_data.full.x.reshape(-1), _mean_prediction.reshape(-1))
+                (
+                    experiment_data.full.x.reshape(-1).cpu(),
+                    _mean_prediction.reshape(-1).cpu(),
+                )
             )
         elif isinstance(model.likelihood, gpytorch.likelihoods.BernoulliLikelihood):
             mean_line.set_data(
-                (experiment_data.full.x.reshape(-1), _mean_prediction.reshape(-1))
+                (
+                    experiment_data.full.x.reshape(-1).cpu(),
+                    _mean_prediction.reshape(-1).cpu(),
+                )
             )
         else:
             raise NotImplementedError
@@ -968,7 +977,8 @@ def plot_eigenvalues(basis: OrthonormalBasis, save_path: str, title: str) -> Non
     )
     fig, ax = plt.subplots(figsize=(13, 13), layout="constrained")
     ax.bar(
-        np.arange(1, eigenvalues.shape[0] + 1), np.flip(eigenvalues.detach().numpy())
+        np.arange(1, eigenvalues.shape[0] + 1),
+        np.flip(eigenvalues.cpu().detach().numpy()),
     )
     ax.set_xlabel("eigenvalue index")
     ax.set_ylabel("eigenvalue")

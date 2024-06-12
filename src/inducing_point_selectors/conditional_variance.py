@@ -69,7 +69,7 @@ class ConditionalVarianceInducingPointSelector(InducingPointSelector):
             x2=x,
         )
         gram = gram if gram.ndim == 2 else gram[0, :, :]
-        di = gram.diagonal().detach().numpy() + jitter
+        di = gram.cpu().diagonal().detach().numpy() + jitter
         indices[0] = np.argmax(di)  # select first point, add to index 0
         ci = np.zeros(
             (m - 1, number_of_training_points)
@@ -84,6 +84,7 @@ class ConditionalVarianceInducingPointSelector(InducingPointSelector):
                     x1=x,
                     x2=new_induce_data,
                 )
+                .cpu()
                 .detach()
                 .numpy()
             )

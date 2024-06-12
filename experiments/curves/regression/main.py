@@ -31,7 +31,7 @@ from experiments.runners import (
     train_pls_runner,
     train_svgp_runner,
 )
-from experiments.utils import create_directory
+from experiments.utils import create_directory, str2bool
 from src.conformalise import ConformaliseGP, ConformalisePLS
 from src.inducing_point_selectors import ConditionalVarianceInducingPointSelector
 from src.kernels.projected_langevin_sampling import PLSKernel
@@ -47,7 +47,7 @@ parser = argparse.ArgumentParser(
 parser.add_argument("--config_path", type=str, help="Path to the configuration file.")
 parser.add_argument(
     "--include_gif",
-    type=bool,
+    type=str2bool,
     default=False,
     help="Indicate whether to include GIFs in the output.",
 )

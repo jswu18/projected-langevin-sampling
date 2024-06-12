@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from typing import Optional
 
 import torch
 
@@ -29,7 +28,7 @@ class PLSBasis(ABC):
     def _initialise_particles_noise(
         self,
         number_of_particles: int,
-        seed: Optional[int] = None,
+        seed: int | None = None,
     ) -> torch.Tensor:
         """
         Initialises the noise for each particle with a standard normal distribution.
@@ -51,11 +50,11 @@ class PLSBasis(ABC):
         )  # size (M, J)
 
     @abstractmethod
-    def initialise_particles(
+    def _initialise_particles(
         self,
         number_of_particles: int,
         noise_only: bool = True,
-        seed: Optional[int] = None,
+        seed: int | None = None,
     ) -> torch.Tensor:
         """
         Initialises the particles for the projected Langevin sampling.
@@ -65,6 +64,29 @@ class PLSBasis(ABC):
         :return: A tensor of size (M, J).
         """
         raise NotImplementedError
+
+    def initialise_particles(
+        self,
+        number_of_particles: int,
+        noise_only: bool = True,
+        seed: int | None = None,
+    ) -> torch.Tensor:
+        """
+        Initialises the particles for the projected Langevin sampling.
+        :param number_of_particles: The number of particles to initialise.
+        :param noise_only: Whether to initialise the particles with noise only or to add the inducing point values.
+        :param seed: An optional seed for reproducibility.
+        :return: A tensor of size (M, J).
+        """
+        particles = self._initialise_particles(
+            number_of_particles=number_of_particles,
+            noise_only=noise_only,
+            seed=seed,
+        )
+        if torch.cuda.is_available():
+            return particles.to(device="cuda")
+        else:
+            return particles
 
     @abstractmethod
     def calculate_untransformed_train_prediction_samples(
@@ -146,7 +168,7 @@ class PLSBasis(ABC):
         self,
         particles: torch.Tensor,
         x: torch.Tensor,
-        noise: torch.Tensor = None,
+        noise: torch.Tensor | None = None,
     ) -> torch.Tensor:
         """
         Predicts samples for given test points x without applying the output transformation.

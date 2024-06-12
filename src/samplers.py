@@ -1,4 +1,4 @@
-from typing import Optional, Tuple
+from typing import Tuple
 
 import torch
 
@@ -6,8 +6,8 @@ import torch
 def sample_multivariate_normal(
     mean: torch.Tensor,
     cov: torch.Tensor,
-    size: Optional[Tuple[int]] = None,
-    seed: Optional[int] = None,
+    size: Tuple[int] | None = None,
+    seed: int | None = None,
 ) -> torch.Tensor:
     """
     Wrapper for pytorch multivariate normal sampler which removes negative eigenvalues as a work around for
@@ -25,7 +25,6 @@ def sample_multivariate_normal(
         generator = None
     size = (1,) if not size else size
     eigenvalues, eigenvectors = torch.linalg.eigh(cov)
-
     # Ensure that the eigenvalues are positive
     eigenvalues = torch.clip(eigenvalues, 0, None)
     normal_sample = torch.normal(
@@ -34,6 +33,11 @@ def sample_multivariate_normal(
         size=(eigenvalues.shape[0], *size),
         generator=generator,
     )
+    if torch.cuda.is_available():
+        eigenvalues = eigenvalues.cuda()
+        eigenvectors = eigenvectors.cuda()
+        normal_sample = normal_sample.cuda()
+        mean = mean.cuda()
     return torch.real(
         mean[:, None]
         + eigenvectors @ torch.diag(torch.sqrt(eigenvalues)) @ normal_sample
@@ -42,7 +46,7 @@ def sample_multivariate_normal(
 
 def sample_point(
     x: torch.Tensor,
-    seed: Optional[int] = None,
+    seed: int | None = None,
 ) -> torch.Tensor:
     """
     Sample an item in a vector

@@ -1,5 +1,4 @@
 import math
-from typing import Optional
 
 import torch
 
@@ -36,6 +35,10 @@ class OrthonormalBasis(PLSBasis):
         self.base_gram_induce_train = self.kernel.base_kernel(
             x1=x_induce, x2=x_train
         )  # k(Z, X) of size (M, N)
+        # move to gpu if available
+        if torch.cuda.is_available():
+            self.base_gram_induce = self.base_gram_induce.to(device="cuda")
+            self.base_gram_induce_train = self.base_gram_induce_train.to(device="cuda")
         self.eigenvalues, self.eigenvectors = torch.linalg.eigh(
             (1 / self.x_induce.shape[0]) * self.base_gram_induce.evaluate()
         )
@@ -68,11 +71,11 @@ class OrthonormalBasis(PLSBasis):
         """
         return self.eigenvalues.shape[0]
 
-    def initialise_particles(
+    def _initialise_particles(
         self,
         number_of_particles: int,
         noise_only: bool = True,
-        seed: Optional[int] = None,
+        seed: int | None = None,
     ) -> torch.Tensor:
         """
         Initialises the particles for the projected Langevin sampling with noise only.
@@ -154,7 +157,7 @@ class OrthonormalBasis(PLSBasis):
         self,
         particles: torch.Tensor,
         x: torch.Tensor,
-    ):
+    ) -> torch.Tensor:
         """
         Calculates the predictive noise for a given input.
 
@@ -204,7 +207,7 @@ class OrthonormalBasis(PLSBasis):
         self,
         particles: torch.Tensor,
         x: torch.Tensor,
-        noise: Optional[torch.Tensor] = None,
+        noise: torch.Tensor | None = None,
     ) -> torch.Tensor:
         """
         Predicts samples for given test points x without applying the output transformation.
@@ -217,12 +220,13 @@ class OrthonormalBasis(PLSBasis):
             x1=x,
             x2=self.x_induce,
         ).to_dense()
+        if torch.cuda.is_available():
+            base_gram_x_induce = base_gram_x_induce.cuda()
         if noise is None:
             noise = self.sample_predictive_noise(
                 particles=particles,
                 x=x,
             )
-
         return noise[self.approximation_dimension :, :] + (
             base_gram_x_induce
             @ self.scaled_eigenvectors

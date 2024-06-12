@@ -1,7 +1,7 @@
 import math
 import os
 from copy import deepcopy
-from typing import List, Optional, Tuple, Union
+from typing import List, Tuple, Union
 
 import gpytorch
 import numpy as np
@@ -72,10 +72,10 @@ def load_subsample_data(
         n_neighbors=subsample_size,
         p=2,
     )
-    knn.fit(X=data.x, y=data.y)
+    knn.fit(X=data.x.cpu(), y=data.y.cpu())
     x_sample = sample_point(x=data.x)
     subsample_indices = knn.kneighbors(
-        X=x_sample,
+        X=x_sample.cpu(),
         return_distance=False,
     ).flatten()
     return Data(
@@ -96,8 +96,8 @@ def exact_gp_runner(
     early_stopper_patience: float,
     model_path: str,
     data_path: str,
-    plot_1d_subsample_path: str = None,
-    plot_loss_path: str = None,
+    plot_1d_subsample_path: str | None = None,
+    plot_loss_path: str | None = None,
     number_of_classes: int = 1,
 ) -> List[gpytorch.models.GP]:
     """
@@ -192,7 +192,7 @@ def plot_pls_1d_particles_runner(
     particle_name: str,
     experiment_data: ExperimentData,
     plot_particles_path: str,
-    plot_title: str = None,
+    plot_title: str | None = None,
 ) -> None:
     create_directory(plot_particles_path)
     if isinstance(pls, ProjectedLangevinSampling):
@@ -262,9 +262,9 @@ def animate_pls_1d_particles_runner(
     seed: int,
     best_lr: float,
     number_of_epochs: int,
-    plot_title: str = None,
-    animate_1d_path: Optional[str] = None,
-    animate_1d_untransformed_path: Optional[str] = None,
+    plot_title: str | None = None,
+    animate_1d_path: str | None = None,
+    animate_1d_untransformed_path: str | None = None,
     christmas_colours: bool = False,
     initial_particles_noise_only: bool = False,
 ):
@@ -321,8 +321,8 @@ def train_pls_runner(
     observation_noise_upper: float = 0,
     observation_noise_lower: float = 0,
     number_of_observation_noise_searches: int = 0,
-    plot_title: str = None,
-    plot_energy_potential_path: str = None,
+    plot_title: str | None = None,
+    plot_energy_potential_path: str | None = None,
     metric_to_optimise: str = "nll",
 ) -> Tuple[torch.Tensor, float, int]:
     best_energy_potential, best_mae, best_mse, best_nll, best_acc, best_auc, best_f1 = (
@@ -354,7 +354,7 @@ def train_pls_runner(
             early_stopper_patience=early_stopper_patience,
             tqdm_desc=f"PLS Step Size Search {i+1} of {number_of_step_searches} for {particle_name} ({step_size=})",
         )
-        if energy_potentials and np.isfinite(particles_i).all():
+        if energy_potentials and torch.isfinite(particles_i).all():
             energy_potentials_history[step_size] = energy_potentials
             prediction = pls.predict(
                 x=experiment_data.train.x,
@@ -377,16 +377,16 @@ def train_pls_runner(
                 and isinstance(prediction, torch.distributions.Bernoulli)
             ):
                 acc = sklearn.metrics.accuracy_score(
-                    y_true=experiment_data.train.y.detach().numpy(),
-                    y_pred=prediction.probs.round().detach().numpy(),
+                    y_true=experiment_data.train.y.cpu().detach().numpy(),
+                    y_pred=prediction.probs.round().cpu().detach().numpy(),
                 )
                 auc = sklearn.metrics.roc_auc_score(
-                    y_true=experiment_data.train.y.detach().numpy(),
-                    y_score=prediction.probs.detach().numpy(),
+                    y_true=experiment_data.train.y.cpu().detach().numpy(),
+                    y_score=prediction.probs.cpu().detach().numpy(),
                 )
                 f1 = sklearn.metrics.f1_score(
-                    y_true=experiment_data.train.y.detach().numpy(),
-                    y_pred=prediction.probs.round().detach().numpy(),
+                    y_true=experiment_data.train.y.cpu().detach().numpy(),
+                    y_pred=prediction.probs.round().cpu().detach().numpy(),
                 )
             if (
                 metric_to_optimise in ["acc", "auc", "f1"]
@@ -527,9 +527,9 @@ def train_svgp_runner(
     is_fixed: bool,
     models_path: str,
     early_stopper_patience: float,
-    observation_noise: Optional[float] = None,
-    plot_title: Optional[str] = None,
-    plot_loss_path: Optional[str] = None,
+    observation_noise: float | None = None,
+    plot_title: str | None = None,
+    plot_loss_path: str | None = None,
     load_model: bool = True,
 ) -> Tuple[svGP, List[float], float]:
     create_directory(models_path)

@@ -16,8 +16,12 @@ def construct_average_gaussian_likelihood(
     """
     average_likelihood = gpytorch.likelihoods.GaussianLikelihood()
     average_likelihood.noise = torch.tensor(
-        np.array([likelihood.noise.detach().numpy() for likelihood in likelihoods])
+        np.array(
+            [likelihood.noise.cpu().detach().numpy() for likelihood in likelihoods]
+        )
     ).mean()
+    if torch.cuda.is_available():
+        average_likelihood.cuda()
     return average_likelihood
 
 
@@ -36,7 +40,9 @@ def construct_average_ard_kernel(
         collections.OrderedDict(
             {
                 param: torch.tensor(
-                    np.array([[k.state_dict()[param].mean(dim=0)] for k in kernels])
+                    np.array(
+                        [[k.state_dict()[param].mean(dim=0).cpu()] for k in kernels]
+                    )
                     .mean(axis=0)
                     .reshape(kernel.state_dict()[param].shape)
                 )

@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from typing import Optional
 
 import torch
 
@@ -19,7 +18,7 @@ class PLSCost(ABC):
     """
 
     def __init__(
-        self, link_function: PLSLinkFunction, observation_noise: Optional[float] = None
+        self, link_function: PLSLinkFunction, observation_noise: float | None = None
     ):
         """
         Constructor for the base class of the cost function.
@@ -83,7 +82,7 @@ class PLSCost(ABC):
     def sample_observation_noise(
         self,
         number_of_particles: int,
-        seed: Optional[int] = None,
+        seed: int | None = None,
     ) -> torch.Tensor:
         """
         Samples observation noise for a given number of particles.
@@ -92,21 +91,29 @@ class PLSCost(ABC):
         :return: A tensor of size (J, ).
         """
         if self.observation_noise is None:
-            return torch.zeros(number_of_particles)
+            return (
+                torch.zeros(number_of_particles).to(device="cuda")
+                if torch.cuda.is_available()
+                else torch.zeros(number_of_particles)
+            )
         generator = None
         if seed is not None:
             generator = torch.Generator().manual_seed(seed)
-        return torch.normal(
+        observation_noise = torch.normal(
             mean=0.0,
             std=self.observation_noise,
             size=(number_of_particles,),
             generator=generator,
         ).flatten()
+        if torch.cuda.is_available():
+            return observation_noise.to(device="cuda")
+        else:
+            return observation_noise
 
     def predict_samples(
         self,
         untransformed_samples: torch.Tensor,
-        observation_noise: Optional[torch.Tensor] = None,
+        observation_noise: torch.Tensor | None = None,
     ) -> torch.Tensor:
         """
         The link function applied to the untransformed samples plus observation noise. This is the prediction samples

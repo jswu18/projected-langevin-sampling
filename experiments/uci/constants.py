@@ -161,6 +161,44 @@ class BreastDataset(Dataset):
     output_column_name = "class"
 
 
+class CaffeineDataset(Dataset):
+    # https://archive.ics.uci.edu/dataset/373/drug+consumption+quantified
+    input_column_names = [
+        "age",
+        "gender",
+        "education",
+        "country",
+        "ethnicity",
+        "nscore",
+        "escore",
+        "oscore",
+        "ascore",
+        "cscore",
+        "impulsive",
+        "ss",
+    ]
+    output_column_name = "caffeine"
+
+
+class ChocolateDataset(Dataset):
+    # https://archive.ics.uci.edu/dataset/373/drug+consumption+quantified
+    input_column_names = [
+        "age",
+        "gender",
+        "education",
+        "country",
+        "ethnicity",
+        "nscore",
+        "escore",
+        "oscore",
+        "ascore",
+        "cscore",
+        "impulsive",
+        "ss",
+    ]
+    output_column_name = "chocolate"
+
+
 class CrabDataset(Dataset):
     # https://www.stats.ox.ac.uk/pub/PRNN/crabs.dat
     # https://datarepository.wolframcloud.com/resources/Sample-Data-Crab-Measures
@@ -380,19 +418,25 @@ class RegressionDatasetSchema(str, enum.Enum):
     energy_cooling = "energy_cooling"
     energy_heating = "energy_heating"
     kin8nm = "kin8nm"
+    naval_compressor = "naval_compressor"
+    naval_turbine = "naval_turbine"
     power = "power"
+    protein = "protein"
     wine_quality = "wine_quality"
     yacht = "yacht"
 
 
 class ClassificationDatasetSchema(str, enum.Enum):
     breast = "breast"
+    caffeine = "caffeine"
+    chocolate = "chocolate"
     crab = "crab"
     diabetes = "diabetes"
     heart = "heart"
     ionosphere = "ionosphere"
     mushrooms = "mushrooms"
     rice = "rice"
+    spam = "spam"
     wine_colour = "wine_colour"
     yeast = "yeast"
 
@@ -403,16 +447,22 @@ DATASET_SCHEMA_MAPPING = {
     RegressionDatasetSchema.energy_cooling: EnergyCoolingDataset,
     RegressionDatasetSchema.energy_heating: EnergyHeatingDataset,
     RegressionDatasetSchema.kin8nm: Kin8nmDataset,
+    RegressionDatasetSchema.naval_compressor: NavalCompressorDataset,
+    RegressionDatasetSchema.naval_turbine: NavalTurbineDataset,
     RegressionDatasetSchema.power: PowerDataset,
+    RegressionDatasetSchema.protein: ProteinDataset,
     RegressionDatasetSchema.wine_quality: WineQualityDataset,
     RegressionDatasetSchema.yacht: YachtDataset,
     ClassificationDatasetSchema.breast: BreastDataset,
+    ClassificationDatasetSchema.caffeine: CaffeineDataset,
+    ClassificationDatasetSchema.chocolate: ChocolateDataset,
     ClassificationDatasetSchema.crab: CrabDataset,
     ClassificationDatasetSchema.diabetes: DiabetesDataset,
     ClassificationDatasetSchema.heart: HeartDataset,
     ClassificationDatasetSchema.ionosphere: IonosphereDataset,
     ClassificationDatasetSchema.mushrooms: MushroomsDataset,
     ClassificationDatasetSchema.rice: RiceDataset,
+    ClassificationDatasetSchema.spam: SpamDataset,
     ClassificationDatasetSchema.wine_colour: WineColourDataset,
     ClassificationDatasetSchema.yeast: YeastDataset,
 }

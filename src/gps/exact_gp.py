@@ -19,6 +19,9 @@ class ExactGP(gpytorch.models.ExactGP):
         super(ExactGP, self).__init__(x, y, likelihood)
         self.mean = mean
         self.kernel = kernel
+        if torch.cuda.is_available():
+            self.cuda()
+            self.likelihood.cuda()
 
     def forward(self, x: torch.Tensor) -> gpytorch.distributions.MultivariateNormal:
         return gpytorch.distributions.MultivariateNormal(

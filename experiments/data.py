@@ -1,6 +1,5 @@
 import enum
 from dataclasses import dataclass
-from typing import Optional
 
 import torch
 
@@ -14,9 +13,17 @@ class ProblemType(str, enum.Enum):
 @dataclass
 class Data:
     x: torch.Tensor
-    y: Optional[torch.Tensor] = None
-    y_untransformed: Optional[torch.Tensor] = None
+    y: torch.Tensor | None = None
+    y_untransformed: torch.Tensor | None = None
     name: str = "data"
+
+    def __post_init__(self):
+        if torch.cuda.is_available():
+            self.x = self.x.to(device="cuda")
+            if self.y is not None:
+                self.y = self.y.to(device="cuda")
+            if self.y_untransformed is not None:
+                self.y_untransformed = self.y_untransformed.to(device="cuda")
 
 
 @dataclass
@@ -24,9 +31,9 @@ class ExperimentData:
     name: str
     problem_type: ProblemType
     full: Data
-    train: Optional[Data] = None
-    test: Optional[Data] = None
-    validation: Optional[Data] = None
+    train: Data | None = None
+    test: Data | None = None
+    validation: Data | None = None
     y_mean: torch.float = 0.0
     y_std: torch.float = 1.0
 

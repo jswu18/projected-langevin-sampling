@@ -12,7 +12,7 @@ def _split_regression_data_intervals(
     y: torch.Tensor,
     number_of_test_intervals: int,
     total_number_of_intervals: int,
-    y_untransformed: Optional[torch.Tensor] = None,
+    y_untransformed: torch.Tensor | None = None,
 ) -> Tuple[
     torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor
 ]:
@@ -86,7 +86,7 @@ def split_regression_data_intervals(
     y: torch.Tensor,
     number_of_test_intervals: int,
     total_number_of_intervals: int,
-    y_untransformed: Optional[torch.Tensor] = None,
+    y_untransformed: torch.Tensor | None = None,
 ):
     (
         x_train,
@@ -158,7 +158,7 @@ def set_up_experiment(
     y: torch.Tensor,
     train_data_percentage: float,
     normalise: bool = True,
-    validation_data_percentage: Optional[float] = 0,
+    validation_data_percentage: Optional[float] = 0.0,
 ) -> ExperimentData:
     (
         x_train,
