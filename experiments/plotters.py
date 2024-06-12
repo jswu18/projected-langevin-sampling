@@ -239,6 +239,8 @@ def plot_1d_pls_prediction(
                 mean=predicted_distribution.rate.detach(),
                 variance=None,
             )
+        elif isinstance(predicted_distribution, torch.distributions.studentT.StudentT):
+            pass
         else:
             raise TypeError
     if predicted_samples is not None:

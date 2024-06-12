@@ -29,6 +29,8 @@ def calculate_mae(
         return prediction.probs.sub(y).abs().mean().item()
     elif isinstance(prediction, torch.distributions.Poisson):
         return prediction.rate.sub(y).abs().mean().item()
+    elif isinstance(prediction, torch.distributions.StudentT):
+        pass
     else:
         raise ValueError(f"Prediction type {type(prediction)} not supported")
 
@@ -46,6 +48,8 @@ def calculate_mse(
         return prediction.probs.sub(y).pow(2).mean().item()
     elif isinstance(prediction, torch.distributions.Poisson):
         return prediction.rate.sub(y).pow(2).mean().item()
+    elif isinstance(prediction, torch.distributions.StudentT):
+        pass
     else:
         raise ValueError(f"Prediction type {type(prediction)} not supported")
 
@@ -71,6 +75,8 @@ def calculate_nll(
             target=y.double(),
             reduction="mean",
         ).item()
+    elif isinstance(prediction, torch.distributions.StudentT):
+        pass
     else:
         raise ValueError(f"Prediction type {type(prediction)} not supported")
 
