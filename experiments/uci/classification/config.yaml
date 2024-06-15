@@ -23,7 +23,7 @@ pls:
   seed: 0
   metric_to_optimise: loss
   initial_particles_noise_only: True
-  early_stopper_patience: 1.0e-2
+  early_stopper_patience: 100.0
 svgp:
   seed: 0
   number_of_epochs: 100000
@@ -31,4 +31,4 @@ svgp:
   learning_rate_upper: 1.0e-2
   learning_rate_lower: 1.0e-4
   number_of_learning_rate_searches: 3
-  early_stopper_patience: 1.0e-2
+  early_stopper_patience: 100.0
