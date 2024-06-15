@@ -89,7 +89,10 @@ def train_svgp(
             all_params -= {model.kernel.base_kernel.raw_lengthscale}
             all_params -= {model.kernel.raw_outputscale}
     if likelihood_noise is not None:
-        model.likelihood.noise_covar.noise.data.fill_(likelihood_noise)
+        if isinstance(likelihood, gpytorch.likelihoods.GaussianLikelihood) or isinstance(
+            likelihood, gpytorch.likelihoods.BernoulliLikelihood
+        ):
+            model.likelihood.noise_covar.noise.data.fill_(likelihood_noise)
     model.train()
     model.likelihood.train()
 
