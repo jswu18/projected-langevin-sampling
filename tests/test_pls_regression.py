@@ -3,7 +3,6 @@ import torch
 
 from mockers.basis import MockBasis
 from mockers.cost import MockCost
-from mockers.kernel import MockKernel, MockPLSKernel
 from src.projected_langevin_sampling import ProjectedLangevinSampling
 from src.utils import set_seed
 
