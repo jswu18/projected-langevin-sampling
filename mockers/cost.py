@@ -1,6 +1,7 @@
 import torch
 
 from src.projected_langevin_sampling.costs.base import PLSCost
+from src.projected_langevin_sampling.link_functions import IdentityLinkFunction
 
 
 class MockCost(PLSCost):
@@ -12,6 +13,11 @@ class MockCost(PLSCost):
     J is the number of particles.
     D is the dimensionality of the data.
     """
+
+    def __init__(self):
+        super().__init__(
+            link_function=IdentityLinkFunction(),
+        )
 
     def predict(
         self, prediction_samples: torch.Tensor
@@ -32,7 +38,7 @@ class MockCost(PLSCost):
         :param untransformed_train_prediction_samples: The untransformed train prediction samples of size (N, J).
         :return: The cost of size (J,) for each particle.
         """
-        return torch.zeros(untransformed_train_prediction_samples.shape[1])
+        return torch.ones(untransformed_train_prediction_samples.shape[1])
 
     def calculate_cost_derivative(
         self, untransformed_train_prediction_samples: torch.Tensor
@@ -43,4 +49,4 @@ class MockCost(PLSCost):
         :param untransformed_train_prediction_samples: The untransformed train prediction samples of size (N, J).
         :return: The cost derivative of size (N, J).
         """
-        return torch.zeros_like(untransformed_train_prediction_samples)
+        return torch.ones_like(untransformed_train_prediction_samples)

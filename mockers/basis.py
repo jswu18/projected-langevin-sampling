@@ -13,10 +13,11 @@ class MockBasis(PLSBasis):
     D is the dimensionality of the data.
     """
 
+    @property
     def approximation_dimension(self) -> int:
         return 10
 
-    def initialise_particles(
+    def _initialise_particles(
         self,
         number_of_particles: int,
         noise_only: bool = True,
@@ -29,7 +30,7 @@ class MockBasis(PLSBasis):
         :param seed: An optional seed for reproducibility.
         :return: A tensor of size (M, J).
         """
-        return torch.zeros((self.approximation_dimension, number_of_particles))
+        return torch.ones((self.approximation_dimension, number_of_particles))
 
     def calculate_untransformed_train_prediction_samples(
         self, particles: torch.Tensor
@@ -39,7 +40,7 @@ class MockBasis(PLSBasis):
         :param particles: The particles of size (M, J).
         :return: The untransformed predictions of size (N, J).
         """
-        return torch.zeros((10, particles.shape[1]))
+        return torch.ones((10, particles.shape[1]))
 
     def calculate_energy_potential(
         self, particles: torch.Tensor, cost: torch.Tensor
@@ -65,7 +66,7 @@ class MockBasis(PLSBasis):
         :param step_size: A step size for the projected Langevin sampling update in the form of a scalar.
         :return: The update to be applied to the particles of size (M, J).
         """
-        return torch.zeros_like(particles)
+        return torch.ones_like(particles) + particles
 
     def sample_predictive_noise(
         self,
@@ -78,7 +79,7 @@ class MockBasis(PLSBasis):
         :param x: Test points of size (N*, D)
         :return: The predictive noise of size (N*, J)
         """
-        return torch.zeros((x.shape[0], particles.shape[1]))
+        return x @ torch.ones((x.shape[1], particles.shape[0])) @ particles
 
     def predict_untransformed_samples(
         self,
@@ -93,4 +94,4 @@ class MockBasis(PLSBasis):
         :param noise: A noise tensor of size (N*, J), if None, it is sampled from the predictive noise distribution.
         :return: Predicted samples of size (N*, J).
         """
-        return torch.zeros((x.shape[0], particles.shape[1]))
+        return x @ torch.ones((x.shape[1], particles.shape[0])) @ particles

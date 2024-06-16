@@ -1,66 +1,44 @@
 import pytest
 import torch
 
+from mockers.basis import MockBasis
+from mockers.cost import MockCost
 from mockers.kernel import MockKernel, MockPLSKernel
-from src.projected_langevin_sampling import GradientFlowRegression
+from src.projected_langevin_sampling import ProjectedLangevinSampling
 from src.utils import set_seed
 
 
 @pytest.mark.parametrize(
-    "x_induce,y_induce,x_train,y_train,jitter,number_of_particles,seed,particles",
+    "number_of_particles,seed,particles",
     [
         [
-            torch.tensor(
-                [
-                    [1.0, 2.0, 3.0],
-                    [1.5, 2.5, 3.5],
-                ]
-            ),
-            torch.tensor([2.1, 3.3]),
-            torch.tensor(
-                [
-                    [1.1, 3.5, 3.5],
-                    [1.3, 7.5, 1.5],
-                    [2.5, 2.5, 0.5],
-                    [1.0, 2.0, 3.0],
-                    [1.5, 2.5, 3.5],
-                ]
-            ),
-            torch.tensor([0.1, 2.3, 3.1, 2.1, 3.3]),
-            0.0,
             3,
             0,
             torch.tensor(
                 [
-                    [3.640995979309082, 1.8065710067749023, -0.07878947257995605],
-                    [3.8684312105178833, 2.2154775857925415, 1.9014045000076294],
+                    [1.0, 1.0, 1.0],
+                    [1.0, 1.0, 1.0],
+                    [1.0, 1.0, 1.0],
+                    [1.0, 1.0, 1.0],
+                    [1.0, 1.0, 1.0],
+                    [1.0, 1.0, 1.0],
+                    [1.0, 1.0, 1.0],
+                    [1.0, 1.0, 1.0],
+                    [1.0, 1.0, 1.0],
+                    [1.0, 1.0, 1.0],
                 ]
             ),
         ],
     ],
 )
 def test_initialise_particles(
-    x_induce: torch.Tensor,
-    y_induce: torch.Tensor,
-    x_train: torch.Tensor,
-    y_train: torch.Tensor,
-    jitter: float,
     number_of_particles: int,
     seed: int,
     particles: torch.Tensor,
 ):
-    kernel = MockPLSKernel(
-        base_kernel=MockKernel(),
-        approximation_samples=x_train,
-    )
-    pls = GradientFlowRegression(
-        kernel=kernel,
-        x_induce=x_induce,
-        y_induce=y_induce,
-        x_train=x_train,
-        y_train=y_train,
-        jitter=jitter,
-        observation_noise=1.0,
+    pls = ProjectedLangevinSampling(
+        basis=MockBasis(),
+        cost=MockCost(),
     )
     assert torch.allclose(
         pls.initialise_particles(number_of_particles=number_of_particles, seed=seed),
@@ -69,80 +47,62 @@ def test_initialise_particles(
 
 
 @pytest.mark.parametrize(
-    "x_induce,y_induce,x_train,y_train,jitter,seed,particles,step_size,observation_noise,update",
+    "seed,particles,step_size,update",
     [
         [
-            torch.tensor(
-                [
-                    [1.0, 2.0, 3.0],
-                    [1.5, 2.5, 3.5],
-                ]
-            ),
-            torch.tensor([2.1, 3.3]),
-            torch.tensor(
-                [
-                    [1.1, 3.5, 3.5],
-                    [1.3, 7.5, 1.5],
-                    [2.5, 2.5, 0.5],
-                    [1.0, 2.0, 3.0],
-                    [1.5, 2.5, 3.5],
-                ]
-            ),
-            torch.tensor([0.1, 2.3, 3.1, 2.1, 3.3]),
-            0.0,
             0,
             torch.tensor(
                 [
-                    [3.640995979309082, 1.8065710067749023, -0.07878947257995605],
-                    [3.8684312105178833, 2.2154775857925415, 1.9014045000076294],
+                    [0.1, 0.0, 2.0],
+                    [0.9, 0.0, 0.1],
+                    [0.1, 0.5, 4.0],
+                    [0.3, 0.0, 0.4],
+                    [3.0, 0.0, 4.2],
+                    [0.0, 2.0, 0.0],
+                    [1.0, 0.1, 5.0],
+                    [0.6, 0.4, 2.0],
+                    [3.0, 0.2, 0.0],
+                    [0.8, 0.9, 2.0],
                 ]
             ),
             0.1,
-            1.0,
             torch.tensor(
                 [
-                    [-6.318556215166498, -3.3139141325395953, -26.852652634868846],
-                    [-4.418808309172321, -4.0371477131348446, -43.87779529313816],
+                    [1.1000, 1.0000, 3.0000],
+                    [1.9000, 1.0000, 1.1000],
+                    [1.1000, 1.5000, 5.0000],
+                    [1.3000, 1.0000, 1.4000],
+                    [4.0000, 1.0000, 5.2000],
+                    [1.0000, 3.0000, 1.0000],
+                    [2.0000, 1.1000, 6.0000],
+                    [1.6000, 1.4000, 3.0000],
+                    [4.0000, 1.2000, 1.0000],
+                    [1.8000, 1.9000, 3.0000],
                 ]
             ),
         ],
     ],
 )
 def test_calculate_update(
-    x_induce: torch.Tensor,
-    y_induce: torch.Tensor,
-    x_train: torch.Tensor,
-    y_train: torch.Tensor,
-    jitter: float,
     seed: int,
     particles: torch.Tensor,
-    learning_rate: float,
-    observation_noise: float,
+    step_size: float,
     update: torch.Tensor,
 ):
-    kernel = MockPLSKernel(
-        base_kernel=MockKernel(),
-        approximation_samples=x_train,
-    )
-    pls = GradientFlowRegression(
-        kernel=kernel,
-        x_induce=x_induce,
-        y_induce=y_induce,
-        x_train=x_train,
-        y_train=y_train,
-        jitter=jitter,
-        observation_noise=observation_noise,
+    pls = ProjectedLangevinSampling(
+        basis=MockBasis(),
+        cost=MockCost(),
     )
     set_seed(seed)
     calculated_update = pls.calculate_particle_update(
         particles=particles,
-        learning_rate=torch.tensor(learning_rate),
+        step_size=torch.tensor(step_size),
     ).detach()
     assert torch.allclose(calculated_update, update)
 
 
 @pytest.mark.parametrize(
-    "x,x_induce,y_induce,x_train,y_train,jitter,seed,number_of_samples,observation_noise,predict_noise",
+    "x,seed,predict_noise",
     [
         [
             torch.tensor(
@@ -151,55 +111,19 @@ def test_calculate_update(
                     [2.5, 2.5, 3.3],
                 ]
             ),
-            torch.tensor(
-                [
-                    [1.0, 2.0, 3.0],
-                    [1.5, 2.5, 3.5],
-                ]
-            ),
-            torch.tensor([2.1, 3.3]),
-            torch.tensor(
-                [
-                    [1.1, 3.5, 3.5],
-                    [1.3, 7.5, 1.5],
-                    [2.5, 2.5, 0.5],
-                    [1.0, 2.0, 3.0],
-                    [1.5, 2.5, 3.5],
-                ]
-            ),
-            torch.tensor([0.1, 2.3, 3.1, 2.1, 3.3]),
-            0.0,
             0,
-            3,
-            1.0,
-            torch.tensor([[-6.1471], [-7.2732], [-2.8229], [-7.3632]]),
+            torch.tensor([[180.0], [83.0]]),
         ],
     ],
 )
 def test_sample_predictive_noise(
     x: torch.Tensor,
-    x_induce: torch.Tensor,
-    y_induce: torch.Tensor,
-    x_train: torch.Tensor,
-    y_train: torch.Tensor,
-    jitter: float,
     seed: int,
-    number_of_samples: int,
-    observation_noise: float,
     predict_noise: torch.Tensor,
 ):
-    kernel = MockPLSKernel(
-        base_kernel=MockKernel(),
-        approximation_samples=x_train,
-    )
-    pls = GradientFlowRegression(
-        kernel=kernel,
-        x_induce=x_induce,
-        y_induce=y_induce,
-        x_train=x_train,
-        y_train=y_train,
-        jitter=jitter,
-        observation_noise=observation_noise,
+    pls = ProjectedLangevinSampling(
+        basis=MockBasis(),
+        cost=MockCost(),
     )
     set_seed(seed)
     particles = pls.initialise_particles(number_of_particles=1, seed=seed)
@@ -211,7 +135,7 @@ def test_sample_predictive_noise(
 
 
 @pytest.mark.parametrize(
-    "x,x_induce,y_induce,x_train,y_train,jitter,seed,particles,observation_noise,prediction",
+    "x,seed,particles,prediction",
     [
         [
             torch.tensor(
@@ -220,24 +144,6 @@ def test_sample_predictive_noise(
                     [2.5, 2.5, 3.3],
                 ]
             ),
-            torch.tensor(
-                [
-                    [1.0, 2.0, 3.0],
-                    [1.5, 2.5, 3.5],
-                ]
-            ),
-            torch.tensor([2.1, 3.3]),
-            torch.tensor(
-                [
-                    [1.1, 3.5, 3.5],
-                    [1.3, 7.5, 1.5],
-                    [2.5, 2.5, 0.5],
-                    [1.0, 2.0, 3.0],
-                    [1.5, 2.5, 3.5],
-                ]
-            ),
-            torch.tensor([0.1, 2.3, 3.1, 2.1, 3.3]),
-            0.0,
             0,
             torch.tensor(
                 [
@@ -245,44 +151,26 @@ def test_sample_predictive_noise(
                     [0.1856488604600999, -0.35420350057036537, -0.45677933473829735],
                 ]
             ),
-            1.0,
             torch.tensor(
-                [
-                    [52.5968, -105.6018, -128.3776],
-                    [15.4785, -29.2983, -38.1299],
-                ]
+                [[-71.8461, 137.0768, 176.7736], [-33.1290, 63.2076, 81.5123]]
             ),
         ],
     ],
 )
 def test_predict_pls(
     x: torch.Tensor,
-    x_induce: torch.Tensor,
-    y_induce: torch.Tensor,
-    x_train: torch.Tensor,
-    y_train: torch.Tensor,
-    jitter: float,
     seed: int,
     particles: torch.Tensor,
-    observation_noise: float,
     prediction: torch.Tensor,
 ):
-    kernel = MockPLSKernel(
-        base_kernel=MockKernel(),
-        approximation_samples=x_train,
-    )
-    pls = GradientFlowRegression(
-        kernel=kernel,
-        x_induce=x_induce,
-        y_induce=y_induce,
-        x_train=x_train,
-        y_train=y_train,
-        jitter=jitter,
-        observation_noise=observation_noise,
+    pls = ProjectedLangevinSampling(
+        basis=MockBasis(),
+        cost=MockCost(),
     )
     set_seed(seed)
     predicted_samples = pls.predict_samples(
         particles=particles,
         x=x,
     ).detach()
+    print(predicted_samples)
     assert torch.allclose(predicted_samples, prediction)
