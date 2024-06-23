@@ -390,5 +390,5 @@ if __name__ == "__main__":
                 "svgp-conformalise",
             ],
             datasets=list(RegressionDatasetSchema.__members__.keys()),
-            metrics=["mae", "mse", "nll"],
+            metrics=["mae", "mse", "nll", "coverage"],
         )

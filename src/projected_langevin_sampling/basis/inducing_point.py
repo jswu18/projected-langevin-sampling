@@ -1,4 +1,5 @@
 import math
+from typing import Optional
 
 import gpytorch
 import torch
@@ -26,7 +27,13 @@ class InducingPointBasis(PLSBasis):
         x_induce: torch.Tensor,
         y_induce: torch.Tensor,
         x_train: torch.Tensor,
+        additional_predictive_noise_distribution: Optional[
+            torch.distributions.Distribution
+        ] = None,
     ):
+        super().__init__(
+            additional_predictive_noise_distribution=additional_predictive_noise_distribution
+        )
         self.kernel = kernel
         self.x_induce = x_induce  # size (M, D)
         self.y_induce = y_induce  # size (M,)
@@ -185,11 +192,16 @@ class InducingPointBasis(PLSBasis):
             ],
             dim=0,
         )  # (M+N*, M+N*)
-        return sample_multivariate_normal(
+        predictive_noise = sample_multivariate_normal(
             mean=torch.zeros(noise_covariance.shape[0]),
             cov=noise_covariance,
             size=(particles.shape[1],),
         ).T  # (M+N*, J)
+        if self.additional_predictive_noise_distribution is not None:
+            predictive_noise += self.additional_predictive_noise_distribution.sample(
+                predictive_noise.shape
+            ).reshape(predictive_noise.shape)
+        return predictive_noise
 
     def predict_untransformed_samples(
         self,

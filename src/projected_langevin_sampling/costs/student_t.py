@@ -1,6 +1,6 @@
-import gpytorch
 import torch
 
+from src.distributions import StudentTMarginals
 from src.projected_langevin_sampling.costs.base import PLSCost
 from src.projected_langevin_sampling.link_functions import (
     IdentityLinkFunction,
@@ -38,18 +38,16 @@ class StudentTCost(PLSCost):
     def predict(
         self,
         prediction_samples: torch.Tensor,
-    ) -> torch.distributions.studentT.StudentT:
+    ) -> StudentTMarginals:
         """
         Constructs a Student T distribution from the prediction samples.
         :param prediction_samples: The prediction samples of size (N, J).
         :return: The Student T distribution.
         """
-        return torch.distributions.studentT.StudentT(
+        return StudentTMarginals(
             df=self.degrees_of_freedom,
-            loc=float(prediction_samples.mean(dim=1)[0]),  # HACK THIS IS WRONG
-            scale=float(
-                torch.sqrt(prediction_samples.var(axis=1))[0]
-            ),  # HACK THIS IS WRONG
+            loc=self.link_function(prediction_samples).mean(dim=1),
+            scale=self.link_function(prediction_samples).std(dim=1),
         )
 
     def calculate_cost(

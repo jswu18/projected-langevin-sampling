@@ -1,4 +1,5 @@
 import math
+from typing import Optional
 
 import torch
 
@@ -25,9 +26,14 @@ class OrthonormalBasis(PLSBasis):
         x_induce: torch.Tensor,
         x_train: torch.Tensor,
         eigenvalue_threshold: float = 0.0,
+        additional_predictive_noise_distribution: Optional[
+            torch.distributions.Distribution
+        ] = None,
     ):
+        super().__init__(
+            additional_predictive_noise_distribution=additional_predictive_noise_distribution
+        )
         self.kernel = kernel
-
         self.x_induce = x_induce  # size (M, D)
         self.base_gram_induce = self.kernel.base_kernel(
             x1=x_induce, x2=x_induce
@@ -163,7 +169,7 @@ class OrthonormalBasis(PLSBasis):
 
         :param particles: Particles of size (M, J)
         :param x: Test points of size (N*, D)
-        :return: The predictive noise of size (N*, J)
+        :return: The predictive noise of size (M+N*, J)
         """
         # Use additional approximation samples to ensure better OOD predictive behaviour
         gram_x = self.kernel.forward(
@@ -197,11 +203,16 @@ class OrthonormalBasis(PLSBasis):
             ],
             dim=0,
         )  # (M+N*, M+N*)
-        return sample_multivariate_normal(
+        predictive_noise = sample_multivariate_normal(
             mean=torch.zeros(noise_covariance.shape[0]),
             cov=noise_covariance,
             size=(particles.shape[1],),
         ).T  # (M+N*, J)
+        if self.additional_predictive_noise_distribution is not None:
+            predictive_noise += self.additional_predictive_noise_distribution.sample(
+                predictive_noise.shape
+            ).reshape(predictive_noise.shape)
+        return predictive_noise
 
     def predict_untransformed_samples(
         self,

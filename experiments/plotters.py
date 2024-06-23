@@ -3,6 +3,7 @@ from typing import Dict, List, Tuple, Union
 import gpytorch
 import matplotlib.animation as animation
 import numpy as np
+import scipy
 import torch
 from matplotlib import pyplot as plt
 from torch.utils.data import DataLoader, TensorDataset
@@ -10,6 +11,7 @@ from tqdm import tqdm
 
 from experiments.data import Data, ExperimentData, ProblemType
 from src.conformalise import ConformaliseGP
+from src.distributions import StudentTMarginals
 from src.gps import ExactGP, svGP
 from src.kernels import PLSKernel
 from src.projected_langevin_sampling import ProjectedLangevinSampling
@@ -33,20 +35,22 @@ def plot_1d_gp_prediction(
     x: torch.Tensor,
     mean: torch.Tensor,
     variance: torch.Tensor | None = None,
+    coverage: float = 0.95,
     save_path: str | None = None,
     title: str | None = None,
 ) -> Tuple[plt.Figure, plt.Axes]:
-    x = x.cpu()
-    mean = mean.cpu()
-    variance = variance.cpu() if variance is not None else None
+    x = x.cpu().detach()
+    mean = mean.cpu().detach()
+    variance = variance.cpu().detach() if variance is not None else None
     if variance is not None:
         stdev = torch.sqrt(variance)
+        confidence_interval_scale = scipy.special.ndtri((coverage + 1) / 2)
         ax.fill_between(
             x.reshape(-1),
-            (mean - 1.96 * stdev).reshape(-1),
-            (mean + 1.96 * stdev).reshape(-1),
+            (mean - confidence_interval_scale * stdev).reshape(-1),
+            (mean + confidence_interval_scale * stdev).reshape(-1),
             facecolor=(0.9, 0.9, 0.9),
-            label="95% error",
+            label=f"{coverage*100}% error",
             zorder=0,
         )
     ax.plot(
@@ -239,8 +243,14 @@ def plot_1d_pls_prediction(
                 mean=predicted_distribution.rate.detach(),
                 variance=None,
             )
-        elif isinstance(predicted_distribution, torch.distributions.studentT.StudentT):
-            pass
+        elif isinstance(predicted_distribution, StudentTMarginals):
+            fig, ax = plot_1d_gp_prediction(
+                fig=fig,
+                ax=ax,
+                x=experiment_data.full.x,
+                mean=predicted_distribution.loc,
+                variance=predicted_distribution.scale**2,
+            )
         else:
             raise TypeError
     if predicted_samples is not None:
@@ -385,14 +395,6 @@ def plot_1d_gp_prediction_and_inducing_points(
             variance=prediction.variance.detach(),
         )
     elif isinstance(model.likelihood, gpytorch.likelihoods.BernoulliLikelihood):
-        ax.plot(
-            experiment_data.full.x.reshape(-1).cpu(),
-            prediction.mean.detach().reshape(-1).cpu(),
-            label="prediction",
-            zorder=0,
-            color="black",
-        )
-    elif isinstance(model.likelihood, gpytorch.likelihoods.StudentTLikelihood):
         ax.plot(
             experiment_data.full.x.reshape(-1).cpu(),
             prediction.mean.detach().reshape(-1).cpu(),

@@ -48,7 +48,6 @@ class svGP(ApproximateGP):
             self.likelihood.cuda()
 
     def forward(self, x: torch.Tensor) -> gpytorch.distributions.Distribution:
-        x.cpu()
         return gpytorch.distributions.MultivariateNormal(
             mean=self.mean(x),
             covariance_matrix=self.kernel(x),

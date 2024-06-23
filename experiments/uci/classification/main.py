@@ -331,7 +331,7 @@ if __name__ == "__main__":
             data_types=["train", "test"],
             model_names=[
                 "pls-onb",
-                "svgp-r",
+                "svgp",
             ],
             datasets=list(ClassificationDatasetSchema.__members__.keys()),
             metrics=["mae", "mse", "nll", "acc", "auc", "f1"],

@@ -3,13 +3,15 @@ from typing import List, Union
 
 import gpytorch
 import pandas as pd
+import scipy
 import sklearn
 import torch
 
-from experiments.data import ExperimentData, ProblemType
+from experiments.data import ExperimentData
 from experiments.plotters import plot_true_versus_predicted
 from experiments.utils import create_directory
 from src.conformalise import ConformaliseBase
+from src.distributions import StudentTMarginals
 from src.gps import ExactGP, svGP
 from src.projected_langevin_sampling import ProjectedLangevinSampling
 from src.temper import TemperBase
@@ -29,8 +31,8 @@ def calculate_mae(
         return prediction.probs.sub(y).abs().mean().item()
     elif isinstance(prediction, torch.distributions.Poisson):
         return prediction.rate.sub(y).abs().mean().item()
-    elif isinstance(prediction, torch.distributions.StudentT):
-        pass
+    elif isinstance(prediction, StudentTMarginals):
+        return prediction.loc.sub(y).abs().mean().item()
     else:
         raise ValueError(f"Prediction type {type(prediction)} not supported")
 
@@ -48,8 +50,8 @@ def calculate_mse(
         return prediction.probs.sub(y).pow(2).mean().item()
     elif isinstance(prediction, torch.distributions.Poisson):
         return prediction.rate.sub(y).pow(2).mean().item()
-    elif isinstance(prediction, torch.distributions.StudentT):
-        pass
+    elif isinstance(prediction, StudentTMarginals):
+        return prediction.loc.sub(y).pow(2).mean().item()
     else:
         raise ValueError(f"Prediction type {type(prediction)} not supported")
 
@@ -75,8 +77,26 @@ def calculate_nll(
             target=y.double(),
             reduction="mean",
         ).item()
-    elif isinstance(prediction, torch.distributions.StudentT):
-        pass
+    elif isinstance(prediction, StudentTMarginals):
+        return prediction.negative_log_likelihood(y)
+    else:
+        raise ValueError(f"Prediction type {type(prediction)} not supported")
+
+
+def calculate_coverage(
+    prediction: torch.distributions.Distribution,
+    y: torch.Tensor,
+    coverage: float = 0.95,
+) -> float:
+    if isinstance(prediction, gpytorch.distributions.MultivariateNormal):
+        confidence_interval_scale = scipy.special.ndtri((coverage + 1) / 2)
+        lower_bound = prediction.mean - confidence_interval_scale * torch.sqrt(
+            prediction.variance
+        )
+        upper_bound = prediction.mean + confidence_interval_scale * torch.sqrt(
+            prediction.variance
+        )
+        return ((lower_bound <= y) & (y <= upper_bound)).float().mean().item()
     else:
         raise ValueError(f"Prediction type {type(prediction)} not supported")
 
@@ -139,15 +159,32 @@ def calculate_metrics(
             os.path.join(results_path, model_name, f"mse_{data.name}.csv"),
             index_label="dataset",
         )
-        nll = calculate_nll(
-            prediction=prediction,
-            y=data.y,
-        )
-        pd.DataFrame([[nll]], columns=[model_name], index=[dataset_name]).to_csv(
-            os.path.join(results_path, model_name, f"nll_{data.name}.csv"),
-            index_label="dataset",
-        )
-        if experiment_data.problem_type == ProblemType.CLASSIFICATION:
+        if isinstance(prediction, gpytorch.distributions.MultivariateNormal):
+            coverage = calculate_coverage(
+                prediction=prediction,
+                y=data.y,
+                coverage=0.95,
+            )
+            pd.DataFrame(
+                [[coverage]], columns=[model_name], index=[dataset_name]
+            ).to_csv(
+                os.path.join(results_path, model_name, f"coverage_{data.name}.csv"),
+                index_label="dataset",
+            )
+        if (
+            isinstance(prediction, gpytorch.distributions.MultivariateNormal)
+            or isinstance(prediction, torch.distributions.Bernoulli)
+            or isinstance(prediction, torch.distributions.Poisson)
+        ):
+            nll = calculate_nll(
+                prediction=prediction,
+                y=data.y,
+            )
+            pd.DataFrame([[nll]], columns=[model_name], index=[dataset_name]).to_csv(
+                os.path.join(results_path, model_name, f"nll_{data.name}.csv"),
+                index_label="dataset",
+            )
+        if isinstance(prediction, torch.distributions.Bernoulli):
             acc = sklearn.metrics.accuracy_score(
                 y_true=data.y.cpu().detach().numpy(),
                 y_pred=prediction.probs.round().cpu().detach().numpy(),

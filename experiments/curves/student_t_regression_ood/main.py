@@ -17,13 +17,12 @@ from experiments.constructors import (
 from experiments.curves.curves import CURVE_FUNCTIONS, Curve
 from experiments.data import Data, ExperimentData, ProblemType
 from experiments.loaders import load_pls, load_svgp
-from experiments.metrics import calculate_metrics, concatenate_metrics
 from experiments.plotters import (
     animate_1d_gp_predictions,
     plot_1d_experiment_data,
     plot_1d_gp_prediction_and_inducing_points,
 )
-from experiments.preprocess import set_up_experiment, split_regression_data_intervals
+from experiments.preprocess import split_regression_data_intervals
 from experiments.runners import (
     animate_pls_1d_particles_runner,
     exact_gp_runner,
@@ -46,7 +45,7 @@ from src.projected_langevin_sampling.link_functions import IdentityLinkFunction
 from src.utils import set_seed
 
 parser = argparse.ArgumentParser(
-    description="Main script for toy Poisson regression experiments."
+    description="Main script for toy Poisson regression experiments with out of distribution test samples."
 )
 parser.add_argument("--config_path", type=str)
 parser.add_argument(
@@ -62,8 +61,10 @@ def get_experiment_data(
     number_of_data_points: int,
     seed: int,
     degrees_of_freedom: float,
-    train_data_percentage: float,
+    number_of_test_intervals: int,
+    total_number_of_intervals: int,
     validation_data_percentage: float,
+    min_validation_data_points: int = 50,
 ) -> ExperimentData:
     x = torch.linspace(-3, 3, number_of_data_points).reshape(-1, 1)
     y_curve = 2 * curve_function.calculate_curve(
@@ -73,18 +74,47 @@ def get_experiment_data(
     set_seed(seed)
     y = link_function.transform(y_curve) + torch.distributions.studentT.StudentT(
         loc=0.0,
-        scale=1.0,
         df=degrees_of_freedom,
     ).sample(sample_shape=y_curve.shape)
-    experiment_data = set_up_experiment(
-        name=curve_function.__name__,
-        problem_type=ProblemType.REGRESSION,
-        seed=seed,
+    (
+        x_train_validation,
+        y_train_validation,
+        _,
+        x_test,
+        y_test,
+        _,
+    ) = split_regression_data_intervals(
+        split_seed=curve_function.seed,
         x=x,
         y=y,
-        train_data_percentage=train_data_percentage,
-        validation_data_percentage=validation_data_percentage,
-        normalise=True,
+        number_of_test_intervals=number_of_test_intervals,
+        total_number_of_intervals=total_number_of_intervals,
+    )
+    if len(x_train_validation) < min_validation_data_points:
+        raise ValueError(
+            f"Number of training points is less than the minimum number of validation points: {len(x_train_validation)} < {min_validation_data_points}"
+        )
+    (
+        x_train,
+        x_validation,
+        y_train,
+        y_validation,
+    ) = train_test_split(
+        x_train_validation,
+        y_train_validation,
+        test_size=max(
+            validation_data_percentage,
+            min_validation_data_points / len(x_train_validation),
+        ),
+        random_state=seed,
+    )
+    experiment_data = ExperimentData(
+        name=type(curve_function).__name__.lower(),
+        problem_type=ProblemType.REGRESSION,
+        full=Data(x=x, y=y, name="full"),
+        train=Data(x=x_train, y=y_train, name="train"),
+        validation=Data(x=x_validation, y=y_validation, name="validation"),
+        test=Data(x=x_test, y=y_test, name="test"),
     )
     return experiment_data
 
@@ -122,7 +152,8 @@ def main(
         number_of_data_points=data_config["number_of_data_points"],
         seed=data_config["seed"],
         degrees_of_freedom=data_config["degrees_of_freedom"],
-        train_data_percentage=data_config["train_data_percentage"],
+        number_of_test_intervals=data_config["number_of_test_intervals"],
+        total_number_of_intervals=data_config["total_number_of_intervals"],
         validation_data_percentage=data_config["validation_data_percentage"],
     )
     data_path = os.path.join(
@@ -134,40 +165,37 @@ def main(
     models_path = os.path.join(
         outputs_path, "models", type(curve_function).__name__.lower()
     )
-    results_path = os.path.join(
-        outputs_path, "results", type(curve_function).__name__.lower()
-    )
     plot_experiment_data(
         experiment_data=experiment_data,
         title=f"{curve_function.__name__} data",
         plot_curve_path=plot_curve_path,
     )
-    model_name = "exact-gp"
-    plot_title = "Student T SVGP with All Data"
-    exact_svgp, _, _ = train_svgp_runner(
-        model_name=model_name,
+    subsample_gp_model_path = os.path.join(models_path, "subsample_gp")
+    subsample_gp_data_path = os.path.join(data_path, "subsample_gp")
+    likelihood = gpytorch.likelihoods.GaussianLikelihood()
+    subsample_gp_models = exact_gp_runner(
         experiment_data=experiment_data,
-        inducing_points=experiment_data.train,
-        mean=gpytorch.means.ConstantMean(),
         kernel=gpytorch.kernels.ScaleKernel(
             gpytorch.kernels.RBFKernel(ard_num_dims=experiment_data.train.x.shape[1])
         ),
-        likelihood=gpytorch.likelihoods.StudentTLikelihood(),
+        likelihood=likelihood,
+        subsample_size=kernel_config["subsample_size"],
         seed=kernel_config["seed"],
-        number_of_epochs=svgp_config["number_of_epochs"],
-        batch_size=svgp_config["batch_size"],
-        learning_rate_upper=kernel_config["learning_rate"],
-        learning_rate_lower=kernel_config["learning_rate"],
-        number_of_learning_rate_searches=1,
-        is_fixed=False,
-        observation_noise=1.0,
+        number_of_epochs=kernel_config["number_of_epochs"],
+        learning_rate=kernel_config["learning_rate"],
+        number_of_iterations=kernel_config["number_of_iterations"],
         early_stopper_patience=kernel_config["early_stopper_patience"],
-        models_path=os.path.join(models_path, f"{model_name}-kernel-exact"),
-        plot_title=plot_title,
+        model_path=subsample_gp_model_path,
+        data_path=subsample_gp_data_path,
+        plot_1d_subsample_path=None,
         plot_loss_path=plot_curve_path,
     )
-    average_ard_kernel = exact_svgp.kernel
-
+    average_ard_kernel = construct_average_ard_kernel(
+        kernels=[model.kernel for model in subsample_gp_models]
+    )
+    likelihood = construct_average_gaussian_likelihood(
+        likelihoods=[model.likelihood for model in subsample_gp_models]
+    )
     inducing_points = inducing_points_runner(
         seed=inducing_points_config["seed"],
         inducing_point_selector=ConditionalVarianceInducingPointSelector(),
@@ -181,24 +209,17 @@ def main(
         ),
         kernel=average_ard_kernel,
     )
-    # degrees_of_freedom = float(2 * likelihood.noise) / float(likelihood.noise - 1)
-    # if degrees_of_freedom <= 2:
-    #     print(
-    #         f"The calculated degrees of freedom is {degrees_of_freedom} which is less than or equal to 2. The noise is {float(likelihood.noise)}. Setting degrees of freedom to 100.0."
-    #     )
-    #     degrees_of_freedom = 3.0
-    # t_noise_distribution = torch.distributions.studentT.StudentT(
-    #     loc=0.0,
-    #     scale=likelihood.noise,
-    #     df=degrees_of_freedom,
-    # )
-    degrees_of_freedom = int(exact_svgp.likelihood.deg_free)
+    degrees_of_freedom = float(2 * likelihood.noise) / float(likelihood.noise - 1)
+    if degrees_of_freedom <= 2:
+        print(
+            f"Degrees of freedom is {degrees_of_freedom} which is less than or equal to 2. Skipping Student T cost."
+        )
+        return
     t_noise_distribution = torch.distributions.studentT.StudentT(
         loc=0.0,
-        scale=exact_svgp.likelihood.noise,
+        scale=likelihood.noise,
         df=degrees_of_freedom,
     )
-    print(f"Degrees of freedom: {degrees_of_freedom}")
     pls_kernel = PLSKernel(
         base_kernel=average_ard_kernel,
         approximation_samples=inducing_points.x,
@@ -294,16 +315,6 @@ def main(
         plot_particles_path=plot_curve_path,
         plot_title=f"{plot_title} Conformalised",
     )
-    set_seed(pls_config["seed"])
-    calculate_metrics(
-        model=pls_conformalised,
-        particles=particles,
-        model_name="pls-onb-conformalised",
-        dataset_name=type(curve_function).__name__.lower(),
-        experiment_data=experiment_data,
-        results_path=results_path,
-        plots_path=plot_curve_path,
-    )
     # plot_pls_1d_particles_runner(
     #     pls=pls_tempered,
     #     particles=particles,
@@ -359,7 +370,7 @@ def main(
                 "number_of_learning_rate_searches"
             ],
             is_fixed=True,
-            observation_noise=float(exact_svgp.likelihood.noise),
+            observation_noise=float(likelihood.noise),
             early_stopper_patience=svgp_config["early_stopper_patience"],
             models_path=os.path.join(models_path, f"{model_name}-kernel-iterations"),
             plot_title=plot_title,
@@ -413,22 +424,13 @@ def main(
     #         f"{model_name}-tempered.png",
     #     ),
     # )
-    set_seed(svgp_config["seed"])
-    calculate_metrics(
-        model=svgp_conformalised,
-        experiment_data=experiment_data,
-        model_name="svgp-conformalised",
-        dataset_name=type(curve_function).__name__.lower(),
-        results_path=results_path,
-        plots_path=plot_curve_path,
-    )
     if include_gif:
         animate_1d_gp_predictions(
             experiment_data=experiment_data,
             inducing_points=inducing_points,
             mean=deepcopy(svgp.mean),
             kernel=deepcopy(svgp.kernel),
-            likelihood=gpytorch.likelihoods.GaussianLikelihood(),
+            likelihood=deepcopy(likelihood),
             seed=svgp_config["seed"],
             number_of_epochs=len(losses),
             batch_size=svgp_config["batch_size"],
@@ -463,16 +465,3 @@ if __name__ == "__main__":
             outputs_path=outputs_path,
             include_gif=args.include_gif,
         )
-    concatenate_metrics(
-        results_path=os.path.join(outputs_path, "results"),
-        data_types=["train", "test"],
-        model_names=[
-            "pls-onb-conformalised",
-            "svgp-conformalised",
-        ],
-        datasets=[
-            type(curve_function_).__name__.lower()
-            for curve_function_ in CURVE_FUNCTIONS
-        ],
-        metrics=["mae", "mse", "nll", "average_interval_width", "coverage"],
-    )

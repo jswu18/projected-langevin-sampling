@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from typing import Optional
 
 import torch
 
@@ -15,6 +16,16 @@ class PLSBasis(ABC):
     J is the number of particles.
     D is the dimensionality of the data.
     """
+
+    def __init__(
+        self,
+        additional_predictive_noise_distribution: Optional[
+            torch.distributions.Distribution
+        ] = None,
+    ):
+        self.additional_predictive_noise_distribution = (
+            additional_predictive_noise_distribution
+        )
 
     @property
     def approximation_dimension(self) -> int:

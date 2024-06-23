@@ -30,6 +30,7 @@ from src.gps import svGP
 from src.inducing_point_selectors import InducingPointSelector
 from src.projected_langevin_sampling import ProjectedLangevinSampling
 from src.samplers import sample_point
+from src.temper.pls import TemperPLS
 from src.utils import set_seed
 
 
@@ -193,6 +194,7 @@ def plot_pls_1d_particles_runner(
     experiment_data: ExperimentData,
     plot_particles_path: str,
     plot_title: str | None = None,
+    number_of_particles_to_plot: int | None = None,
 ) -> None:
     create_directory(plot_particles_path)
     if isinstance(pls, ProjectedLangevinSampling):
@@ -204,13 +206,19 @@ def plot_pls_1d_particles_runner(
         predicted_distribution = pls.predict(
             x=experiment_data.full.x,
         )
+    elif isinstance(pls, TemperPLS):
+        predicted_distribution = pls.predict(
+            x=experiment_data.full.x,
+        )
     else:
         raise TypeError(f"Unknown PLS type: {type(pls)}")
     predicted_samples = None
     if isinstance(pls, ProjectedLangevinSampling):
         predicted_samples = pls.predict_samples(
             x=experiment_data.full.x,
-            particles=particles,
+            particles=particles[:, :number_of_particles_to_plot]
+            if number_of_particles_to_plot is not None
+            else particles,
         ).detach()
     plot_1d_pls_prediction(
         experiment_data=experiment_data,
@@ -226,7 +234,9 @@ def plot_pls_1d_particles_runner(
     if experiment_data.full.y_untransformed is not None:
         untransformed_predicted_samples = pls.predict_untransformed_samples(
             x=experiment_data.full.x,
-            particles=particles,
+            particles=particles[:, :number_of_particles_to_plot]
+            if number_of_particles_to_plot is not None
+            else particles,
         ).detach()
         plot_1d_pls_prediction(
             experiment_data=experiment_data,
