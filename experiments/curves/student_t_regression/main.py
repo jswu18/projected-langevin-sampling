@@ -6,16 +6,16 @@ from typing import Any, Dict
 
 import gpytorch
 import matplotlib.pyplot as plt
+import scipy
 import torch
 import yaml
-from sklearn.model_selection import train_test_split
 
 from experiments.constructors import (
     construct_average_ard_kernel,
     construct_average_gaussian_likelihood,
 )
 from experiments.curves.curves import CURVE_FUNCTIONS, Curve
-from experiments.data import Data, ExperimentData, ProblemType
+from experiments.data import ExperimentData, ProblemType
 from experiments.loaders import load_pls, load_svgp
 from experiments.metrics import calculate_metrics, concatenate_metrics
 from experiments.plotters import (
@@ -23,7 +23,7 @@ from experiments.plotters import (
     plot_1d_experiment_data,
     plot_1d_gp_prediction_and_inducing_points,
 )
-from experiments.preprocess import set_up_experiment, split_regression_data_intervals
+from experiments.preprocess import set_up_experiment
 from experiments.runners import (
     animate_pls_1d_particles_runner,
     exact_gp_runner,
@@ -142,32 +142,88 @@ def main(
         title=f"{curve_function.__name__} data",
         plot_curve_path=plot_curve_path,
     )
-    model_name = "exact-gp"
-    plot_title = "Student T SVGP with All Data"
-    exact_svgp, _, _ = train_svgp_runner(
-        model_name=model_name,
+    # model_name = "exact-gp"
+    # plot_title = "Student T SVGP with All Data"
+    # exact_svgp, _, _ = train_svgp_runner(
+    #     model_name=model_name,
+    #     experiment_data=experiment_data,
+    #     inducing_points=experiment_data.train,
+    #     mean=gpytorch.means.ConstantMean(),
+    #     kernel=gpytorch.kernels.ScaleKernel(
+    #         gpytorch.kernels.RBFKernel(ard_num_dims=experiment_data.train.x.shape[1])
+    #     ),
+    #     likelihood=gpytorch.likelihoods.StudentTLikelihood(),
+    #     seed=kernel_config["seed"],
+    #     number_of_epochs=svgp_config["number_of_epochs"],
+    #     batch_size=svgp_config["batch_size"],
+    #     learning_rate_upper=kernel_config["learning_rate"],
+    #     learning_rate_lower=kernel_config["learning_rate"],
+    #     number_of_learning_rate_searches=1,
+    #     is_fixed=False,
+    #     observation_noise=1.0,
+    #     early_stopper_patience=kernel_config["early_stopper_patience"],
+    #     models_path=os.path.join(models_path, f"{model_name}-kernel-exact"),
+    #     plot_title=plot_title,
+    #     plot_loss_path=plot_curve_path,
+    # )
+    # average_ard_kernel = exact_svgp.kernel
+    # plot_1d_gp_prediction_and_inducing_points(
+    #     model=exact_svgp,
+    #     experiment_data=experiment_data,
+    #     inducing_points=None,
+    #     title=f"{plot_title} SVGP Exact",
+    #     save_path=os.path.join(
+    #         plot_curve_path,
+    #         f"{model_name}-svgp-exact.png",
+    #     ),
+    # )
+    subsample_gp_model_path = os.path.join(models_path, "subsample_gp")
+    subsample_gp_data_path = os.path.join(data_path, "subsample_gp")
+    subsample_gp_models = exact_gp_runner(
         experiment_data=experiment_data,
-        inducing_points=experiment_data.train,
-        mean=gpytorch.means.ConstantMean(),
         kernel=gpytorch.kernels.ScaleKernel(
             gpytorch.kernels.RBFKernel(ard_num_dims=experiment_data.train.x.shape[1])
         ),
-        likelihood=gpytorch.likelihoods.StudentTLikelihood(),
+        likelihood=gpytorch.likelihoods.GaussianLikelihood(),
+        subsample_size=kernel_config["subsample_size"],
         seed=kernel_config["seed"],
-        number_of_epochs=svgp_config["number_of_epochs"],
-        batch_size=svgp_config["batch_size"],
-        learning_rate_upper=kernel_config["learning_rate"],
-        learning_rate_lower=kernel_config["learning_rate"],
-        number_of_learning_rate_searches=1,
-        is_fixed=False,
-        observation_noise=1.0,
+        number_of_epochs=kernel_config["number_of_epochs"],
+        learning_rate=kernel_config["learning_rate"],
+        number_of_iterations=kernel_config["number_of_iterations"],
         early_stopper_patience=kernel_config["early_stopper_patience"],
-        models_path=os.path.join(models_path, f"{model_name}-kernel-exact"),
-        plot_title=plot_title,
+        model_path=subsample_gp_model_path,
+        data_path=subsample_gp_data_path,
+        plot_1d_subsample_path=None,
         plot_loss_path=plot_curve_path,
     )
-    average_ard_kernel = exact_svgp.kernel
-
+    exact_gp_predictions = [
+        model.likelihood(model(experiment_data.train.x))
+        for model in subsample_gp_models
+    ]
+    residuals = (
+        torch.stack(
+            (
+                [
+                    experiment_data.train.y - prediction.mean
+                    for prediction in exact_gp_predictions
+                ]
+            ),
+            axis=1,
+        )
+        .mean(
+            axis=1,
+        )
+        .cpu()
+        .detach()
+        .numpy()
+    )
+    degrees_of_freedom, _, _ = scipy.stats.t.fit(residuals, floc=0)
+    average_ard_kernel = construct_average_ard_kernel(
+        kernels=[model.kernel for model in subsample_gp_models]
+    )
+    likelihood = construct_average_gaussian_likelihood(
+        likelihoods=[model.likelihood for model in subsample_gp_models]
+    )
     inducing_points = inducing_points_runner(
         seed=inducing_points_config["seed"],
         inducing_point_selector=ConditionalVarianceInducingPointSelector(),
@@ -192,10 +248,10 @@ def main(
     #     scale=likelihood.noise,
     #     df=degrees_of_freedom,
     # )
-    degrees_of_freedom = int(exact_svgp.likelihood.deg_free)
+    # degrees_of_freedom = int(exact_svgp.likelihood.deg_free)
     t_noise_distribution = torch.distributions.studentT.StudentT(
         loc=0.0,
-        scale=exact_svgp.likelihood.noise,
+        scale=likelihood.noise,
         df=degrees_of_freedom,
     )
     print(f"Degrees of freedom: {degrees_of_freedom}")
@@ -330,120 +386,120 @@ def main(
             initial_particles_noise_only=pls_config["initial_particles_noise_only"],
         )
 
-    plot_title = "SVGP for Regression"
-    model_name = f"svgp-r"
-    svgp_model_path = os.path.join(models_path, f"{model_name}.pth")
-    if os.path.exists(svgp_model_path):
-        svgp, losses, best_learning_rate = load_svgp(
-            model_path=svgp_model_path,
-            x_induce=inducing_points.x,
-            mean=gpytorch.means.ConstantMean(),
-            kernel=deepcopy(pls_kernel),
-            likelihood=gpytorch.likelihoods.GaussianLikelihood(),
-            learn_inducing_locations=False,
-        )
-    else:
-        svgp, losses, best_learning_rate = train_svgp_runner(
-            model_name=model_name,
-            experiment_data=experiment_data,
-            inducing_points=inducing_points,
-            mean=gpytorch.means.ConstantMean(),
-            kernel=deepcopy(pls_kernel),
-            likelihood=gpytorch.likelihoods.GaussianLikelihood(),
-            seed=svgp_config["seed"],
-            number_of_epochs=svgp_config["number_of_epochs"],
-            batch_size=svgp_config["batch_size"],
-            learning_rate_upper=svgp_config["learning_rate_upper"],
-            learning_rate_lower=svgp_config["learning_rate_lower"],
-            number_of_learning_rate_searches=svgp_config[
-                "number_of_learning_rate_searches"
-            ],
-            is_fixed=True,
-            observation_noise=float(exact_svgp.likelihood.noise),
-            early_stopper_patience=svgp_config["early_stopper_patience"],
-            models_path=os.path.join(models_path, f"{model_name}-kernel-iterations"),
-            plot_title=plot_title,
-            plot_loss_path=plot_curve_path,
-        )
-        torch.save(
-            {
-                "model": svgp.state_dict(),
-                "losses": losses,
-                "best_learning_rate": best_learning_rate,
-            },
-            os.path.join(models_path, f"{model_name}.pth"),
-        )
-    svgp_conformalised = ConformaliseGP(
-        x_calibration=experiment_data.validation.x,
-        y_calibration=experiment_data.validation.y,
-        gp=svgp,
-    )
-    # svgp_tempered = TemperGP(
+    # plot_title = "SVGP for Regression"
+    # model_name = f"svgp-r"
+    # svgp_model_path = os.path.join(models_path, f"{model_name}.pth")
+    # if os.path.exists(svgp_model_path):
+    #     svgp, losses, best_learning_rate = load_svgp(
+    #         model_path=svgp_model_path,
+    #         x_induce=inducing_points.x,
+    #         mean=gpytorch.means.ConstantMean(),
+    #         kernel=deepcopy(pls_kernel),
+    #         likelihood=gpytorch.likelihoods.GaussianLikelihood(),
+    #         learn_inducing_locations=False,
+    #     )
+    # else:
+    #     svgp, losses, best_learning_rate = train_svgp_runner(
+    #         model_name=model_name,
+    #         experiment_data=experiment_data,
+    #         inducing_points=inducing_points,
+    #         mean=gpytorch.means.ConstantMean(),
+    #         kernel=deepcopy(pls_kernel),
+    #         likelihood=gpytorch.likelihoods.GaussianLikelihood(),
+    #         seed=svgp_config["seed"],
+    #         number_of_epochs=svgp_config["number_of_epochs"],
+    #         batch_size=svgp_config["batch_size"],
+    #         learning_rate_upper=svgp_config["learning_rate_upper"],
+    #         learning_rate_lower=svgp_config["learning_rate_lower"],
+    #         number_of_learning_rate_searches=svgp_config[
+    #             "number_of_learning_rate_searches"
+    #         ],
+    #         is_fixed=True,
+    #         observation_noise=float(exact_svgp.likelihood.noise),
+    #         early_stopper_patience=svgp_config["early_stopper_patience"],
+    #         models_path=os.path.join(models_path, f"{model_name}-kernel-iterations"),
+    #         plot_title=plot_title,
+    #         plot_loss_path=plot_curve_path,
+    #     )
+    #     torch.save(
+    #         {
+    #             "model": svgp.state_dict(),
+    #             "losses": losses,
+    #             "best_learning_rate": best_learning_rate,
+    #         },
+    #         os.path.join(models_path, f"{model_name}.pth"),
+    #     )
+    # svgp_conformalised = ConformaliseGP(
     #     x_calibration=experiment_data.validation.x,
     #     y_calibration=experiment_data.validation.y,
     #     gp=svgp,
     # )
-    plot_1d_gp_prediction_and_inducing_points(
-        model=svgp,
-        experiment_data=experiment_data,
-        inducing_points=inducing_points,
-        title=plot_title,
-        save_path=os.path.join(
-            plot_curve_path,
-            f"{model_name}.png",
-        ),
-    )
-    plot_1d_gp_prediction_and_inducing_points(
-        model=svgp_conformalised,
-        experiment_data=experiment_data,
-        inducing_points=inducing_points,
-        title=f"{plot_title} Conformalised",
-        save_path=os.path.join(
-            plot_curve_path,
-            f"{model_name}-conformalised.png",
-        ),
-    )
+    # # svgp_tempered = TemperGP(
+    # #     x_calibration=experiment_data.validation.x,
+    # #     y_calibration=experiment_data.validation.y,
+    # #     gp=svgp,
+    # # )
     # plot_1d_gp_prediction_and_inducing_points(
-    #     model=svgp_tempered,
+    #     model=svgp,
     #     experiment_data=experiment_data,
     #     inducing_points=inducing_points,
-    #     title=f"{plot_title} Tempered",
+    #     title=plot_title,
     #     save_path=os.path.join(
     #         plot_curve_path,
-    #         f"{model_name}-tempered.png",
+    #         f"{model_name}.png",
     #     ),
     # )
-    set_seed(svgp_config["seed"])
-    calculate_metrics(
-        model=svgp_conformalised,
-        experiment_data=experiment_data,
-        model_name="svgp-conformalised",
-        dataset_name=type(curve_function).__name__.lower(),
-        results_path=results_path,
-        plots_path=plot_curve_path,
-    )
-    if include_gif:
-        animate_1d_gp_predictions(
-            experiment_data=experiment_data,
-            inducing_points=inducing_points,
-            mean=deepcopy(svgp.mean),
-            kernel=deepcopy(svgp.kernel),
-            likelihood=gpytorch.likelihoods.GaussianLikelihood(),
-            seed=svgp_config["seed"],
-            number_of_epochs=len(losses),
-            batch_size=svgp_config["batch_size"],
-            learning_rate=best_learning_rate,
-            title=plot_title,
-            save_path=os.path.join(
-                plot_curve_path,
-                f"{model_name}.gif",
-            ),
-            learn_inducing_locations=False,
-            learn_kernel_parameters=False,
-            christmas_colours=svgp_config["christmas_colours"]
-            if "christmas_colours" in pls_config
-            else False,
-        )
+    # plot_1d_gp_prediction_and_inducing_points(
+    #     model=svgp_conformalised,
+    #     experiment_data=experiment_data,
+    #     inducing_points=inducing_points,
+    #     title=f"{plot_title} Conformalised",
+    #     save_path=os.path.join(
+    #         plot_curve_path,
+    #         f"{model_name}-conformalised.png",
+    #     ),
+    # )
+    # # plot_1d_gp_prediction_and_inducing_points(
+    # #     model=svgp_tempered,
+    # #     experiment_data=experiment_data,
+    # #     inducing_points=inducing_points,
+    # #     title=f"{plot_title} Tempered",
+    # #     save_path=os.path.join(
+    # #         plot_curve_path,
+    # #         f"{model_name}-tempered.png",
+    # #     ),
+    # # )
+    # set_seed(svgp_config["seed"])
+    # calculate_metrics(
+    #     model=svgp_conformalised,
+    #     experiment_data=experiment_data,
+    #     model_name="svgp-conformalised",
+    #     dataset_name=type(curve_function).__name__.lower(),
+    #     results_path=results_path,
+    #     plots_path=plot_curve_path,
+    # )
+    # if include_gif:
+    #     animate_1d_gp_predictions(
+    #         experiment_data=experiment_data,
+    #         inducing_points=inducing_points,
+    #         mean=deepcopy(svgp.mean),
+    #         kernel=deepcopy(svgp.kernel),
+    #         likelihood=gpytorch.likelihoods.GaussianLikelihood(),
+    #         seed=svgp_config["seed"],
+    #         number_of_epochs=len(losses),
+    #         batch_size=svgp_config["batch_size"],
+    #         learning_rate=best_learning_rate,
+    #         title=plot_title,
+    #         save_path=os.path.join(
+    #             plot_curve_path,
+    #             f"{model_name}.gif",
+    #         ),
+    #         learn_inducing_locations=False,
+    #         learn_kernel_parameters=False,
+    #         christmas_colours=svgp_config["christmas_colours"]
+    #         if "christmas_colours" in pls_config
+    #         else False,
+    #     )
 
 
 if __name__ == "__main__":

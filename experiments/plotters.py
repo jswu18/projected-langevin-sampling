@@ -402,6 +402,14 @@ def plot_1d_gp_prediction_and_inducing_points(
             zorder=0,
             color="black",
         )
+    elif isinstance(model.likelihood, gpytorch.likelihoods.StudentTLikelihood):
+        fig, ax = plot_1d_gp_prediction(
+            fig=fig,
+            ax=ax,
+            x=experiment_data.full.x.reshape(-1).cpu(),
+            mean=prediction.mean.mean(axis=0).detach().reshape(-1).cpu(),
+            variance=prediction.variance.mean(axis=0).detach(),
+        )
     else:
         raise NotImplementedError
     fig.legend(

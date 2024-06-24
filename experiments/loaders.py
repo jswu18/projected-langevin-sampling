@@ -11,7 +11,9 @@ def load_pls(
     pls: ProjectedLangevinSampling,
     model_path: str,
 ) -> Tuple[ProjectedLangevinSampling, torch.Tensor, float, int]:
-    model_config = torch.load(model_path)
+    model_config = torch.load(
+        model_path, map_location="cuda" if torch.cuda.is_available() else "cpu"
+    )
     particles = model_config["particles"]
     pls.observation_noise = model_config["observation_noise"]
     print(f"Loaded particles and observation_noise from {model_path=}.")
@@ -44,7 +46,9 @@ def load_svgp(
         learn_inducing_locations=learn_inducing_locations,
         likelihood=likelihood,
     )
-    loaded_states = torch.load(model_path)
+    loaded_states = torch.load(
+        model_path, map_location="cuda" if torch.cuda.is_available() else "cpu"
+    )
     model.load_state_dict(loaded_states["model"])
     print(f"Loaded svGP model from {model_path=}.")
     best_learning_rate = None
@@ -60,8 +64,12 @@ def load_ard_exact_gp_model(
     mean: gpytorch.means.Mean,
     kernel: gpytorch.kernels.Kernel,
 ) -> Tuple[ExactGP, torch.Tensor]:
-    data = torch.load(data_path)
-    model_state_dict = torch.load(model_path)
+    data = torch.load(
+        data_path, map_location="cuda" if torch.cuda.is_available() else "cpu"
+    )
+    model_state_dict = torch.load(
+        model_path, map_location="cuda" if torch.cuda.is_available() else "cpu"
+    )
     model = ExactGP(
         x=data.x,
         y=data.y,
