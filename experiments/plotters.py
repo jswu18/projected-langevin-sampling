@@ -44,7 +44,7 @@ def plot_1d_gp_prediction(
     variance = variance.cpu().detach() if variance is not None else None
     if variance is not None:
         stdev = torch.sqrt(variance)
-        confidence_interval_scale = scipy.special.ndtri((coverage + 1) / 2)
+        confidence_interval_scale = scipy.stats.norm.interval(coverage)[1]
         ax.fill_between(
             x.reshape(-1),
             (mean - confidence_interval_scale * stdev).reshape(-1),

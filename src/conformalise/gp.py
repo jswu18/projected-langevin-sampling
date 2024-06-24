@@ -37,7 +37,7 @@ class ConformaliseGP(ConformaliseBase):
         :return: Tuple of lower and upper bounds of shape (1, N).
         """
         prediction = self.gp.likelihood(self.gp(x))
-        confidence_interval_scale = scipy.special.ndtri((coverage + 1) / 2)
+        confidence_interval_scale = scipy.stats.norm.interval(coverage)[1]
         lower_bound = prediction.mean - confidence_interval_scale * torch.sqrt(
             prediction.variance
         )

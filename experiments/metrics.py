@@ -89,7 +89,7 @@ def calculate_coverage(
     coverage: float = 0.95,
 ) -> float:
     if isinstance(prediction, gpytorch.distributions.MultivariateNormal):
-        confidence_interval_scale = scipy.special.ndtri((coverage + 1) / 2)
+        confidence_interval_scale = scipy.stats.norm.interval(coverage)[1]
         lower_bound = prediction.mean - confidence_interval_scale * torch.sqrt(
             prediction.variance
         )
