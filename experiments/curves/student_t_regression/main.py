@@ -20,6 +20,7 @@ from experiments.loaders import load_pls, load_svgp
 from experiments.metrics import calculate_metrics, concatenate_metrics
 from experiments.plotters import (
     animate_1d_gp_predictions,
+    plot_1d_conformal_prediction,
     plot_1d_experiment_data,
     plot_1d_gp_prediction_and_inducing_points,
 )
@@ -114,6 +115,7 @@ def main(
     inducing_points_config: Dict[str, Any],
     pls_config: Dict[str, Any],
     svgp_config: Dict[str, Any],
+    metrics_config: Dict[str, Any],
     outputs_path: str,
     include_gif: bool,
 ) -> None:
@@ -196,6 +198,20 @@ def main(
         plot_1d_subsample_path=None,
         plot_loss_path=plot_curve_path,
     )
+    for i, exact_gp_iter in enumerate(subsample_gp_models):
+        plot_1d_gp_prediction_and_inducing_points(
+            model=exact_gp_iter,
+            experiment_data=experiment_data,
+            inducing_points=None,
+            title=f"Subsample GP {i}" if len(subsample_gp_models) > 1 else "Exact GP",
+            save_path=os.path.join(
+                plot_curve_path,
+                f"subsample-gp-{i}.png"
+                if len(subsample_gp_models) > 1
+                else "exact-gp.png",
+            ),
+            coverage=metrics_config["coverage"],
+        )
     exact_gp_predictions = [
         model.likelihood(model(experiment_data.train.x))
         for model in subsample_gp_models
@@ -287,6 +303,7 @@ def main(
         plot_particles_path=plot_curve_path,
         plot_title=plot_title,
         number_of_particles_to_plot=10,
+        coverage=metrics_config["coverage"],
     )
     if os.path.exists(pls_path):
         pls, particles, best_lr, number_of_epochs = load_pls(
@@ -341,14 +358,17 @@ def main(
         plot_particles_path=plot_curve_path,
         plot_title=plot_title,
         number_of_particles_to_plot=10,
+        coverage=metrics_config["coverage"],
     )
-    plot_pls_1d_particles_runner(
-        pls=pls_conformalised,
-        particles=particles,
-        particle_name=f"{pls.name}-learned-conformalised",
+    plot_1d_conformal_prediction(
+        model=pls_conformalised,
         experiment_data=experiment_data,
-        plot_particles_path=plot_curve_path,
         plot_title=f"{plot_title} Conformalised",
+        coverage=metrics_config["coverage"],
+        save_path=os.path.join(
+            plot_curve_path,
+            f"{pls.name}-conformalised.png",
+        ),
     )
     set_seed(pls_config["seed"])
     calculate_metrics(
@@ -359,6 +379,7 @@ def main(
         experiment_data=experiment_data,
         results_path=results_path,
         plots_path=plot_curve_path,
+        coverage=metrics_config["coverage"],
     )
     # plot_pls_1d_particles_runner(
     #     pls=pls_tempered,
@@ -386,120 +407,123 @@ def main(
             initial_particles_noise_only=pls_config["initial_particles_noise_only"],
         )
 
-    # plot_title = "SVGP for Regression"
-    # model_name = f"svgp-r"
-    # svgp_model_path = os.path.join(models_path, f"{model_name}.pth")
-    # if os.path.exists(svgp_model_path):
-    #     svgp, losses, best_learning_rate = load_svgp(
-    #         model_path=svgp_model_path,
-    #         x_induce=inducing_points.x,
-    #         mean=gpytorch.means.ConstantMean(),
-    #         kernel=deepcopy(pls_kernel),
-    #         likelihood=gpytorch.likelihoods.GaussianLikelihood(),
-    #         learn_inducing_locations=False,
-    #     )
-    # else:
-    #     svgp, losses, best_learning_rate = train_svgp_runner(
-    #         model_name=model_name,
-    #         experiment_data=experiment_data,
-    #         inducing_points=inducing_points,
-    #         mean=gpytorch.means.ConstantMean(),
-    #         kernel=deepcopy(pls_kernel),
-    #         likelihood=gpytorch.likelihoods.GaussianLikelihood(),
-    #         seed=svgp_config["seed"],
-    #         number_of_epochs=svgp_config["number_of_epochs"],
-    #         batch_size=svgp_config["batch_size"],
-    #         learning_rate_upper=svgp_config["learning_rate_upper"],
-    #         learning_rate_lower=svgp_config["learning_rate_lower"],
-    #         number_of_learning_rate_searches=svgp_config[
-    #             "number_of_learning_rate_searches"
-    #         ],
-    #         is_fixed=True,
-    #         observation_noise=float(exact_svgp.likelihood.noise),
-    #         early_stopper_patience=svgp_config["early_stopper_patience"],
-    #         models_path=os.path.join(models_path, f"{model_name}-kernel-iterations"),
-    #         plot_title=plot_title,
-    #         plot_loss_path=plot_curve_path,
-    #     )
-    #     torch.save(
-    #         {
-    #             "model": svgp.state_dict(),
-    #             "losses": losses,
-    #             "best_learning_rate": best_learning_rate,
-    #         },
-    #         os.path.join(models_path, f"{model_name}.pth"),
-    #     )
-    # svgp_conformalised = ConformaliseGP(
+    plot_title = "SVGP for Regression"
+    model_name = f"svgp-r"
+    svgp_model_path = os.path.join(models_path, f"{model_name}.pth")
+
+    if os.path.exists(svgp_model_path):
+        svgp, losses, best_learning_rate = load_svgp(
+            model_path=svgp_model_path,
+            x_induce=inducing_points.x,
+            mean=gpytorch.means.ConstantMean(),
+            kernel=deepcopy(pls_kernel),
+            likelihood=gpytorch.likelihoods.StudentTLikelihood(),
+            learn_inducing_locations=False,
+        )
+    else:
+        svgp, losses, best_learning_rate = train_svgp_runner(
+            model_name=model_name,
+            experiment_data=experiment_data,
+            inducing_points=inducing_points,
+            mean=gpytorch.means.ConstantMean(),
+            kernel=deepcopy(pls_kernel),
+            likelihood=gpytorch.likelihoods.StudentTLikelihood(),
+            seed=svgp_config["seed"],
+            number_of_epochs=svgp_config["number_of_epochs"],
+            batch_size=svgp_config["batch_size"],
+            learning_rate_upper=svgp_config["learning_rate_upper"],
+            learning_rate_lower=svgp_config["learning_rate_lower"],
+            number_of_learning_rate_searches=svgp_config[
+                "number_of_learning_rate_searches"
+            ],
+            is_fixed=True,
+            observation_noise=float(likelihood.noise),
+            early_stopper_patience=svgp_config["early_stopper_patience"],
+            models_path=os.path.join(models_path, f"{model_name}-kernel-iterations"),
+            plot_title=plot_title,
+            plot_loss_path=plot_curve_path,
+        )
+        torch.save(
+            {
+                "model": svgp.state_dict(),
+                "losses": losses,
+                "best_learning_rate": best_learning_rate,
+            },
+            os.path.join(models_path, f"{model_name}.pth"),
+        )
+    svgp_conformalised = ConformaliseGP(
+        x_calibration=experiment_data.validation.x,
+        y_calibration=experiment_data.validation.y,
+        gp=svgp,
+    )
+    # svgp_tempered = TemperGP(
     #     x_calibration=experiment_data.validation.x,
     #     y_calibration=experiment_data.validation.y,
     #     gp=svgp,
     # )
-    # # svgp_tempered = TemperGP(
-    # #     x_calibration=experiment_data.validation.x,
-    # #     y_calibration=experiment_data.validation.y,
-    # #     gp=svgp,
-    # # )
+    plot_1d_gp_prediction_and_inducing_points(
+        model=svgp,
+        experiment_data=experiment_data,
+        inducing_points=inducing_points,
+        title=plot_title,
+        save_path=os.path.join(
+            plot_curve_path,
+            f"{model_name}.png",
+        ),
+        coverage=metrics_config["coverage"],
+    )
+    plot_1d_conformal_prediction(
+        model=svgp_conformalised,
+        experiment_data=experiment_data,
+        plot_title=f"{plot_title} Conformalised",
+        coverage=metrics_config["coverage"],
+        save_path=os.path.join(
+            plot_curve_path,
+            f"{model_name}-conformalised.png",
+        ),
+    )
     # plot_1d_gp_prediction_and_inducing_points(
-    #     model=svgp,
+    #     model=svgp_tempered,
     #     experiment_data=experiment_data,
     #     inducing_points=inducing_points,
-    #     title=plot_title,
+    #     title=f"{plot_title} Tempered",
     #     save_path=os.path.join(
     #         plot_curve_path,
-    #         f"{model_name}.png",
+    #         f"{model_name}-tempered.png",
     #     ),
     # )
-    # plot_1d_gp_prediction_and_inducing_points(
-    #     model=svgp_conformalised,
-    #     experiment_data=experiment_data,
-    #     inducing_points=inducing_points,
-    #     title=f"{plot_title} Conformalised",
-    #     save_path=os.path.join(
-    #         plot_curve_path,
-    #         f"{model_name}-conformalised.png",
-    #     ),
-    # )
-    # # plot_1d_gp_prediction_and_inducing_points(
-    # #     model=svgp_tempered,
-    # #     experiment_data=experiment_data,
-    # #     inducing_points=inducing_points,
-    # #     title=f"{plot_title} Tempered",
-    # #     save_path=os.path.join(
-    # #         plot_curve_path,
-    # #         f"{model_name}-tempered.png",
-    # #     ),
-    # # )
-    # set_seed(svgp_config["seed"])
-    # calculate_metrics(
-    #     model=svgp_conformalised,
-    #     experiment_data=experiment_data,
-    #     model_name="svgp-conformalised",
-    #     dataset_name=type(curve_function).__name__.lower(),
-    #     results_path=results_path,
-    #     plots_path=plot_curve_path,
-    # )
-    # if include_gif:
-    #     animate_1d_gp_predictions(
-    #         experiment_data=experiment_data,
-    #         inducing_points=inducing_points,
-    #         mean=deepcopy(svgp.mean),
-    #         kernel=deepcopy(svgp.kernel),
-    #         likelihood=gpytorch.likelihoods.GaussianLikelihood(),
-    #         seed=svgp_config["seed"],
-    #         number_of_epochs=len(losses),
-    #         batch_size=svgp_config["batch_size"],
-    #         learning_rate=best_learning_rate,
-    #         title=plot_title,
-    #         save_path=os.path.join(
-    #             plot_curve_path,
-    #             f"{model_name}.gif",
-    #         ),
-    #         learn_inducing_locations=False,
-    #         learn_kernel_parameters=False,
-    #         christmas_colours=svgp_config["christmas_colours"]
-    #         if "christmas_colours" in pls_config
-    #         else False,
-    #     )
+    set_seed(svgp_config["seed"])
+    calculate_metrics(
+        model=svgp_conformalised,
+        experiment_data=experiment_data,
+        model_name="svgp-conformalised",
+        dataset_name=type(curve_function).__name__.lower(),
+        results_path=results_path,
+        plots_path=plot_curve_path,
+        coverage=metrics_config["coverage"],
+    )
+    if include_gif:
+        animate_1d_gp_predictions(
+            experiment_data=experiment_data,
+            inducing_points=inducing_points,
+            mean=deepcopy(svgp.mean),
+            kernel=deepcopy(svgp.kernel),
+            likelihood=gpytorch.likelihoods.StudentTLikelihood(),
+            seed=svgp_config["seed"],
+            number_of_epochs=len(losses),
+            batch_size=svgp_config["batch_size"],
+            learning_rate=best_learning_rate,
+            title=plot_title,
+            save_path=os.path.join(
+                plot_curve_path,
+                f"{model_name}.gif",
+            ),
+            learn_inducing_locations=False,
+            learn_kernel_parameters=False,
+            christmas_colours=svgp_config["christmas_colours"]
+            if "christmas_colours" in pls_config
+            else False,
+        )
 
 
 if __name__ == "__main__":
@@ -516,6 +540,7 @@ if __name__ == "__main__":
             inducing_points_config=loaded_config["inducing_points"],
             pls_config=loaded_config["pls"],
             svgp_config=loaded_config["svgp"],
+            metrics_config=loaded_config["metrics"],
             outputs_path=outputs_path,
             include_gif=args.include_gif,
         )
@@ -530,5 +555,12 @@ if __name__ == "__main__":
             type(curve_function_).__name__.lower()
             for curve_function_ in CURVE_FUNCTIONS
         ],
-        metrics=["mae", "mse", "nll", "average_interval_width", "coverage"],
+        metrics=[
+            "mae",
+            "mse",
+            "nll",
+            "average_interval_width",
+            "median_interval_width",
+            "coverage",
+        ],
     )

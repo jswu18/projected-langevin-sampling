@@ -2,6 +2,7 @@ import os
 from typing import List, Union
 
 import gpytorch
+import numpy as np
 import pandas as pd
 import scipy
 import sklearn
@@ -11,15 +12,21 @@ from experiments.data import ExperimentData
 from experiments.plotters import plot_true_versus_predicted
 from experiments.utils import create_directory
 from src.conformalise import ConformaliseBase
+from src.conformalise.base import ConformalPrediction
+from src.conformalise.gp import ConformaliseGP
+from src.conformalise.pls import ConformalisePLS
 from src.distributions import StudentTMarginals
 from src.gps import ExactGP, svGP
 from src.projected_langevin_sampling import ProjectedLangevinSampling
+from src.projected_langevin_sampling.costs.student_t import StudentTCost
 from src.temper import TemperBase
 from src.utils import set_seed
 
 
 def calculate_mae(
-    prediction: torch.distributions.Distribution,
+    prediction: torch.distributions.Distribution
+    | ConformalPrediction
+    | StudentTMarginals,
     y: torch.Tensor,
 ) -> float:
     if isinstance(prediction, gpytorch.distributions.MultivariateNormal):
@@ -33,12 +40,16 @@ def calculate_mae(
         return prediction.rate.sub(y).abs().mean().item()
     elif isinstance(prediction, StudentTMarginals):
         return prediction.loc.sub(y).abs().mean().item()
+    elif isinstance(prediction, ConformalPrediction):
+        return prediction.mean.sub(y).abs().mean().item()
     else:
         raise ValueError(f"Prediction type {type(prediction)} not supported")
 
 
 def calculate_mse(
-    prediction: torch.distributions.Distribution,
+    prediction: torch.distributions.Distribution
+    | ConformalPrediction
+    | StudentTMarginals,
     y: torch.Tensor,
 ) -> float:
     if isinstance(prediction, gpytorch.distributions.MultivariateNormal):
@@ -52,12 +63,16 @@ def calculate_mse(
         return prediction.rate.sub(y).pow(2).mean().item()
     elif isinstance(prediction, StudentTMarginals):
         return prediction.loc.sub(y).pow(2).mean().item()
+    elif isinstance(prediction, ConformalPrediction):
+        return prediction.mean.sub(y).pow(2).mean().item()
     else:
         raise ValueError(f"Prediction type {type(prediction)} not supported")
 
 
 def calculate_nll(
-    prediction: torch.distributions.Distribution,
+    prediction: torch.distributions.Distribution
+    | ConformalPrediction
+    | StudentTMarginals,
     y: torch.Tensor,
 ) -> float:
     if isinstance(prediction, gpytorch.distributions.MultivariateNormal):
@@ -78,39 +93,54 @@ def calculate_nll(
             reduction="mean",
         ).item()
     elif isinstance(prediction, StudentTMarginals):
-        return prediction.negative_log_likelihood(y)
+        return prediction.negative_log_likelihood(y).item()
+    elif isinstance(prediction, ConformalPrediction):
+        assert (
+            prediction.coverage == 2 / 3
+        ), f"NLL calculation needs 2/3 coverage, got {prediction.coverage=}"
+        # average the NLLs for each point by taking half the width of the coverage interval
+        # as the standard deviation
+        lower, upper = prediction.lower, prediction.upper
+        std = (upper - lower) / 2
+        return np.mean(
+            [
+                -scipy.stats.norm.logpdf(y_i, loc=mean_i, scale=std_i)
+                for y_i, mean_i, std_i in zip(
+                    y.cpu().detach().numpy(),
+                    prediction.mean.cpu().detach().numpy(),
+                    std.cpu().detach().numpy(),
+                )
+            ]
+        ).item()
     else:
         raise ValueError(f"Prediction type {type(prediction)} not supported")
 
 
 def calculate_coverage(
-    prediction: torch.distributions.Distribution,
+    prediction: ConformalPrediction,
     y: torch.Tensor,
-    coverage: float = 0.95,
 ) -> float:
-    if isinstance(prediction, gpytorch.distributions.MultivariateNormal):
-        confidence_interval_scale = scipy.stats.norm.interval(coverage)[1]
-        lower_bound = prediction.mean - confidence_interval_scale * torch.sqrt(
-            prediction.variance
-        )
-        upper_bound = prediction.mean + confidence_interval_scale * torch.sqrt(
-            prediction.variance
-        )
-        return ((lower_bound <= y) & (y <= upper_bound)).float().mean().item()
-    else:
-        raise ValueError(f"Prediction type {type(prediction)} not supported")
+    return ((prediction.lower <= y) & (y <= prediction.upper)).float().mean().item()
 
 
 def calculate_average_interval_width(
     model: ConformaliseBase,
     x: torch.Tensor,
     coverage: float,
-    y_std: float,
 ) -> float:
     return model.calculate_average_interval_width(
         x=x,
         coverage=coverage,
-    ).item()
+    )
+
+
+def calculate_median_interval_width(
+    model: ConformaliseBase,
+    x: torch.Tensor,
+    coverage: float,
+) -> float:
+    lower, upper = model.predict_coverage(x=x, coverage=coverage)
+    return torch.median(upper - lower).item()
 
 
 def calculate_metrics(
@@ -122,13 +152,21 @@ def calculate_metrics(
     dataset_name: str,
     results_path: str,
     plots_path: str,
+    coverage: float,
     particles: torch.Tensor | None = None,
 ):
+    assert experiment_data.train is not None
+    assert experiment_data.test is not None
+
     create_directory(os.path.join(results_path, model_name))
     for data in [
         experiment_data.train,
         experiment_data.test,
     ]:
+        assert data is not None
+        assert data.x is not None
+        assert data.y is not None
+
         experiment_data.train.x.cpu()
         experiment_data.train.y.cpu()
         experiment_data.test.x.cpu()
@@ -137,9 +175,9 @@ def calculate_metrics(
         set_seed(0)
         if isinstance(model, svGP) or isinstance(model, ExactGP):
             prediction = model.likelihood(model(data.x))
-        elif isinstance(model, TemperBase) or isinstance(model, ConformaliseBase):
-            prediction = model(data.x)
-        elif isinstance(model, ProjectedLangevinSampling):
+        elif isinstance(model, ConformaliseBase):
+            prediction = model(x=data.x, coverage=coverage)
+        elif isinstance(model, ProjectedLangevinSampling) and particles is not None:
             prediction = model(x=data.x, particles=particles)
         else:
             raise ValueError(f"Model type {type(model)} not supported")
@@ -159,14 +197,13 @@ def calculate_metrics(
             os.path.join(results_path, model_name, f"mse_{data.name}.csv"),
             index_label="dataset",
         )
-        if isinstance(prediction, gpytorch.distributions.MultivariateNormal):
-            coverage = calculate_coverage(
+        if isinstance(prediction, ConformalPrediction):
+            prediction_coverage = calculate_coverage(
                 prediction=prediction,
                 y=data.y,
-                coverage=0.95,
             )
             pd.DataFrame(
-                [[coverage]], columns=[model_name], index=[dataset_name]
+                [[prediction_coverage]], columns=[model_name], index=[dataset_name]
             ).to_csv(
                 os.path.join(results_path, model_name, f"coverage_{data.name}.csv"),
                 index_label="dataset",
@@ -175,11 +212,18 @@ def calculate_metrics(
             isinstance(prediction, gpytorch.distributions.MultivariateNormal)
             or isinstance(prediction, torch.distributions.Bernoulli)
             or isinstance(prediction, torch.distributions.Poisson)
+            or isinstance(prediction, ConformalPrediction)
         ):
-            nll = calculate_nll(
-                prediction=prediction,
-                y=data.y,
-            )
+            if isinstance(model, ConformaliseBase):
+                nll = calculate_nll(
+                    prediction=model(x=data.x, coverage=2 / 3),
+                    y=data.y,
+                )
+            else:
+                nll = calculate_nll(
+                    prediction=prediction,
+                    y=data.y,
+                )
             pd.DataFrame([[nll]], columns=[model_name], index=[dataset_name]).to_csv(
                 os.path.join(results_path, model_name, f"nll_{data.name}.csv"),
                 index_label="dataset",
@@ -223,11 +267,28 @@ def calculate_metrics(
             )
 
         if isinstance(model, ConformaliseBase):
+            median_interval_width = calculate_median_interval_width(
+                model=model,
+                x=data.x,
+                coverage=coverage,
+            )
+            pd.DataFrame(
+                [[median_interval_width]],
+                columns=[model_name],
+                index=[dataset_name],
+            ).to_csv(
+                os.path.join(
+                    results_path,
+                    model_name,
+                    f"median_interval_width_{data.name}.csv",
+                ),
+                index_label="dataset",
+            )
+
             average_interval_width = calculate_average_interval_width(
                 model=model,
                 x=data.x,
-                coverage=0.95,
-                y_std=experiment_data.y_std,
+                coverage=coverage,
             )
             pd.DataFrame(
                 [[average_interval_width]],
@@ -250,7 +311,9 @@ def calculate_metrics(
             save_path=os.path.join(
                 plots_path, model_name, f"true_versus_predicted_{data.name}.png"
             ),
-            error_bar=True,
+            coverage=coverage,
+            error_bar=isinstance(prediction, ConformalPrediction)
+            or isinstance(prediction, gpytorch.distributions.MultivariateNormal),
         )
 
 

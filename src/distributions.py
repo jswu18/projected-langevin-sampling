@@ -24,17 +24,19 @@ class StudentTMarginals:
         :param y: The y values of shape (n,).
         :return: The average log probability.
         """
-        return -np.mean(
-            [
-                gpytorch.distributions.base_distributions.StudentT(
-                    df=self.df,
-                    loc=loc_,
-                    scale=scale_,
-                )
-                .log_prob(y_)
-                .cpu()
-                .detach()
-                .numpy()
-                for loc_, scale_, y_ in zip(self.loc, self.scale, y)
-            ]
+        return -torch.tensor(
+            np.mean(
+                [
+                    gpytorch.distributions.base_distributions.StudentT(
+                        df=self.df,
+                        loc=loc_,
+                        scale=scale_,
+                    )
+                    .log_prob(y_)
+                    .cpu()
+                    .detach()
+                    .numpy()
+                    for loc_, scale_, y_ in zip(self.loc, self.scale, y)
+                ]
+            )
         )

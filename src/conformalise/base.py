@@ -1,9 +1,17 @@
 from abc import ABC, abstractmethod
-from typing import Tuple, Union
+from dataclasses import dataclass
+from typing import Tuple
 
-import gpytorch.distributions
 import numpy as np
 import torch
+
+
+@dataclass
+class ConformalPrediction:
+    coverage: float
+    mean: torch.Tensor
+    lower: torch.Tensor
+    upper: torch.Tensor
 
 
 class ConformaliseBase(ABC):
@@ -108,46 +116,44 @@ class ConformaliseBase(ABC):
     def calculate_average_interval_width(
         self,
         x: torch.Tensor,
-        coverage: Union[float, torch.Tensor],
-    ) -> torch.Tensor:
+        coverage: float,
+    ) -> float:
         """
         Calculates the average interval width for a given input and coverage percentage.
-        :param x: Input data of shape (n, d).
+        :param x: Input data of shape (N, D).
         :param coverage: The coverage percentage.
         :return: The average interval width.
         """
         lower, upper = self.predict_coverage(x=x, coverage=coverage)
-        return torch.mean(upper - lower)
+        return torch.mean(upper - lower).item()
 
     def predict_variance(
         self,
         x: torch.Tensor,
     ) -> torch.Tensor:
         """
-        Returns variance predictions for a given input.
+        Returns variance predictions for a given input as
+        half the width of the coverage interval at 2/3 coverage.
         :param x: Input data of shape (N, D).
         :return: Variance predictions of shape (1, N).
         """
-        lower, upper = self.predict_coverage(x=x, coverage=0.666)
+        lower, upper = self.predict_coverage(x=x, coverage=2 / 3)
         return (upper - lower) / 2
 
-    def predict(
-        self, x: torch.Tensor, jitter=1e-20
-    ) -> gpytorch.distributions.MultivariateNormal:
+    def predict(self, x: torch.Tensor, coverage: float) -> ConformalPrediction:
         """
         Returns a predictive distribution for a given input.
         :param x: Input data of shape (N, D).
         :param jitter: A small value to add to the diagonal of the covariance matrix.
         :return: Predictive distribution.
         """
-        return gpytorch.distributions.MultivariateNormal(
+        lower, upper = self.predict_coverage(x=x, coverage=coverage)
+        return ConformalPrediction(
+            coverage=coverage,
             mean=self.predict_median(x=x),
-            covariance_matrix=torch.diag(
-                torch.clip(self.predict_variance(x=x), jitter, None)
-            ),
+            lower=lower,
+            upper=upper,
         )
 
-    def __call__(
-        self, x: torch.Tensor, jitter=1e-20
-    ) -> gpytorch.distributions.MultivariateNormal:
-        return self.predict(x=x, jitter=jitter)
+    def __call__(self, x: torch.Tensor, coverage: float) -> ConformalPrediction:
+        return self.predict(x=x, coverage=coverage)

@@ -27,6 +27,7 @@ from experiments.utils import create_directory
 from src.bisection_search import LogBisectionSearch
 from src.conformalise import ConformalisePLS
 from src.gps import svGP
+from src.gps.exact_gp import ExactGP
 from src.inducing_point_selectors import InducingPointSelector
 from src.projected_langevin_sampling import ProjectedLangevinSampling
 from src.samplers import sample_point
@@ -100,7 +101,7 @@ def exact_gp_runner(
     plot_1d_subsample_path: str | None = None,
     plot_loss_path: str | None = None,
     number_of_classes: int = 1,
-) -> List[gpytorch.models.GP]:
+) -> List[ExactGP]:
     """
     Trains an exact GP on the full data or a subsample of the data, depending on the training data size.
     """
@@ -188,11 +189,12 @@ def exact_gp_runner(
 
 
 def plot_pls_1d_particles_runner(
-    pls: Union[ProjectedLangevinSampling, ConformalisePLS],
+    pls: ProjectedLangevinSampling,
     particles: torch.Tensor,
     particle_name: str,
     experiment_data: ExperimentData,
     plot_particles_path: str,
+    coverage: float = 0.95,
     plot_title: str | None = None,
     number_of_particles_to_plot: int | None = None,
 ) -> None:
@@ -225,6 +227,7 @@ def plot_pls_1d_particles_runner(
         x=experiment_data.full.x,
         predicted_samples=predicted_samples,
         predicted_distribution=predicted_distribution,
+        coverage=coverage,
         title=f"{plot_title}" if plot_title is not None else None,
         save_path=os.path.join(
             plot_particles_path,
@@ -527,6 +530,7 @@ def train_svgp_runner(
     likelihood: Union[
         gpytorch.likelihoods.GaussianLikelihood,
         gpytorch.likelihoods.BernoulliLikelihood,
+        gpytorch.likelihoods.StudentTLikelihood,
     ],
     seed: int,
     number_of_epochs: int,

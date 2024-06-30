@@ -33,3 +33,5 @@ svgp:
   learning_rate_lower: 1.0e-3
   number_of_learning_rate_searches: 3
   early_stopper_patience: 100.0
+metrics:
+  coverage: 0.95

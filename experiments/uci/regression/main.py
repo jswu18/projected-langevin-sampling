@@ -95,6 +95,7 @@ def main(
     inducing_points_config: Dict[str, Any],
     pls_config: Dict[str, Any],
     svgp_config: Dict[str, Any],
+    metrics_config: Dict[str, Any],
     outputs_path: str,
 ) -> None:
     print(f"Running experiment for {dataset_name=} and {data_seed=}.")
@@ -244,22 +245,24 @@ def main(
             experiment_data=experiment_data,
             results_path=results_path,
             plots_path=plots_path,
+            coverage=metrics_config["coverage"],
         )
-        set_seed(pls_config["seed"])
-        calculate_metrics(
-            model=TemperPLS(
-                pls=pls,
-                particles=particles,
-                x_calibration=experiment_data.validation.x,
-                y_calibration=experiment_data.validation.y,
-            ),
-            particles=particles,
-            model_name=f"{pls_name}-temper",
-            dataset_name=dataset_name,
-            experiment_data=experiment_data,
-            results_path=results_path,
-            plots_path=plots_path,
-        )
+        # set_seed(pls_config["seed"])
+        # calculate_metrics(
+        #     model=TemperPLS(
+        #         pls=pls,
+        #         particles=particles,
+        #         x_calibration=experiment_data.validation.x,
+        #         y_calibration=experiment_data.validation.y,
+        #     ),
+        #     particles=particles,
+        #     model_name=f"{pls_name}-temper",
+        #     dataset_name=dataset_name,
+        #     experiment_data=experiment_data,
+        #     results_path=results_path,
+        #     plots_path=plots_path,
+        #     coverage=metrics_config["coverage"],
+        # )
         set_seed(pls_config["seed"])
         calculate_metrics(
             model=ConformalisePLS(
@@ -274,6 +277,7 @@ def main(
             experiment_data=experiment_data,
             results_path=results_path,
             plots_path=plots_path,
+            coverage=metrics_config["coverage"],
         )
 
     model_name = "svgp"
@@ -326,20 +330,22 @@ def main(
         experiment_data=experiment_data,
         results_path=results_path,
         plots_path=plots_path,
+        coverage=metrics_config["coverage"],
     )
-    set_seed(svgp_config["seed"])
-    calculate_metrics(
-        model=TemperGP(
-            gp=svgp,
-            x_calibration=experiment_data.validation.x,
-            y_calibration=experiment_data.validation.y,
-        ),
-        model_name=f"{model_name}-temper",
-        dataset_name=dataset_name,
-        experiment_data=experiment_data,
-        results_path=results_path,
-        plots_path=plots_path,
-    )
+    # set_seed(svgp_config["seed"])
+    # calculate_metrics(
+    #     model=TemperGP(
+    #         gp=svgp,
+    #         x_calibration=experiment_data.validation.x,
+    #         y_calibration=experiment_data.validation.y,
+    #     ),
+    #     model_name=f"{model_name}-temper",
+    #     dataset_name=dataset_name,
+    #     experiment_data=experiment_data,
+    #     results_path=results_path,
+    #     plots_path=plots_path,
+    #     coverage=metrics_config["coverage"],
+    # )
     set_seed(svgp_config["seed"])
     calculate_metrics(
         model=ConformaliseGP(
@@ -352,6 +358,7 @@ def main(
         dataset_name=dataset_name,
         results_path=results_path,
         plots_path=plots_path,
+        coverage=metrics_config["coverage"],
     )
 
 
@@ -376,19 +383,20 @@ if __name__ == "__main__":
                 inducing_points_config=loaded_config["inducing_points"],
                 pls_config=loaded_config["pls"],
                 svgp_config=loaded_config["svgp"],
+                metrics_config=loaded_config["metrics"],
                 outputs_path=outputs_path,
             )
         concatenate_metrics(
             results_path=os.path.join(outputs_path, str(data_seed), "results"),
             data_types=["train", "test"],
             model_names=[
-                "pls-onb",
-                "pls-onb-temper",
+                # "pls-onb",
+                # "pls-onb-temper",
                 "pls-onb-conformalise",
-                "svgp",
-                "svgp-temper",
+                # "svgp",
+                # "svgp-temper",
                 "svgp-conformalise",
             ],
             datasets=list(RegressionDatasetSchema.__members__.keys()),
-            metrics=["mae", "mse", "nll", "coverage"],
+            metrics=["mae", "mse", "nll", "average_interval_width", "coverage"],
         )

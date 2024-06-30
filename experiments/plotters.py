@@ -11,6 +11,7 @@ from tqdm import tqdm
 
 from experiments.data import Data, ExperimentData, ProblemType
 from src.conformalise import ConformaliseGP
+from src.conformalise.base import ConformaliseBase, ConformalPrediction
 from src.distributions import StudentTMarginals
 from src.gps import ExactGP, svGP
 from src.kernels import PLSKernel
@@ -199,6 +200,7 @@ def plot_1d_pls_prediction(
     experiment_data: ExperimentData,
     x: torch.Tensor,
     save_path: str,
+    coverage: float = 0.95,
     predicted_samples: torch.Tensor | None = None,
     y_name: str | None = None,
     predicted_distribution: torch.distributions.Distribution | None = None,
@@ -226,6 +228,7 @@ def plot_1d_pls_prediction(
                 x=experiment_data.full.x,
                 mean=predicted_distribution.mean.detach(),
                 variance=predicted_distribution.variance.detach(),
+                coverage=coverage,
             )
         elif isinstance(predicted_distribution, torch.distributions.Bernoulli):
             fig, ax = plot_1d_gp_prediction(
@@ -242,6 +245,7 @@ def plot_1d_pls_prediction(
                 x=experiment_data.full.x,
                 mean=predicted_distribution.rate.detach(),
                 variance=None,
+                coverage=coverage,
             )
         elif isinstance(predicted_distribution, StudentTMarginals):
             fig, ax = plot_1d_gp_prediction(
@@ -250,6 +254,7 @@ def plot_1d_pls_prediction(
                 x=experiment_data.full.x,
                 mean=predicted_distribution.loc,
                 variance=predicted_distribution.scale**2,
+                coverage=coverage,
             )
         else:
             raise TypeError
@@ -363,12 +368,15 @@ def plot_losses(
 
 
 def plot_1d_gp_prediction_and_inducing_points(
-    model: Union[ExactGP, svGP, ConformaliseGP],
+    model: Union[ExactGP, svGP],
     experiment_data: ExperimentData,
     title: str,
     save_path: str,
     inducing_points: Data | None = None,
+    coverage: float = 0.95,
 ):
+    model.eval()
+    model.likelihood.eval()
     fig, ax = plt.subplots(figsize=(5, 3), layout="constrained")
     fig, ax = plot_1d_experiment_data(
         fig=fig,
@@ -393,6 +401,7 @@ def plot_1d_gp_prediction_and_inducing_points(
             x=experiment_data.full.x.cpu(),
             mean=prediction.mean.detach(),
             variance=prediction.variance.detach(),
+            coverage=coverage,
         )
     elif isinstance(model.likelihood, gpytorch.likelihoods.BernoulliLikelihood):
         ax.plot(
@@ -407,8 +416,11 @@ def plot_1d_gp_prediction_and_inducing_points(
             fig=fig,
             ax=ax,
             x=experiment_data.full.x.reshape(-1).cpu(),
-            mean=prediction.mean.mean(axis=0).detach().reshape(-1).cpu(),
+            mean=prediction.mean.mean(axis=0).detach().reshape(-1).cpu()
+            if prediction.mean.dim() == 2
+            else prediction.mean.detach().reshape(-1).cpu(),
             variance=prediction.variance.mean(axis=0).detach(),
+            coverage=coverage,
         )
     else:
         raise NotImplementedError
@@ -418,6 +430,59 @@ def plot_1d_gp_prediction_and_inducing_points(
     )
     ax.set_title(title)
 
+    fig.savefig(save_path)
+    plt.close(fig)
+
+
+def plot_1d_conformal_prediction(
+    model: ConformaliseBase,
+    experiment_data: ExperimentData,
+    plot_title: str,
+    save_path: str,
+    coverage: float,
+    inducing_points: Data | None = None,
+):
+    fig, ax = plt.subplots(figsize=(5, 3), layout="constrained")
+    fig, ax = plot_1d_experiment_data(
+        fig=fig,
+        ax=ax,
+        experiment_data=experiment_data,
+    )
+    if inducing_points is not None:
+        for i in range(inducing_points.x.shape[0]):
+            plt.axvline(
+                x=float(inducing_points.x[i].cpu()),
+                color="black",
+                alpha=0.2,
+                label="induce" if i == 0 else None,
+                zorder=1,
+            )
+    ax.autoscale(enable=False)  # turn off autoscale before plotting gp prediction
+    prediction = model.predict(x=experiment_data.full.x, coverage=coverage)
+    ax.fill_between(
+        experiment_data.full.x.reshape(-1).cpu().detach().numpy(),
+        prediction.lower.reshape(-1).cpu().detach().numpy(),
+        prediction.upper.reshape(-1).cpu().detach().numpy(),
+        facecolor=(0.9, 0.9, 0.9),
+        label=f"{coverage*100}% error",
+        zorder=0,
+    )
+    ax.plot(
+        experiment_data.full.x.reshape(-1).cpu().detach().numpy(),
+        prediction.mean.reshape(-1).cpu().detach().numpy(),
+        label="mean",
+        zorder=1,
+        color="black",
+        linewidth=0.5,
+    )
+    ax.set_xlabel("x")
+    ax.set_ylabel("y")
+    if plot_title is not None:
+        ax.set_title(plot_title)
+    fig.legend(
+        loc="outside lower center",
+        ncols=3,
+    )
     fig.savefig(save_path)
     plt.close(fig)
 
@@ -460,20 +525,36 @@ def plot_energy_potentials(
 
 def plot_true_versus_predicted(
     y_true: torch.Tensor,
-    y_pred: gpytorch.distributions.MultivariateNormal,
+    y_pred: gpytorch.distributions.MultivariateNormal | ConformalPrediction,
     title: str,
     save_path: str,
+    coverage: float,
     error_bar: bool = True,
 ):
     fig, ax = plt.subplots(figsize=(13, 13), layout="constrained")
     if error_bar:
-        _, _, bars = plt.errorbar(
-            y_true.cpu().detach().numpy(),
-            y_pred.mean.cpu().detach().numpy(),
-            yerr=1.96 * y_pred.stddev.cpu().detach().numpy(),
-            fmt="o",
-            elinewidth=0.5,
-        )
+        if isinstance(y_pred, gpytorch.distributions.MultivariateNormal):
+            confidence_interval_scale = scipy.stats.norm.interval(coverage)[1]
+            _, _, bars = plt.errorbar(
+                y_true.cpu().detach().numpy(),
+                y_pred.mean.cpu().detach().numpy(),
+                yerr=confidence_interval_scale * y_pred.variance.cpu().detach().numpy(),
+                fmt="o",
+                elinewidth=0.5,
+            )
+            [bar.set_alpha(0.5) for bar in bars]
+        elif isinstance(y_pred, ConformalPrediction):
+            assert coverage == y_pred.coverage, f"{coverage=}!={y_pred.coverage=}"
+            _, _, bars = plt.errorbar(
+                y_true.cpu().detach().numpy(),
+                y_pred.mean.cpu().detach().numpy(),
+                yerr=[
+                    (y_pred.mean - y_pred.lower).cpu().detach().numpy().clip(0, None),
+                    (y_pred.upper - y_pred.mean).cpu().detach().numpy().clip(0, None),
+                ],
+                fmt="o",
+                elinewidth=0.5,
+            )
         [bar.set_alpha(0.5) for bar in bars]
     else:
         plt.scatter(
@@ -484,7 +565,7 @@ def plot_true_versus_predicted(
     ax.set_xlabel("true")
     ax.set_ylabel("predicted")
     if error_bar:
-        ax.set_title(f"{title} (95% confidence interval)")
+        ax.set_title(f"{title} ({coverage*100}% confidence interval)")
     else:
         ax.set_title(title)
     axis_lims = [
@@ -815,6 +896,7 @@ def animate_1d_gp_predictions(
     likelihood: Union[
         gpytorch.likelihoods.GaussianLikelihood,
         gpytorch.likelihoods.BernoulliLikelihood,
+        gpytorch.likelihoods.StudentTLikelihood,
     ],
     seed: int,
     number_of_epochs: int,

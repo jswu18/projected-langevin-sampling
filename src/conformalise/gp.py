@@ -1,5 +1,6 @@
 from typing import Tuple, Union
 
+import gpytorch
 import scipy
 import torch
 
@@ -44,7 +45,12 @@ class ConformaliseGP(ConformaliseBase):
         upper_bound = prediction.mean + confidence_interval_scale * torch.sqrt(
             prediction.variance
         )
-        return lower_bound, upper_bound
+        if isinstance(self.gp.likelihood, gpytorch.likelihoods.GaussianLikelihood):
+            return lower_bound, upper_bound
+        elif isinstance(self.gp.likelihood, gpytorch.likelihoods.StudentTLikelihood):
+            return lower_bound.mean(axis=0), upper_bound.mean(axis=0)
+        else:
+            raise ValueError(f"Unknown likelihood type: {type(self.gp.likelihood)=}")
 
     def predict_median(self, x: torch.Tensor) -> torch.Tensor:
         """
