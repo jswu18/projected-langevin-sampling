@@ -1,5 +1,6 @@
 data:
-  train_data_percentage: 0.75
+  train_data_percentage: 0.8
+  validation_data_percentage: 0.1
 kernel:
   seed: 0
   learning_rate: 1.0e-2
@@ -32,3 +33,5 @@ svgp:
   learning_rate_lower: 1.0e-4
   number_of_learning_rate_searches: 3
   early_stopper_patience: 100.0
+metrics:
+  coverage: None

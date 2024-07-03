@@ -51,6 +51,7 @@ parser.add_argument(
 def get_experiment_data(
     seed: int,
     train_data_percentage: float,
+    validation_data_percentage: float,
     dataset_name: str,
 ) -> ExperimentData:
     df = pd.read_csv(
@@ -82,6 +83,7 @@ def get_experiment_data(
         x=x,
         y=y,
         train_data_percentage=train_data_percentage,
+        validation_data_percentage=validation_data_percentage,
         normalise=False,
     )
     return experiment_data
@@ -95,6 +97,7 @@ def main(
     inducing_points_config: Dict[str, Any],
     pls_config: Dict[str, Any],
     svgp_config: Dict[str, Any],
+    metrics_config: Dict[str, Any],
     outputs_path: str,
 ) -> None:
     print(f"Running experiment for {dataset_name=} and {data_seed=}.")
@@ -122,6 +125,7 @@ def main(
         experiment_data = get_experiment_data(
             seed=data_seed,
             train_data_percentage=data_config["train_data_percentage"],
+            validation_data_percentage=data_config["validation_data_percentage"],
             dataset_name=dataset_name,
         )
         experiment_data.save(experiment_data_path)
@@ -248,6 +252,7 @@ def main(
             experiment_data=experiment_data,
             results_path=results_path,
             plots_path=plots_path,
+            coverage=metrics_config["coverage"],
         )
 
     model_name = f"svgp"
@@ -300,6 +305,7 @@ def main(
         experiment_data=experiment_data,
         results_path=results_path,
         plots_path=plots_path,
+        coverage=metrics_config["coverage"],
     )
 
 
@@ -324,6 +330,7 @@ if __name__ == "__main__":
                 inducing_points_config=loaded_config["inducing_points"],
                 pls_config=loaded_config["pls"],
                 svgp_config=loaded_config["svgp"],
+                metrics_config=loaded_config["metrics"],
                 outputs_path=outputs_path,
             )
         concatenate_metrics(

@@ -421,7 +421,7 @@ class RegressionDatasetSchema(str, enum.Enum):
     # naval_compressor = "naval_compressor"
     # naval_turbine = "naval_turbine"
     power = "power"
-    # protein = "protein"
+    protein = "protein"
     wine_quality = "wine_quality"
     yacht = "yacht"
 
@@ -436,7 +436,7 @@ class ClassificationDatasetSchema(str, enum.Enum):
     ionosphere = "ionosphere"
     mushrooms = "mushrooms"
     rice = "rice"
-    # spam = "spam"
+    spam = "spam"
     wine_colour = "wine_colour"
     yeast = "yeast"
 
@@ -450,7 +450,7 @@ DATASET_SCHEMA_MAPPING = {
     # RegressionDatasetSchema.naval_compressor: NavalCompressorDataset,
     # RegressionDatasetSchema.naval_turbine: NavalTurbineDataset,
     RegressionDatasetSchema.power: PowerDataset,
-    # RegressionDatasetSchema.protein: ProteinDataset,
+    RegressionDatasetSchema.protein: ProteinDataset,
     RegressionDatasetSchema.wine_quality: WineQualityDataset,
     RegressionDatasetSchema.yacht: YachtDataset,
     ClassificationDatasetSchema.breast: BreastDataset,
@@ -462,7 +462,7 @@ DATASET_SCHEMA_MAPPING = {
     ClassificationDatasetSchema.ionosphere: IonosphereDataset,
     ClassificationDatasetSchema.mushrooms: MushroomsDataset,
     ClassificationDatasetSchema.rice: RiceDataset,
-    # ClassificationDatasetSchema.spam: SpamDataset,
+    ClassificationDatasetSchema.spam: SpamDataset,
     ClassificationDatasetSchema.wine_colour: WineColourDataset,
     ClassificationDatasetSchema.yeast: YeastDataset,
 }
