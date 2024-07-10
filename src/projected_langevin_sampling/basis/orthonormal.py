@@ -139,6 +139,7 @@ class OrthonormalBasis(PLSBasis):
         :param step_size: A step size for the projected Langevin sampling update in the form of a scalar.
         :return: The update to be applied to the particles of size (M, J).
         """
+        # TODO: just sample IID from univariate normal
         noise_vector = sample_multivariate_normal(
             mean=torch.zeros(particles.shape[0]),
             cov=torch.eye(particles.shape[0]),

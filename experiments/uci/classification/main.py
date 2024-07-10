@@ -321,25 +321,31 @@ if __name__ == "__main__":
     outputs_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "outputs")
     for data_seed in data_seeds:
         for dataset_schema in ClassificationDatasetSchema:
-            dataset_name = str(dataset_schema.name)
-            main(
-                data_seed=data_seed,
-                dataset_name=dataset_name,
-                data_config=loaded_config["data"],
-                kernel_config=loaded_config["kernel"],
-                inducing_points_config=loaded_config["inducing_points"],
-                pls_config=loaded_config["pls"],
-                svgp_config=loaded_config["svgp"],
-                metrics_config=loaded_config["metrics"],
-                outputs_path=outputs_path,
+            try:
+                dataset_name = str(dataset_schema.name)
+                main(
+                    data_seed=data_seed,
+                    dataset_name=dataset_name,
+                    data_config=loaded_config["data"],
+                    kernel_config=loaded_config["kernel"],
+                    inducing_points_config=loaded_config["inducing_points"],
+                    pls_config=loaded_config["pls"],
+                    svgp_config=loaded_config["svgp"],
+                    metrics_config=loaded_config["metrics"],
+                    outputs_path=outputs_path,
+                )
+            except Exception as e:
+                print(f"Error with {dataset_schema.name=} and {data_seed=}:{e}")
+        try:
+            concatenate_metrics(
+                results_path=os.path.join(outputs_path, str(data_seed), "results"),
+                data_types=["train", "test"],
+                model_names=[
+                    "pls-onb",
+                    "svgp",
+                ],
+                datasets=list(ClassificationDatasetSchema.__members__.keys()),
+                metrics=["mae", "mse", "nll", "acc", "auc", "f1"],
             )
-        concatenate_metrics(
-            results_path=os.path.join(outputs_path, str(data_seed), "results"),
-            data_types=["train", "test"],
-            model_names=[
-                "pls-onb",
-                "svgp",
-            ],
-            datasets=list(ClassificationDatasetSchema.__members__.keys()),
-            metrics=["mae", "mse", "nll", "acc", "auc", "f1"],
-        )
+        except Exception as e:
+            print(f"Error with concatenating metrics for {data_seed=}:{e}")

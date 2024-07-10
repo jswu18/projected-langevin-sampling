@@ -213,6 +213,7 @@ def calculate_metrics(
             or isinstance(prediction, torch.distributions.Bernoulli)
             or isinstance(prediction, torch.distributions.Poisson)
             or isinstance(prediction, ConformalPrediction)
+            or isinstance(prediction, StudentTMarginals)
         ):
             if isinstance(model, ConformaliseBase):
                 nll = calculate_nll(

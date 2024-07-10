@@ -6,6 +6,7 @@ from typing import Any, Dict
 
 import gpytorch
 import pandas as pd
+import scipy
 import torch
 import yaml
 
@@ -32,6 +33,7 @@ from src.kernels import PLSKernel
 from src.projected_langevin_sampling import ProjectedLangevinSampling
 from src.projected_langevin_sampling.basis import InducingPointBasis, OrthonormalBasis
 from src.projected_langevin_sampling.costs import GaussianCost
+from src.projected_langevin_sampling.costs.student_t import StudentTCost
 from src.projected_langevin_sampling.link_functions import IdentityLinkFunction
 from src.temper import TemperGP, TemperPLS
 from src.utils import set_seed
@@ -183,10 +185,56 @@ def main(
         y_train=experiment_data.train.y,
         link_function=IdentityLinkFunction(),
     )
+
+    for model in subsample_gp_models:
+        model.eval()
+        model.likelihood.eval()
+    exact_gp_predictions = [
+        model.likelihood(model(experiment_data.train.x))
+        for model in subsample_gp_models
+    ]
+    residuals = (
+        torch.stack(
+            (
+                [
+                    experiment_data.train.y - prediction.mean
+                    for prediction in exact_gp_predictions
+                ]
+            ),
+            axis=1,
+        )
+        .mean(
+            axis=1,
+        )
+        .cpu()
+        .detach()
+        .numpy()
+    )
+    degrees_of_freedom, _, _ = scipy.stats.t.fit(residuals, floc=0)
+    t_noise_distribution = torch.distributions.studentT.StudentT(
+        loc=0.0,
+        scale=likelihood.noise,
+        df=degrees_of_freedom,
+    )
+    student_onb_basis = OrthonormalBasis(
+        kernel=pls_kernel,
+        x_induce=inducing_points.x,
+        x_train=experiment_data.train.x,
+        additional_predictive_noise_distribution=t_noise_distribution,
+    )
+    student_cost = StudentTCost(
+        degrees_of_freedom=degrees_of_freedom,
+        y_train=experiment_data.train.y,
+        link_function=IdentityLinkFunction(),
+    )
     pls_dict = {
         "pls-onb": ProjectedLangevinSampling(
             basis=onb_basis,
             cost=gaussian_cost,
+        ),
+        "pls-student-onb": ProjectedLangevinSampling(
+            basis=student_onb_basis,
+            cost=student_cost,
         ),
     }
     for pls_name, pls in pls_dict.items():
@@ -375,28 +423,35 @@ if __name__ == "__main__":
     outputs_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "outputs")
     for data_seed in data_seeds:
         for dataset_schema in RegressionDatasetSchema:
-            main(
-                data_seed=data_seed,
-                dataset_name=str(dataset_schema.name),
-                data_config=loaded_config["data"],
-                kernel_config=loaded_config["kernel"],
-                inducing_points_config=loaded_config["inducing_points"],
-                pls_config=loaded_config["pls"],
-                svgp_config=loaded_config["svgp"],
-                metrics_config=loaded_config["metrics"],
-                outputs_path=outputs_path,
+            try:
+                main(
+                    data_seed=data_seed,
+                    dataset_name=str(dataset_schema.name),
+                    data_config=loaded_config["data"],
+                    kernel_config=loaded_config["kernel"],
+                    inducing_points_config=loaded_config["inducing_points"],
+                    pls_config=loaded_config["pls"],
+                    svgp_config=loaded_config["svgp"],
+                    metrics_config=loaded_config["metrics"],
+                    outputs_path=outputs_path,
+                )
+            except Exception as e:
+                print(f"Error with {dataset_schema.name=} and {data_seed=}:{e}")
+        try:
+            concatenate_metrics(
+                results_path=os.path.join(outputs_path, str(data_seed), "results"),
+                data_types=["train", "test"],
+                model_names=[
+                    # "pls-onb",
+                    # "pls-onb-temper",
+                    "pls-onb-conformalise",
+                    "pls-student-onb-conformalise",
+                    # "svgp",
+                    # "svgp-temper",
+                    "svgp-conformalise",
+                ],
+                datasets=list(RegressionDatasetSchema.__members__.keys()),
+                metrics=["mae", "mse", "nll", "average_interval_width", "coverage"],
             )
-        concatenate_metrics(
-            results_path=os.path.join(outputs_path, str(data_seed), "results"),
-            data_types=["train", "test"],
-            model_names=[
-                # "pls-onb",
-                # "pls-onb-temper",
-                "pls-onb-conformalise",
-                # "svgp",
-                # "svgp-temper",
-                "svgp-conformalise",
-            ],
-            datasets=list(RegressionDatasetSchema.__members__.keys()),
-            metrics=["mae", "mse", "nll", "average_interval_width", "coverage"],
-        )
+        except Exception as e:
+            print(f"Error with concatenating metrics for {data_seed=}:{e}")

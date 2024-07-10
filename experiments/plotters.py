@@ -525,19 +525,22 @@ def plot_energy_potentials(
 
 def plot_true_versus_predicted(
     y_true: torch.Tensor,
-    y_pred: gpytorch.distributions.MultivariateNormal | ConformalPrediction,
+    y_pred: gpytorch.distributions.MultivariateNormal
+    | ConformalPrediction
+    | StudentTMarginals,
     title: str,
     save_path: str,
     coverage: float,
     error_bar: bool = True,
 ):
     fig, ax = plt.subplots(figsize=(13, 13), layout="constrained")
+    y_pred_mean = y_pred.loc if isinstance(y_pred, StudentTMarginals) else y_pred.mean
     if error_bar:
         if isinstance(y_pred, gpytorch.distributions.MultivariateNormal):
             confidence_interval_scale = scipy.stats.norm.interval(coverage)[1]
             _, _, bars = plt.errorbar(
                 y_true.cpu().detach().numpy(),
-                y_pred.mean.cpu().detach().numpy(),
+                y_pred_mean.cpu().detach().numpy(),
                 yerr=confidence_interval_scale * y_pred.variance.cpu().detach().numpy(),
                 fmt="o",
                 elinewidth=0.5,
@@ -547,7 +550,7 @@ def plot_true_versus_predicted(
             assert coverage == y_pred.coverage, f"{coverage=}!={y_pred.coverage=}"
             _, _, bars = plt.errorbar(
                 y_true.cpu().detach().numpy(),
-                y_pred.mean.cpu().detach().numpy(),
+                y_pred_mean.cpu().detach().numpy(),
                 yerr=[
                     (y_pred.mean - y_pred.lower).cpu().detach().numpy().clip(0, None),
                     (y_pred.upper - y_pred.mean).cpu().detach().numpy().clip(0, None),
@@ -559,7 +562,7 @@ def plot_true_versus_predicted(
     else:
         plt.scatter(
             y_true.cpu().detach().numpy(),
-            y_pred.mean.cpu().detach().numpy(),
+            y_pred_mean.cpu().detach().numpy(),
             marker="o",
         )
     ax.set_xlabel("true")
@@ -569,8 +572,8 @@ def plot_true_versus_predicted(
     else:
         ax.set_title(title)
     axis_lims = [
-        min(y_true.min().cpu().item(), y_pred.mean.min().cpu().item()),
-        max(y_true.max().cpu().item(), y_pred.mean.max().cpu().item()),
+        min(y_true.min().cpu().item(), y_pred_mean.min().cpu().item()),
+        max(y_true.max().cpu().item(), y_pred_mean.max().cpu().item()),
     ]
     plt.plot(axis_lims, axis_lims, color="gray", label="target", linestyle="dashed")
     plt.xlim(axis_lims)
