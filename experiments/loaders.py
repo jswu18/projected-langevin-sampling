@@ -36,6 +36,7 @@ def load_svgp(
     likelihood: Union[
         gpytorch.likelihoods.GaussianLikelihood,
         gpytorch.likelihoods.BernoulliLikelihood,
+        gpytorch.likelihoods.StudentTLikelihood,
     ],
     learn_inducing_locations: bool,
 ) -> Tuple[svGP, torch.Tensor, float]:

@@ -93,6 +93,8 @@ def train_svgp(
             likelihood, gpytorch.likelihoods.GaussianLikelihood
         ) or isinstance(likelihood, gpytorch.likelihoods.BernoulliLikelihood):
             model.likelihood.noise_covar.noise.data.fill_(likelihood_noise)
+        if isinstance(likelihood, gpytorch.likelihoods.StudentTLikelihood):
+            model.likelihood.noise.data.fill_(likelihood_noise)
     model.train()
     model.likelihood.train()
 

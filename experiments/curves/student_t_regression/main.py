@@ -5,10 +5,12 @@ from copy import deepcopy
 from typing import Any, Dict
 
 import gpytorch
+import gpytorch.constraints
 import matplotlib.pyplot as plt
 import scipy
 import torch
 import yaml
+from gpytorch.constraints import Interval
 
 from experiments.constructors import (
     construct_average_ard_kernel,
@@ -233,7 +235,8 @@ def main(
         .detach()
         .numpy()
     )
-    degrees_of_freedom, _, _ = scipy.stats.t.fit(residuals, floc=0)
+    degrees_of_freedom, loc, scale = scipy.stats.t.fit(residuals, floc=0)
+    print(f"{loc=} and {scale=}")
     average_ard_kernel = construct_average_ard_kernel(
         kernels=[model.kernel for model in subsample_gp_models]
     )
@@ -285,6 +288,7 @@ def main(
         degrees_of_freedom=degrees_of_freedom,
         y_train=experiment_data.train.y,
         link_function=IdentityLinkFunction(),
+        scale=scale,
     )
     plot_title = "PLS for Student T Regression"
     pls = ProjectedLangevinSampling(basis=onb_basis, cost=cost, name="pls-onb")
@@ -410,6 +414,16 @@ def main(
     plot_title = "SVGP for Regression"
     model_name = f"svgp-r"
     svgp_model_path = os.path.join(models_path, f"{model_name}.pth")
+    likelihood = gpytorch.likelihoods.StudentTLikelihood()
+    likelihood.deg_free = degrees_of_freedom
+    # hacky solution for now, should have this as a fixed value
+    likelihood.register_constraint(
+        param_name="raw_deg_free",
+        constraint=gpytorch.constraints.Interval(
+            lower_bound=degrees_of_freedom,
+            upper_bound=degrees_of_freedom + 1e-10,
+        ),
+    )
 
     if os.path.exists(svgp_model_path):
         svgp, losses, best_learning_rate = load_svgp(
@@ -417,7 +431,7 @@ def main(
             x_induce=inducing_points.x,
             mean=gpytorch.means.ConstantMean(),
             kernel=deepcopy(pls_kernel),
-            likelihood=gpytorch.likelihoods.StudentTLikelihood(),
+            likelihood=likelihood,
             learn_inducing_locations=False,
         )
     else:
@@ -427,7 +441,7 @@ def main(
             inducing_points=inducing_points,
             mean=gpytorch.means.ConstantMean(),
             kernel=deepcopy(pls_kernel),
-            likelihood=gpytorch.likelihoods.StudentTLikelihood(),
+            likelihood=likelihood,
             seed=svgp_config["seed"],
             number_of_epochs=svgp_config["number_of_epochs"],
             batch_size=svgp_config["batch_size"],

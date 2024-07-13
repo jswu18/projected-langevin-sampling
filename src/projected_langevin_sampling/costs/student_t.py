@@ -24,6 +24,7 @@ class StudentTCost(PLSCost):
         degrees_of_freedom: float,
         y_train: torch.Tensor,
         link_function: PLSLinkFunction,
+        scale: float = 1.0,
     ):
         """
         Constructor for the Student T cost function. This requires the degrees of freedom.
@@ -34,6 +35,7 @@ class StudentTCost(PLSCost):
         super().__init__(link_function=link_function, observation_noise=None)
         self.y_train = y_train
         self.degrees_of_freedom = degrees_of_freedom
+        self.scale = scale
 
     def predict(
         self,
@@ -47,7 +49,7 @@ class StudentTCost(PLSCost):
         return StudentTMarginals(
             df=self.degrees_of_freedom,
             loc=self.link_function(prediction_samples).mean(dim=1),
-            scale=self.link_function(prediction_samples).std(dim=1),
+            scale=self.scale * torch.ones((prediction_samples.shape[0])),
         )
 
     def calculate_cost(
@@ -64,7 +66,9 @@ class StudentTCost(PLSCost):
         return (
             0.5
             * (self.degrees_of_freedom + 1)
-            * torch.log(1 + torch.square(errors) / self.degrees_of_freedom).sum(dim=1)
+            * torch.log(
+                1 + torch.square(errors) / (self.degrees_of_freedom * (self.scale**2))
+            ).sum(dim=1)
         )
 
     def _calculate_cost_derivative_identity_link_function(
@@ -80,7 +84,7 @@ class StudentTCost(PLSCost):
         )
         errors = train_prediction_samples - self.y_train[:, None]
         return (self.degrees_of_freedom + 1) * torch.divide(
-            errors, (self.degrees_of_freedom + torch.square(errors))
+            errors, (self.degrees_of_freedom * (self.scale**2) + torch.square(errors))
         )
 
     def calculate_cost_derivative(
