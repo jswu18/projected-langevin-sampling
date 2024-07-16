@@ -328,86 +328,101 @@ def main(
             coverage=metrics_config["coverage"],
         )
 
-    model_name = "svgp"
-    svgp_model_path = os.path.join(models_path, f"{model_name}.pth")
-    if os.path.exists(svgp_model_path):
-        svgp, _, _ = load_svgp(
-            model_path=svgp_model_path,
-            x_induce=inducing_points.x,
-            mean=gpytorch.means.ConstantMean(),
-            kernel=deepcopy(pls_kernel),
-            likelihood=gpytorch.likelihoods.GaussianLikelihood(),
-            learn_inducing_locations=False,
-        )
-    else:
-        svgp, losses, best_learning_rate = train_svgp_runner(
-            model_name=model_name,
-            experiment_data=experiment_data,
-            inducing_points=inducing_points,
-            mean=gpytorch.means.ConstantMean(),
-            kernel=deepcopy(pls_kernel),
-            likelihood=gpytorch.likelihoods.GaussianLikelihood(),
-            seed=svgp_config["seed"],
-            number_of_epochs=svgp_config["number_of_epochs"],
-            batch_size=svgp_config["batch_size"],
-            learning_rate_upper=svgp_config["learning_rate_upper"],
-            learning_rate_lower=svgp_config["learning_rate_lower"],
-            number_of_learning_rate_searches=svgp_config[
-                "number_of_learning_rate_searches"
-            ],
-            is_fixed=True,
-            observation_noise=float(likelihood.noise),
-            early_stopper_patience=svgp_config["early_stopper_patience"],
-            models_path=os.path.join(models_path, f"{model_name}-kernel-iterations"),
-            plot_title=f"{dataset_name}",
-            plot_loss_path=plots_path,
-        )
-        torch.save(
-            {
-                "model": svgp.state_dict(),
-                "losses": losses,
-                "best_learning_rate": best_learning_rate,
-            },
-            os.path.join(models_path, f"{model_name}.pth"),
-        )
-    set_seed(svgp_config["seed"])
-    calculate_metrics(
-        model=svgp,
-        model_name=model_name,
-        dataset_name=dataset_name,
-        experiment_data=experiment_data,
-        results_path=results_path,
-        plots_path=plots_path,
-        coverage=metrics_config["coverage"],
-    )
-    # set_seed(svgp_config["seed"])
-    # calculate_metrics(
-    #     model=TemperGP(
-    #         gp=svgp,
-    #         x_calibration=experiment_data.validation.x,
-    #         y_calibration=experiment_data.validation.y,
-    #     ),
-    #     model_name=f"{model_name}-temper",
-    #     dataset_name=dataset_name,
-    #     experiment_data=experiment_data,
-    #     results_path=results_path,
-    #     plots_path=plots_path,
-    #     coverage=metrics_config["coverage"],
-    # )
-    set_seed(svgp_config["seed"])
-    calculate_metrics(
-        model=ConformaliseGP(
-            gp=svgp,
-            x_calibration=experiment_data.validation.x,
-            y_calibration=experiment_data.validation.y,
+
+    student_likelihood = gpytorch.likelihoods.StudentTLikelihood()
+    student_likelihood.deg_free = degrees_of_freedom
+    # hacky solution for now, should have this as a fixed value
+    student_likelihood.register_constraint(
+        param_name="raw_deg_free",
+        constraint=gpytorch.constraints.Interval(
+            lower_bound=degrees_of_freedom,
+            upper_bound=degrees_of_freedom + 1e-10,
         ),
-        experiment_data=experiment_data,
-        model_name=f"{model_name}-conformalise",
-        dataset_name=dataset_name,
-        results_path=results_path,
-        plots_path=plots_path,
-        coverage=metrics_config["coverage"],
     )
+    likelihood_dict = {
+        "svgp": gpytorch.likelihoods.GaussianLikelihood(),
+        "svgp-student": student_likelihood
+    }
+    for model_name, likelihood in likelihood_dict.items():
+        svgp_model_path = os.path.join(models_path, f"{model_name}.pth")
+        if os.path.exists(svgp_model_path):
+            svgp, _, _ = load_svgp(
+                model_path=svgp_model_path,
+                x_induce=inducing_points.x,
+                mean=gpytorch.means.ConstantMean(),
+                kernel=deepcopy(pls_kernel),
+                likelihood=likelihood,
+                learn_inducing_locations=False,
+            )
+        else:
+            svgp, losses, best_learning_rate = train_svgp_runner(
+                model_name=model_name,
+                experiment_data=experiment_data,
+                inducing_points=inducing_points,
+                mean=gpytorch.means.ConstantMean(),
+                kernel=deepcopy(pls_kernel),
+                likelihood=likelihood,
+                seed=svgp_config["seed"],
+                number_of_epochs=svgp_config["number_of_epochs"],
+                batch_size=svgp_config["batch_size"],
+                learning_rate_upper=svgp_config["learning_rate_upper"],
+                learning_rate_lower=svgp_config["learning_rate_lower"],
+                number_of_learning_rate_searches=svgp_config[
+                    "number_of_learning_rate_searches"
+                ],
+                is_fixed=True,
+                observation_noise=float(likelihood.noise),
+                early_stopper_patience=svgp_config["early_stopper_patience"],
+                models_path=os.path.join(models_path, f"{model_name}-kernel-iterations"),
+                plot_title=f"{dataset_name}",
+                plot_loss_path=plots_path,
+            )
+            torch.save(
+                {
+                    "model": svgp.state_dict(),
+                    "losses": losses,
+                    "best_learning_rate": best_learning_rate,
+                },
+                os.path.join(models_path, f"{model_name}.pth"),
+            )
+        set_seed(svgp_config["seed"])
+        calculate_metrics(
+            model=svgp,
+            model_name=model_name,
+            dataset_name=dataset_name,
+            experiment_data=experiment_data,
+            results_path=results_path,
+            plots_path=plots_path,
+            coverage=metrics_config["coverage"],
+        )
+        # set_seed(svgp_config["seed"])
+        # calculate_metrics(
+        #     model=TemperGP(
+        #         gp=svgp,
+        #         x_calibration=experiment_data.validation.x,
+        #         y_calibration=experiment_data.validation.y,
+        #     ),
+        #     model_name=f"{model_name}-temper",
+        #     dataset_name=dataset_name,
+        #     experiment_data=experiment_data,
+        #     results_path=results_path,
+        #     plots_path=plots_path,
+        #     coverage=metrics_config["coverage"],
+        # )
+        set_seed(svgp_config["seed"])
+        calculate_metrics(
+            model=ConformaliseGP(
+                gp=svgp,
+                x_calibration=experiment_data.validation.x,
+                y_calibration=experiment_data.validation.y,
+            ),
+            experiment_data=experiment_data,
+            model_name=f"{model_name}-conformalise",
+            dataset_name=dataset_name,
+            results_path=results_path,
+            plots_path=plots_path,
+            coverage=metrics_config["coverage"],
+        )
 
 
 if __name__ == "__main__":
