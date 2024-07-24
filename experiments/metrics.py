@@ -40,6 +40,8 @@ def calculate_mae(
         return prediction.rate.sub(y).abs().mean().item()
     elif isinstance(prediction, StudentTMarginals):
         return prediction.loc.sub(y).abs().mean().item()
+    elif isinstance(prediction, torch.distributions.studentT.StudentT):
+        return prediction.loc.sub(y).abs().mean().item()
     elif isinstance(prediction, ConformalPrediction):
         return prediction.mean.sub(y).abs().mean().item()
     else:
@@ -62,6 +64,8 @@ def calculate_mse(
     elif isinstance(prediction, torch.distributions.Poisson):
         return prediction.rate.sub(y).pow(2).mean().item()
     elif isinstance(prediction, StudentTMarginals):
+        return prediction.loc.sub(y).pow(2).mean().item()
+    elif isinstance(prediction, torch.distributions.studentT.StudentT):
         return prediction.loc.sub(y).pow(2).mean().item()
     elif isinstance(prediction, ConformalPrediction):
         return prediction.mean.sub(y).pow(2).mean().item()
@@ -94,6 +98,8 @@ def calculate_nll(
         ).item()
     elif isinstance(prediction, StudentTMarginals):
         return prediction.negative_log_likelihood(y).item()
+    elif isinstance(prediction, torch.distributions.studentT.StudentT):
+        return prediction.log_prob(y).mean().item()
     elif isinstance(prediction, ConformalPrediction):
         assert (
             prediction.coverage == 2 / 3
@@ -214,6 +220,7 @@ def calculate_metrics(
             or isinstance(prediction, torch.distributions.Poisson)
             or isinstance(prediction, ConformalPrediction)
             or isinstance(prediction, StudentTMarginals)
+            or isinstance(prediction, torch.distributions.studentT.StudentT)
         ):
             if isinstance(model, ConformaliseBase):
                 nll = calculate_nll(
@@ -305,17 +312,18 @@ def calculate_metrics(
             )
 
         create_directory(os.path.join(plots_path, model_name))
-        plot_true_versus_predicted(
-            y_true=data.y,
-            y_pred=prediction,
-            title=f"True versus Predicted ({mae=:.2f},{mse=:.2f},{nll=:.2f}) ({dataset_name},{model_name},{data.name} data)",
-            save_path=os.path.join(
-                plots_path, model_name, f"true_versus_predicted_{data.name}.png"
-            ),
-            coverage=coverage,
-            error_bar=isinstance(prediction, ConformalPrediction)
-            or isinstance(prediction, gpytorch.distributions.MultivariateNormal),
-        )
+        if not isinstance(prediction, torch.distributions.studentT.StudentT):
+            plot_true_versus_predicted(
+                y_true=data.y,
+                y_pred=prediction,
+                title=f"True versus Predicted ({mae=:.2f},{mse=:.2f},{nll=:.2f}) ({dataset_name},{model_name},{data.name} data)",
+                save_path=os.path.join(
+                    plots_path, model_name, f"true_versus_predicted_{data.name}.png"
+                ),
+                coverage=coverage,
+                error_bar=isinstance(prediction, ConformalPrediction)
+                or isinstance(prediction, gpytorch.distributions.MultivariateNormal),
+            )
 
 
 def concatenate_metrics(

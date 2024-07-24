@@ -413,17 +413,17 @@ class YeastDataset(Dataset):
 
 
 class RegressionDatasetSchema(str, enum.Enum):
-    boston = "boston"
+    # boston = "boston"
     concrete = "concrete"
     energy_cooling = "energy_cooling"
     energy_heating = "energy_heating"
     kin8nm = "kin8nm"
     # naval_compressor = "naval_compressor"
     # naval_turbine = "naval_turbine"
-    power = "power"
-    protein = "protein"
+    # power = "power"
+    # protein = "protein"
     wine_quality = "wine_quality"
-    yacht = "yacht"
+    # yacht = "yacht"
 
 
 class ClassificationDatasetSchema(str, enum.Enum):
@@ -442,17 +442,17 @@ class ClassificationDatasetSchema(str, enum.Enum):
 
 
 DATASET_SCHEMA_MAPPING = {
-    RegressionDatasetSchema.boston: BostonDataset,
+    # RegressionDatasetSchema.boston: BostonDataset,
     RegressionDatasetSchema.concrete: ConcreteDataset,
     RegressionDatasetSchema.energy_cooling: EnergyCoolingDataset,
     RegressionDatasetSchema.energy_heating: EnergyHeatingDataset,
     RegressionDatasetSchema.kin8nm: Kin8nmDataset,
     # RegressionDatasetSchema.naval_compressor: NavalCompressorDataset,
     # RegressionDatasetSchema.naval_turbine: NavalTurbineDataset,
-    RegressionDatasetSchema.power: PowerDataset,
-    RegressionDatasetSchema.protein: ProteinDataset,
+    # RegressionDatasetSchema.power: PowerDataset,
+    # RegressionDatasetSchema.protein: ProteinDataset,
     RegressionDatasetSchema.wine_quality: WineQualityDataset,
-    RegressionDatasetSchema.yacht: YachtDataset,
+    # RegressionDatasetSchema.yacht: YachtDataset,
     ClassificationDatasetSchema.breast: BreastDataset,
     # ClassificationDatasetSchema.caffeine: CaffeineDataset,
     # ClassificationDatasetSchema.chocolate: ChocolateDataset,

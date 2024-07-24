@@ -210,7 +210,8 @@ def main(
         .detach()
         .numpy()
     )
-    degrees_of_freedom, _, _ = scipy.stats.t.fit(residuals, floc=0)
+    degrees_of_freedom, loc, scale = scipy.stats.t.fit(residuals, floc=0)
+    print(f"{loc=} and {scale=}")
     t_noise_distribution = torch.distributions.studentT.StudentT(
         loc=0.0,
         scale=likelihood.noise,
@@ -226,12 +227,13 @@ def main(
         degrees_of_freedom=degrees_of_freedom,
         y_train=experiment_data.train.y,
         link_function=IdentityLinkFunction(),
+        scale=scale,
     )
     pls_dict = {
-        "pls-onb": ProjectedLangevinSampling(
-            basis=onb_basis,
-            cost=gaussian_cost,
-        ),
+        # "pls-onb": ProjectedLangevinSampling(
+        #     basis=onb_basis,
+        #     cost=gaussian_cost,
+        # ),
         "pls-student-onb": ProjectedLangevinSampling(
             basis=student_onb_basis,
             cost=student_cost,
@@ -328,20 +330,18 @@ def main(
             coverage=metrics_config["coverage"],
         )
 
-
     student_likelihood = gpytorch.likelihoods.StudentTLikelihood()
-    student_likelihood.deg_free = degrees_of_freedom
     # hacky solution for now, should have this as a fixed value
     student_likelihood.register_constraint(
         param_name="raw_deg_free",
         constraint=gpytorch.constraints.Interval(
-            lower_bound=degrees_of_freedom,
+            lower_bound=degrees_of_freedom - 1e-10,
             upper_bound=degrees_of_freedom + 1e-10,
         ),
     )
     likelihood_dict = {
         "svgp": gpytorch.likelihoods.GaussianLikelihood(),
-        "svgp-student": student_likelihood
+        "svgp-student": student_likelihood,
     }
     for model_name, likelihood in likelihood_dict.items():
         svgp_model_path = os.path.join(models_path, f"{model_name}.pth")
@@ -373,7 +373,9 @@ def main(
                 is_fixed=True,
                 observation_noise=float(likelihood.noise),
                 early_stopper_patience=svgp_config["early_stopper_patience"],
-                models_path=os.path.join(models_path, f"{model_name}-kernel-iterations"),
+                models_path=os.path.join(
+                    models_path, f"{model_name}-kernel-iterations"
+                ),
                 plot_title=f"{dataset_name}",
                 plot_loss_path=plots_path,
             )
@@ -431,28 +433,58 @@ if __name__ == "__main__":
     with open(args.config_path, "r") as file:
         loaded_config = yaml.safe_load(file)
     if args.data_seed == -1:
-        data_seeds = [0, 1, 2, 3, 4]
+        # data_seeds = [0, 1, 2, 3, 4]
+        data_seeds = [2, 3, 4]
     else:
         data_seeds = [args.data_seed]
 
     outputs_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "outputs")
     for data_seed in data_seeds:
         for dataset_schema in RegressionDatasetSchema:
-            try:
-                main(
-                    data_seed=data_seed,
-                    dataset_name=str(dataset_schema.name),
-                    data_config=loaded_config["data"],
-                    kernel_config=loaded_config["kernel"],
-                    inducing_points_config=loaded_config["inducing_points"],
-                    pls_config=loaded_config["pls"],
-                    svgp_config=loaded_config["svgp"],
-                    metrics_config=loaded_config["metrics"],
-                    outputs_path=outputs_path,
-                )
-            except Exception as e:
-                print(f"Error with {dataset_schema.name=} and {data_seed=}:{e}")
-        try:
+            # try:
+            #     main(
+            #         data_seed=data_seed,
+            #         dataset_name=str(dataset_schema.name),
+            #         data_config=loaded_config["data"],
+            #         kernel_config=loaded_config["kernel"],
+            #         inducing_points_config=loaded_config["inducing_points"],
+            #         pls_config=loaded_config["pls"],
+            #         svgp_config=loaded_config["svgp"],
+            #         metrics_config=loaded_config["metrics"],
+            #         outputs_path=outputs_path,
+            #     )
+            # except Exception as e:
+            #     print(f"Error with {dataset_schema.name=} and {data_seed=}:{e}")
+            main(
+                data_seed=data_seed,
+                dataset_name=str(dataset_schema.name),
+                data_config=loaded_config["data"],
+                kernel_config=loaded_config["kernel"],
+                inducing_points_config=loaded_config["inducing_points"],
+                pls_config=loaded_config["pls"],
+                svgp_config=loaded_config["svgp"],
+                metrics_config=loaded_config["metrics"],
+                outputs_path=outputs_path,
+            )
+            # try:
+            #     concatenate_metrics(
+            #         results_path=os.path.join(outputs_path, str(data_seed), "results"),
+            #         data_types=["train", "test"],
+            #         model_names=[
+            #             # "pls-onb",
+            #             # "pls-onb-temper",
+            #             "pls-onb-conformalise",
+            #             "pls-student-onb-conformalise",
+            #             # "svgp",
+            #             # "svgp-temper",
+            #             "svgp-conformalise",
+            #             "svgp-student-conformalise",
+            #         ],
+            #         datasets=list(RegressionDatasetSchema.__members__.keys()),
+            #         metrics=["mae", "mse", "nll", "average_interval_width", "coverage"],
+            #     )
+            # except Exception as e:
+            #     print(f"Error with concatenating metrics for {data_seed=}:{e}")
             concatenate_metrics(
                 results_path=os.path.join(outputs_path, str(data_seed), "results"),
                 data_types=["train", "test"],
@@ -464,9 +496,8 @@ if __name__ == "__main__":
                     # "svgp",
                     # "svgp-temper",
                     "svgp-conformalise",
+                    "svgp-student-conformalise",
                 ],
                 datasets=list(RegressionDatasetSchema.__members__.keys()),
                 metrics=["mae", "mse", "nll", "average_interval_width", "coverage"],
             )
-        except Exception as e:
-            print(f"Error with concatenating metrics for {data_seed=}:{e}")
