@@ -19,6 +19,7 @@ from experiments.data import Data, ExperimentData, ProblemType
 from experiments.loaders import load_pls, load_svgp
 from experiments.plotters import (
     animate_1d_gp_predictions,
+    plot_1d_conformal_prediction,
     plot_1d_experiment_data,
     plot_1d_gp_prediction_and_inducing_points,
 )
@@ -358,15 +359,15 @@ def main(
         y_calibration=experiment_data.validation.y,
         gp=svgp,
     )
-    plot_1d_gp_prediction_and_inducing_points(
+    plot_1d_conformal_prediction(
         model=svgp_conformalised,
         experiment_data=experiment_data,
-        inducing_points=inducing_points,
         title=f"{plot_title} Conformalised",
         save_path=os.path.join(
             plot_curve_path,
             f"{model_name}-conformalised.png",
         ),
+        coverage=0.95,
     )
     plot_1d_gp_prediction_and_inducing_points(
         model=svgp,

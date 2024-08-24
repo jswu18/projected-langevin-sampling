@@ -8,6 +8,7 @@ class ProblemType(str, enum.Enum):
     POISSON_REGRESSION = "poisson_regression"
     REGRESSION = "regression"
     CLASSIFICATION = "classification"
+    LOGISTIC_GROWTH = "logistic_growth"
 
 
 @dataclass

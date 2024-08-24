@@ -6,6 +6,18 @@ import torch
 
 
 @dataclass
+class NonParametric:
+    samples: torch.Tensor  # Having shape (number of points, number of samples)
+
+    @property
+    def mean(self):
+        return self.samples.mean(axis=1)
+
+    def quantile(self, q: float):
+        return self.samples.quantile(q, dim=1)
+
+
+@dataclass
 class StudentTMarginals:
     """
     A class for the marginals of the Student T distribution where

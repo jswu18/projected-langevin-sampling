@@ -189,7 +189,7 @@ def exact_gp_runner(
 
 
 def plot_pls_1d_particles_runner(
-    pls: ProjectedLangevinSampling,
+    pls: Union[ProjectedLangevinSampling, ConformalisePLS, TemperPLS],
     particles: torch.Tensor,
     particle_name: str,
     experiment_data: ExperimentData,
@@ -207,6 +207,7 @@ def plot_pls_1d_particles_runner(
     elif isinstance(pls, ConformalisePLS):
         predicted_distribution = pls.predict(
             x=experiment_data.full.x,
+            coverage=coverage,
         )
     elif isinstance(pls, TemperPLS):
         predicted_distribution = pls.predict(
@@ -338,16 +339,13 @@ def train_pls_runner(
     plot_energy_potential_path: str | None = None,
     metric_to_optimise: str = "nll",
 ) -> Tuple[torch.Tensor, float, int]:
-    best_energy_potential, best_mae, best_mse, best_nll, best_acc, best_auc, best_f1 = (
-        float("inf"),
-        float("inf"),
-        float("inf"),
-        float("inf"),
-        0,
-        0,
-        0,
-    )
-    acc, auc, f1 = 0, 0, 0
+    if metric_to_optimise in ["nll", "mse", "mae", "loss"]:
+        best_metric_value = float("inf")
+    elif metric_to_optimise in ["acc", "auc", "f1"]:
+        best_metric_value = 0
+    else:
+        raise NotImplementedError(f"Unknown metric to optimise {metric_to_optimise}.")
+    metric_value = None
     best_lr = None
     energy_potentials_history = {}
     step_sizes = np.logspace(
@@ -373,72 +371,50 @@ def train_pls_runner(
                 x=experiment_data.train.x,
                 particles=particles_i,
             )
-            nll = calculate_nll(
-                prediction=prediction,
-                y=experiment_data.train.y,
-            )
-            mse = calculate_mse(
-                prediction=prediction,
-                y=experiment_data.train.y,
-            )
-            mae = calculate_mae(
-                prediction=prediction,
-                y=experiment_data.train.y,
-            )
-            if (
-                experiment_data.problem_type == ProblemType.CLASSIFICATION
-                and isinstance(prediction, torch.distributions.Bernoulli)
-            ):
-                acc = sklearn.metrics.accuracy_score(
+            if metric_to_optimise == "nll":
+                metric_value = calculate_nll(
+                    prediction=prediction,
+                    y=experiment_data.train.y,
+                )
+            elif metric_to_optimise == "mse":
+                metric_value = calculate_mse(
+                    prediction=prediction,
+                    y=experiment_data.train.y,
+                )
+            elif metric_to_optimise == "mae":
+                metric_value = calculate_mae(
+                    prediction=prediction,
+                    y=experiment_data.train.y,
+                )
+            elif metric_to_optimise == "acc":
+                metric_value = sklearn.metrics.accuracy_score(
                     y_true=experiment_data.train.y.cpu().detach().numpy(),
                     y_pred=prediction.probs.round().cpu().detach().numpy(),
                 )
-                auc = sklearn.metrics.roc_auc_score(
+            elif metric_to_optimise == "auc":
+                metric_value = sklearn.metrics.roc_auc_score(
                     y_true=experiment_data.train.y.cpu().detach().numpy(),
                     y_score=prediction.probs.cpu().detach().numpy(),
                 )
-                f1 = sklearn.metrics.f1_score(
+            elif metric_to_optimise == "f1":
+                metric_value = sklearn.metrics.f1_score(
                     y_true=experiment_data.train.y.cpu().detach().numpy(),
                     y_pred=prediction.probs.round().cpu().detach().numpy(),
                 )
-            if (
-                metric_to_optimise in ["acc", "auc", "f1"]
-                and experiment_data.problem_type != ProblemType.CLASSIFICATION
-            ):
-                raise ValueError(
-                    f"Cannot use binary classification metric {metric_to_optimise} for problem type {experiment_data.problem_type}."
-                )
-            if metric_to_optimise not in [
-                "nll",
-                "mse",
-                "mae",
-                "acc",
-                "auc",
-                "f1",
-                "loss",
-            ]:
+            elif metric_to_optimise == "loss":
+                metric_value = energy_potentials[-1]
+            else:
                 raise ValueError(f"Unknown metric to minimise: {metric_to_optimise}")
-            elif (
-                (metric_to_optimise == "nll" and nll < best_nll)
-                or (metric_to_optimise == "mse" and mse < best_mse)
-                or (metric_to_optimise == "mae" and mae < best_mae)
-                or (metric_to_optimise == "acc" and acc > best_acc)
-                or (metric_to_optimise == "auc" and auc > best_auc)
-                or (metric_to_optimise == "f1" and f1 > best_f1)
-                or (
-                    metric_to_optimise == "loss"
-                    and energy_potentials[-1] < best_energy_potential
-                )
+            if (
+                metric_to_optimise in ["nll", "mse", "mae", "loss"]
+                and metric_value < best_metric_value
+            ) or (
+                metric_to_optimise in ["acc", "auc", "f1"]
+                and metric_value > best_metric_value
             ):
-                best_nll, best_mae, best_mse, best_lr = (
-                    nll,
-                    mae,
-                    mse,
-                    step_size,
-                )
-                best_energy_potential = energy_potentials[-1]
-                particles_out = deepcopy(particles_i.detach())
+                best_metric_value = metric_value
                 best_lr = step_size
+                particles_out = deepcopy(particles_i.detach())
             if (
                 i > 0
                 and step_sizes[i - 1] in energy_potentials_history

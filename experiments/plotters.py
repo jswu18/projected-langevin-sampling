@@ -12,7 +12,7 @@ from tqdm import tqdm
 from experiments.data import Data, ExperimentData, ProblemType
 from src.conformalise import ConformaliseGP
 from src.conformalise.base import ConformaliseBase, ConformalPrediction
-from src.distributions import StudentTMarginals
+from src.distributions import NonParametric, StudentTMarginals
 from src.gps import ExactGP, svGP
 from src.kernels import PLSKernel
 from src.projected_langevin_sampling import ProjectedLangevinSampling
@@ -54,6 +54,53 @@ def plot_1d_gp_prediction(
             label=f"{coverage*100}% error",
             zorder=0,
         )
+    ax.plot(
+        x.reshape(-1),
+        mean.reshape(-1),
+        label="mean",
+        zorder=1,
+        color="black",
+        linewidth=0.5,
+    )
+    ax.set_xlabel("x")
+    ax.set_ylabel("y")
+    if title is not None:
+        ax.set_title(title)
+    if save_path is not None:
+        fig.legend(
+            loc="outside lower center",
+            ncols=3,
+        )
+        fig.savefig(save_path, bbox_inches="tight")
+        plt.close(fig)
+        return fig, ax
+    else:
+        return fig, ax
+
+
+def plot_1d_non_parametric_prediction(
+    fig: plt.Figure,
+    ax: plt.Axes,
+    x: torch.Tensor,
+    mean: torch.Tensor,
+    lower: torch.Tensor,
+    upper: torch.Tensor,
+    coverage: float,
+    save_path: str | None = None,
+    title: str | None = None,
+) -> Tuple[plt.Figure, plt.Axes]:
+    x = x.cpu().detach()
+    mean = mean.cpu().detach()
+    lower = lower.cpu().detach()
+    upper = upper.cpu().detach()
+    ax.fill_between(
+        x.reshape(-1),
+        lower.reshape(-1),
+        upper.reshape(-1),
+        facecolor=(0.9, 0.9, 0.9),
+        label=f"{coverage*100}% error",
+        zorder=0,
+    )
     ax.plot(
         x.reshape(-1),
         mean.reshape(-1),
@@ -256,6 +303,26 @@ def plot_1d_pls_prediction(
                 variance=predicted_distribution.scale**2,
                 coverage=coverage,
             )
+        elif isinstance(predicted_distribution, ConformalPrediction):
+            fig, ax = plot_1d_non_parametric_prediction(
+                fig=fig,
+                ax=ax,
+                x=experiment_data.full.x,
+                mean=predicted_distribution.mean,
+                lower=predicted_distribution.lower,
+                upper=predicted_distribution.upper,
+                coverage=coverage,
+            )
+        elif isinstance(predicted_distribution, NonParametric):
+            fig, ax = plot_1d_non_parametric_prediction(
+                fig=fig,
+                ax=ax,
+                x=experiment_data.full.x,
+                mean=predicted_distribution.mean,
+                lower=predicted_distribution.quantile(0.5 - coverage / 2),
+                upper=predicted_distribution.quantile(0.5 + coverage / 2),
+                coverage=coverage,
+            )
         else:
             raise TypeError
     if predicted_samples is not None:
@@ -320,7 +387,7 @@ def plot_1d_pls_prediction_histogram(
 
     histogram_data = untransformed_predicted_samples[max_full_idx, :]
     ax[1].hist(
-        histogram_data.cpu(),
+        histogram_data.cpu().reshape(-1),
         bins=number_of_bins,
         color="tab:red",
         alpha=0.75,
@@ -437,7 +504,7 @@ def plot_1d_gp_prediction_and_inducing_points(
 def plot_1d_conformal_prediction(
     model: ConformaliseBase,
     experiment_data: ExperimentData,
-    plot_title: str,
+    title: str,
     save_path: str,
     coverage: float,
     inducing_points: Data | None = None,
@@ -477,8 +544,8 @@ def plot_1d_conformal_prediction(
     )
     ax.set_xlabel("x")
     ax.set_ylabel("y")
-    if plot_title is not None:
-        ax.set_title(plot_title)
+    if title is not None:
+        ax.set_title(title)
     fig.legend(
         loc="outside lower center",
         ncols=3,
