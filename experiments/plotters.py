@@ -247,6 +247,7 @@ def plot_1d_pls_prediction(
     experiment_data: ExperimentData,
     x: torch.Tensor,
     save_path: str,
+    inducing_points: Data | None = None,
     coverage: float = 0.95,
     predicted_samples: torch.Tensor | None = None,
     y_name: str | None = None,
@@ -263,6 +264,15 @@ def plot_1d_pls_prediction(
             experiment_data=experiment_data,
             is_sample_untransformed=is_sample_untransformed,
         )
+    if inducing_points is not None:
+        for i in range(inducing_points.x.shape[0]):
+            plt.axvline(
+                x=inducing_points.x[i].cpu(),
+                color="black",
+                alpha=0.2,
+                label="induce" if i == 0 else None,
+                zorder=1,
+            )
     if not is_sample_untransformed:
         ax.autoscale(enable=False)  # turn off autoscale before plotting particles
     if predicted_distribution:

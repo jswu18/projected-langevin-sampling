@@ -194,6 +194,7 @@ def plot_pls_1d_particles_runner(
     particle_name: str,
     experiment_data: ExperimentData,
     plot_particles_path: str,
+    inducing_points: Data | None = None,
     coverage: float = 0.95,
     plot_title: str | None = None,
     number_of_particles_to_plot: int | None = None,
@@ -225,6 +226,7 @@ def plot_pls_1d_particles_runner(
         ).detach()
     plot_1d_pls_prediction(
         experiment_data=experiment_data,
+        inducing_points=inducing_points,
         x=experiment_data.full.x,
         predicted_samples=predicted_samples,
         predicted_distribution=predicted_distribution,

@@ -1,7 +1,7 @@
 import argparse
 import math
 import os
-from typing import Any, Dict, Tuple, List
+from typing import Any, Dict, List, Tuple
 
 import gpytorch
 import matplotlib.pyplot as plt
@@ -12,13 +12,16 @@ from experiments.constructors import (
     construct_average_ard_kernel,
     construct_average_gaussian_likelihood,
 )
-from experiments.preprocess import set_up_experiment
-from experiments.constructors import construct_average_ard_kernel
 from experiments.curves.curves import CURVE_FUNCTIONS, Curve
 from experiments.data import Data, ExperimentData, ProblemType
 from experiments.loaders import load_pls
-from experiments.plotters import plot_1d_experiment_data, plot_1d_pls_prediction, plot_1d_gp_prediction
-from experiments.preprocess import split_regression_data_intervals
+from experiments.plotters import (
+    plot_1d_experiment_data,
+    plot_1d_gp_prediction,
+    plot_1d_pls_prediction,
+    plot_eigenvalues,
+)
+from experiments.preprocess import set_up_experiment, split_regression_data_intervals
 from experiments.runners import (
     animate_pls_1d_particles_runner,
     exact_gp_runner,
@@ -34,7 +37,10 @@ from src.projected_langevin_sampling import ProjectedLangevinSampling
 from src.projected_langevin_sampling.basis import InducingPointBasis, OrthonormalBasis
 from src.projected_langevin_sampling.costs import PoissonCost
 from src.projected_langevin_sampling.costs.multimodal import MultiModalCost
-from src.projected_langevin_sampling.link_functions import SquareLinkFunction, IdentityLinkFunction
+from src.projected_langevin_sampling.link_functions import (
+    IdentityLinkFunction,
+    SquareLinkFunction,
+)
 from src.utils import set_seed
 
 parser = argparse.ArgumentParser(
@@ -58,7 +64,7 @@ def get_experiment_data(
     sigma_true: float,
     train_data_percentage: float,
     validation_data_percentage: float,
-) -> ExperimentData:
+) -> Tuple[ExperimentData, ExperimentData]:
     x = torch.linspace(-3, 3, number_of_data_points).reshape(-1, 1)
     y_curve = 2 * curve_function.calculate_curve(
         x=x,
@@ -73,16 +79,30 @@ def get_experiment_data(
         generator=torch.Generator().manual_seed(seed),
         size=y_curve.shape,
     )
-    return set_up_experiment(
+    y = y_curve + sigma_true * gaussian_noise
+
+    experiment_data = set_up_experiment(
         name=curve_function.__name__,
         problem_type=ProblemType.MULTIMODAL_REGRESSION,
         seed=seed,
         x=x,
-        y=y_curve + bernoulli_shift_true*bernoulli_noise + sigma_true*gaussian_noise,
+        y=y,
         train_data_percentage=train_data_percentage,
         validation_data_percentage=validation_data_percentage,
         normalise=True,
     )
+    experiment_data_bimodal = set_up_experiment(
+        name=curve_function.__name__,
+        problem_type=ProblemType.MULTIMODAL_REGRESSION,
+        seed=seed,
+        x=experiment_data.full.x,
+        y=experiment_data.full.y + bernoulli_shift_true * bernoulli_noise,
+        train_data_percentage=train_data_percentage,
+        validation_data_percentage=validation_data_percentage,
+        normalise=False,
+    )
+    return experiment_data_bimodal, experiment_data
+
 
 def plot_experiment_data(
     experiment_data: ExperimentData,
@@ -101,6 +121,7 @@ def plot_experiment_data(
     create_directory(plot_curve_path)
     plt.savefig(os.path.join(plot_curve_path, "experiment-data.png"))
     plt.close()
+
 
 def plot_gp_prediction(
     experiment_data: ExperimentData,
@@ -142,14 +163,19 @@ def approximate_bernoulli_parameters(
 
         # double the absolute mean error
         shifts.append(
-            2 * (predicted_distribution.mean - train_data.y).abs().mean().detach().item()
+            2
+            * (predicted_distribution.mean - train_data.y).abs().mean().detach().item()
         )
 
         # ratio of points above and below the mean
         bernoulli_noises.append(
             torch.mean((predicted_distribution.mean > train_data.y).float()).item()
         )
-    return torch.tensor(shifts).mean().item(), torch.tensor(bernoulli_noises).mean().item()
+    return (
+        torch.tensor(shifts).mean().item(),
+        torch.tensor(bernoulli_noises).mean().item(),
+    )
+
 
 def main(
     curve_function: Curve,
@@ -160,7 +186,7 @@ def main(
     outputs_path: str,
     include_gif: bool,
 ) -> None:
-    experiment_data = get_experiment_data(
+    experiment_data, experiment_data_gp = get_experiment_data(
         curve_function=curve_function,
         number_of_data_points=data_config["number_of_data_points"],
         seed=data_config["seed"],
@@ -189,8 +215,13 @@ def main(
     )
     subsample_gp_model_path = os.path.join(models_path, "subsample_gp")
     subsample_gp_data_path = os.path.join(data_path, "subsample_gp")
-    subsample_gp_models = exact_gp_runner(
+    plot_experiment_data(
         experiment_data=experiment_data,
+        title=f"{curve_function.__name__} data GP",
+        plot_curve_path=plot_curve_path,
+    )
+    subsample_gp_models = exact_gp_runner(
+        experiment_data=experiment_data_gp,
         kernel=gpytorch.kernels.ScaleKernel(
             gpytorch.kernels.RBFKernel(ard_num_dims=experiment_data.train.x.shape[1])
         ),
@@ -210,7 +241,7 @@ def main(
         kernels=[model.kernel for model in subsample_gp_models]
     )
     plot_gp_prediction(
-        experiment_data=experiment_data,
+        experiment_data=experiment_data_gp,
         model=subsample_gp_models[0],
         title=f"{curve_function.__name__} Exact GP",
         save_path=os.path.join(plot_curve_path, "exact_gp.png"),
@@ -244,32 +275,70 @@ def main(
         train_data=experiment_data.train,
         subsample_gp_models=subsample_gp_models,
     )
+    # temporary
+    y_temp = torch.linspace(-10, 20, 1000).reshape(1, -1)
     cost = MultiModalCost(
-        observation_noise=float(likelihood.noise),
+        observation_noise=data_config["sigma_true"],
+        # observation_noise=1e-1,
+        # observation_noise=float(likelihood.noise)/2,
+        y_train=y_temp,
+        link_function=IdentityLinkFunction(),
+        shift=data_config["bernoulli_shift_true"],
+        bernoulli_noise=0.5,
+    )
+    plt.plot(
+        y_temp.reshape(-1), cost.calculate_cost(torch.zeros(y_temp.shape)).reshape(-1)
+    )
+    plt.show()
+    #####
+
+    cost = MultiModalCost(
+        observation_noise=data_config["sigma_true"],
+        # observation_noise=0.01,
+        # observation_noise=float(likelihood.noise)/2,
         y_train=experiment_data.train.y,
         link_function=IdentityLinkFunction(),
-        shift=approximate_shift,
-        bernoulli_noise=approximate_bernoulli_noise
+        shift=data_config["bernoulli_shift_true"],
+        bernoulli_noise=data_config["bernoulli_probability_true"],
     )
     plot_title = "PLS for Multi-modal Regression"
     pls = ProjectedLangevinSampling(basis=onb_basis, cost=cost, name="pls-onb")
-    pls_path = os.path.join(models_path, f"{pls.name}.pth")
     set_seed(pls_config["seed"])
-    particles = pls.initialise_particles(
-        number_of_particles=pls_config["number_of_particles"],
-        seed=pls_config["seed"],
-        noise_only=pls_config["initial_particles_noise_only"],
+    # particles = pls.initialise_particles(
+    #     number_of_particles=pls_config["number_of_particles"],
+    #     seed=pls_config["seed"],
+    #     noise_only=pls_config["initial_particles_noise_only"],
+    # )
+    particles = torch.normal(
+        0,
+        0.01,
+        size=(onb_basis.approximation_dimension, pls_config["number_of_particles"]),
     )
-    particles += (4 * torch.bernoulli(
-        torch.ones((pls_config["number_of_particles"])) * approximate_bernoulli_noise,
-    )-2)[None, :]
+    bernoulli_samples = torch.bernoulli(
+        torch.ones((pls_config["number_of_particles"]))
+        * data_config["bernoulli_probability_true"],
+    )
+    particles += 0.5 * bernoulli_samples[None, :]  # add zero or one to the particles
+    particles = (
+        math.sqrt(onb_basis.x_induce.shape[0])
+        * onb_basis.eigenvectors.T
+        @ torch.diag(torch.divide(1, torch.sqrt(onb_basis.eigenvalues)))
+        @ particles
+    )
+
     plot_pls_1d_particles_runner(
         pls=pls,
         particles=particles,
         particle_name=f"{pls.name}-initial",
         experiment_data=experiment_data,
+        inducing_points=inducing_points,
         plot_particles_path=plot_curve_path,
         plot_title=plot_title,
+    )
+    plot_eigenvalues(
+        basis=onb_basis,
+        save_path=os.path.join(plot_curve_path, f"eigenvalues.png"),
+        title=f"Eigenvalues",
     )
     # if os.path.exists(pls_path):
     #     pls, particles, best_lr, number_of_epochs = load_pls(
@@ -300,20 +369,21 @@ def main(
         metric_to_optimise=pls_config["metric_to_optimise"],
         early_stopper_patience=pls_config["early_stopper_patience"],
     )
-        # torch.save(
-        #     {
-        #         "particles": particles,
-        #         "observation_noise": pls.observation_noise,
-        #         "best_lr": best_lr,
-        #         "number_of_epochs": number_of_epochs,
-        #     },
-        #     pls_path,
-        # )
+    # torch.save(
+    #     {
+    #         "particles": particles,
+    #         "observation_noise": pls.observation_noise,
+    #         "best_lr": best_lr,
+    #         "number_of_epochs": number_of_epochs,
+    #     },
+    #     pls_path,
+    # )
     plot_pls_1d_particles_runner(
         pls=pls,
         particles=particles,
         particle_name=f"{pls.name}-learned",
         experiment_data=experiment_data,
+        inducing_points=inducing_points,
         plot_particles_path=plot_curve_path,
         plot_title=plot_title,
     )

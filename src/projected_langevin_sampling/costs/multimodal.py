@@ -33,24 +33,26 @@ class MultiModalCost(PLSCost):
         self.bernoulli_noise = bernoulli_noise
         self.y_train = y_train
 
-    def calculate_mode_likelihoods(self, prediction_samples: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    def calculate_mode_likelihoods(
+        self, prediction_samples: torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Constructs a likelihood from the prediction samples.
         :param prediction_samples: The prediction samples of size (N, J).
         :return: The likelihood of size (N, J).
         """
-        likelihood_mode_1 = (1 / torch.sqrt(2 * torch.tensor([torch.pi]) * self.observation_noise)) * torch.exp(
+        likelihood_mode_1 = (
+            1 / torch.sqrt(2 * torch.tensor([torch.pi]) * self.observation_noise)
+        ) * torch.exp(
             -0.5
-            * torch.square(
-                prediction_samples - self.y_train[:, None]
-            )
+            * torch.square(prediction_samples - self.y_train[:, None])
             / self.observation_noise
         )
-        likelihood_mode_2 = (1 / torch.sqrt(2 * torch.tensor([torch.pi]) * self.observation_noise)) * torch.exp(
+        likelihood_mode_2 = (
+            1 / torch.sqrt(2 * torch.tensor([torch.pi]) * self.observation_noise)
+        ) * torch.exp(
             -0.5
-            * torch.square(
-                prediction_samples + self.shift - self.y_train[:, None]
-            )
+            * torch.square(prediction_samples + self.shift - self.y_train[:, None])
             / self.observation_noise
         )
         return likelihood_mode_1, likelihood_mode_2
@@ -65,7 +67,6 @@ class MultiModalCost(PLSCost):
         :return: The multivariate normal distribution.
         """
         pass
-
 
     def calculate_cost(
         self, untransformed_train_prediction_samples: torch.Tensor
@@ -82,21 +83,27 @@ class MultiModalCost(PLSCost):
 
         # (J, N)
         errors_mode_1 = (train_prediction_samples - self.y_train[:, None]).T
-        errors_mode_2 = (train_prediction_samples + self.shift - self.y_train[:, None]).T
+        errors_mode_2 = (
+            train_prediction_samples + self.shift - self.y_train[:, None]
+        ).T
 
         log_likelihood_mode_1 = -0.5 * torch.sum(
-            errors_mode_1 ** 2 / self.observation_noise, dim=1
+            errors_mode_1**2 / self.observation_noise, dim=1
         ) - 0.5 * torch.log(2 * torch.tensor([torch.pi]) * self.observation_noise)
 
         log_likelihood_mode_2 = -0.5 * torch.sum(
-            errors_mode_2 ** 2 / self.observation_noise, dim=1
+            errors_mode_2**2 / self.observation_noise, dim=1
         ) - 0.5 * torch.log(2 * torch.tensor([torch.pi]) * self.observation_noise)
 
         return -torch.logsumexp(
-            torch.stack([self.bernoulli_noise*log_likelihood_mode_1, (1-self.bernoulli_noise)*log_likelihood_mode_2]),
-            dim=0
+            torch.stack(
+                [
+                    self.bernoulli_noise * log_likelihood_mode_1,
+                    (1 - self.bernoulli_noise) * log_likelihood_mode_2,
+                ]
+            ),
+            dim=0,
         )
-
 
     def _calculate_cost_derivative_identity_link_function(
         self, untransformed_train_prediction_samples: torch.Tensor
@@ -113,20 +120,23 @@ class MultiModalCost(PLSCost):
         likelihood_mode_1, likelihood_mode_2 = self.calculate_mode_likelihoods(
             prediction_samples=train_prediction_samples
         )
-        likelihood = self.bernoulli_noise * likelihood_mode_1 + (1 - self.bernoulli_noise) * likelihood_mode_2
+        likelihood = (
+            self.bernoulli_noise * likelihood_mode_1
+            + (1 - self.bernoulli_noise) * likelihood_mode_2
+        )
 
         # (N, J)
-        errors_mode_1 = (train_prediction_samples - self.y_train[:, None])
-        errors_mode_2 = (train_prediction_samples + self.shift - self.y_train[:, None])
+        errors_mode_1 = train_prediction_samples - self.y_train[:, None]
+        errors_mode_2 = train_prediction_samples + self.shift - self.y_train[:, None]
 
         # (N, J)
         return torch.divide(
-            self.bernoulli_noise * errors_mode_1 * likelihood_mode_1 + (1 - self.bernoulli_noise) * errors_mode_2 * likelihood_mode_2,
-            torch.sqrt(2 * torch.tensor([torch.pi])) * (self.observation_noise**3) * likelihood
+            self.bernoulli_noise * errors_mode_1 * likelihood_mode_1
+            + (1 - self.bernoulli_noise) * errors_mode_2 * likelihood_mode_2,
+            torch.sqrt(2 * torch.tensor([torch.pi]))
+            * (self.observation_noise**3)
+            * likelihood,
         )
-
-
-
 
     def calculate_cost_derivative(
         self,
