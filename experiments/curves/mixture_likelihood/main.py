@@ -35,12 +35,8 @@ from src.inducing_point_selectors import ConditionalVarianceInducingPointSelecto
 from src.kernels.projected_langevin_sampling import PLSKernel
 from src.projected_langevin_sampling import ProjectedLangevinSampling
 from src.projected_langevin_sampling.basis import InducingPointBasis, OrthonormalBasis
-from src.projected_langevin_sampling.costs import PoissonCost
 from src.projected_langevin_sampling.costs.multimodal import MultiModalCost
-from src.projected_langevin_sampling.link_functions import (
-    IdentityLinkFunction,
-    SquareLinkFunction,
-)
+from src.projected_langevin_sampling.link_functions import IdentityLinkFunction
 from src.utils import set_seed
 
 parser = argparse.ArgumentParser(
@@ -89,7 +85,7 @@ def get_experiment_data(
         y=y,
         train_data_percentage=train_data_percentage,
         validation_data_percentage=validation_data_percentage,
-        normalise=True,
+        normalise=False,
     )
     experiment_data_bimodal = set_up_experiment(
         name=curve_function.__name__,
@@ -97,6 +93,7 @@ def get_experiment_data(
         seed=seed,
         x=experiment_data.full.x,
         y=experiment_data.full.y + bernoulli_shift_true * bernoulli_noise,
+        # y=experiment_data.full.y,
         train_data_percentage=train_data_percentage,
         validation_data_percentage=validation_data_percentage,
         normalise=False,
@@ -246,17 +243,14 @@ def main(
         title=f"{curve_function.__name__} Exact GP",
         save_path=os.path.join(plot_curve_path, "exact_gp.png"),
     )
-    likelihood = construct_average_gaussian_likelihood(
-        likelihoods=[model.likelihood for model in subsample_gp_models]
-    )
     inducing_points = inducing_points_runner(
         seed=inducing_points_config["seed"],
         inducing_point_selector=ConditionalVarianceInducingPointSelector(),
-        data=experiment_data.train,
+        data=experiment_data_gp.train,
         number_induce_points=int(
             inducing_points_config["inducing_points_factor"]
             * math.pow(
-                experiment_data.train.x.shape[0],
+                experiment_data_gp.train.x.shape[0],
                 1 / inducing_points_config["inducing_points_power"],
             )
         ),
@@ -271,36 +265,92 @@ def main(
         x_induce=inducing_points.x,
         x_train=experiment_data.train.x,
     )
-    approximate_shift, approximate_bernoulli_noise = approximate_bernoulli_parameters(
-        train_data=experiment_data.train,
-        subsample_gp_models=subsample_gp_models,
-    )
-    # temporary
-    y_temp = torch.linspace(-10, 20, 1000).reshape(1, -1)
+
+    particle_init_noise = 1e-4
+
+    ####
+    # cost_val = []
+    # for y in torch.linspace(-1000, 1000, 1000):
+    #     cost = MultiModalCost(
+    #         observation_noise=data_config["sigma_true"],
+    #         # y_train=torch.zeros((experiment_data.train.y.shape)),
+    #         # y_train=experiment_data.train.y,
+    #         y_train = torch.tensor(y).reshape(1, 1),
+    #         link_function=IdentityLinkFunction(),
+    #         shift=data_config["bernoulli_shift_true"],
+    #         bernoulli_noise=data_config["bernoulli_probability_true"],
+    #     )
+    #     cost_val.append(cost.calculate_cost(500*torch.ones((1, 1))))
+
+    # cost = MultiModalCost(
+    #     observation_noise=data_config["sigma_true"],
+    #     y_train=0 * torch.ones((experiment_data.train.y.shape)),
+    #     # y_train=experiment_data.train.y,
+    #     # y_train = torch.tensor(y).reshape(1, 1),
+    #     link_function=IdentityLinkFunction(),
+    #     shift=data_config["bernoulli_shift_true"],
+    #     bernoulli_noise=data_config["bernoulli_probability_true"],
+    # )
+
+    # y_temp = torch.linspace(-20, 30, 1000).repeat(600).reshape(600, 1000)
+    # cost_val = cost.calculate_cost(y_temp).reshape(-1)
+    # plt.plot(
+    #     torch.linspace(-20, 30, 1000), cost_val
+    # )
+    # cost = MultiModalCost(
+    #     observation_noise=data_config["sigma_true"],
+    #     y_train=10 * torch.ones((experiment_data.train.y.shape)),
+    #     # y_train=experiment_data.train.y,
+    #     # y_train = torch.tensor(y).reshape(1, 1),
+    #     link_function=IdentityLinkFunction(),
+    #     shift=data_config["bernoulli_shift_true"],
+    #     bernoulli_noise=data_config["bernoulli_probability_true"],
+    # )
+
+    # y_temp = torch.linspace(-20, 30, 1000).repeat(600).reshape(600, 1000)
+    # cost_val = cost.calculate_cost(y_temp).reshape(-1)
+    # plt.plot(
+    #     torch.linspace(-20, 30, 1000), cost_val
+    # )
     cost = MultiModalCost(
         observation_noise=data_config["sigma_true"],
-        # observation_noise=1e-1,
-        # observation_noise=float(likelihood.noise)/2,
-        y_train=y_temp,
+        # y_train=1 * torch.ones((experiment_data.train.y.shape)),
+        y_train=experiment_data.train.y,
+        # y_train = torch.tensor(y).reshape(1, 1),
         link_function=IdentityLinkFunction(),
         shift=data_config["bernoulli_shift_true"],
-        bernoulli_noise=0.5,
+        bernoulli_noise=data_config["bernoulli_probability_true"],
     )
-    plt.plot(
-        y_temp.reshape(-1), cost.calculate_cost(torch.zeros(y_temp.shape)).reshape(-1)
-    )
-    plt.show()
-    #####
+
+    y_temp = torch.linspace(-20, 30, 1000).repeat(600).reshape(600, 1000)
+    cost_val = cost.calculate_cost(y_temp).reshape(-1)
+    plt.plot(torch.linspace(-20, 30, 1000), cost_val)
+    plt.savefig(os.path.join(plot_curve_path, "cost.png"))
+    # return
+    # plt.close()
+    # return
+    # cost_derivative = cost.calculate_cost_derivative(y_temp)
+    # for i in range(cost_derivative.shape[0]):
+    #     plt.plot(
+    #         y_temp[0, :], cost_derivative[i, :]
+    #     )
+    #     break
+    # plt.savefig(
+    #     os.path.join(plot_curve_path, "cost_derivative.png")
+    # )
+    # plt.close()
+    # return
+    # ####
 
     cost = MultiModalCost(
         observation_noise=data_config["sigma_true"],
-        # observation_noise=0.01,
-        # observation_noise=float(likelihood.noise)/2,
+        # y_train=experiment_data_gp.train.y,
         y_train=experiment_data.train.y,
         link_function=IdentityLinkFunction(),
         shift=data_config["bernoulli_shift_true"],
         bernoulli_noise=data_config["bernoulli_probability_true"],
     )
+
     plot_title = "PLS for Multi-modal Regression"
     pls = ProjectedLangevinSampling(basis=onb_basis, cost=cost, name="pls-onb")
     set_seed(pls_config["seed"])
@@ -311,21 +361,24 @@ def main(
     # )
     particles = torch.normal(
         0,
-        0.01,
+        particle_init_noise,
         size=(onb_basis.approximation_dimension, pls_config["number_of_particles"]),
     )
-    bernoulli_samples = torch.bernoulli(
-        torch.ones((pls_config["number_of_particles"]))
-        * data_config["bernoulli_probability_true"],
-    )
-    particles += 0.5 * bernoulli_samples[None, :]  # add zero or one to the particles
+    # bernoulli_samples = torch.bernoulli(
+    #     torch.ones((pls_config["number_of_particles"]))
+    #     * data_config["bernoulli_probability_true"],
+    # )
+    shift_scale = 1.8
+    particles += torch.linspace(
+        -8e-1, shift_scale * data_config["bernoulli_shift_true"], particles.shape[1]
+    )[None, :]
+    # particles += 0.5 * shift_scale * data_config["bernoulli_shift_true"]
     particles = (
         math.sqrt(onb_basis.x_induce.shape[0])
         * onb_basis.eigenvectors.T
         @ torch.diag(torch.divide(1, torch.sqrt(onb_basis.eigenvalues)))
         @ particles
     )
-
     plot_pls_1d_particles_runner(
         pls=pls,
         particles=particles,
@@ -340,12 +393,12 @@ def main(
         save_path=os.path.join(plot_curve_path, f"eigenvalues.png"),
         title=f"Eigenvalues",
     )
-    # if os.path.exists(pls_path):
-    #     pls, particles, best_lr, number_of_epochs = load_pls(
-    #         pls=pls,
-    #         model_path=pls_path,
-    #     )
-    # else:
+    # # if os.path.exists(pls_path):
+    # #     pls, particles, best_lr, number_of_epochs = load_pls(
+    # #         pls=pls,
+    # #         model_path=pls_path,
+    # #     )
+    # # else:
     particles, best_lr, number_of_epochs = train_pls_runner(
         pls=pls,
         particles=particles,
@@ -369,15 +422,15 @@ def main(
         metric_to_optimise=pls_config["metric_to_optimise"],
         early_stopper_patience=pls_config["early_stopper_patience"],
     )
-    # torch.save(
-    #     {
-    #         "particles": particles,
-    #         "observation_noise": pls.observation_noise,
-    #         "best_lr": best_lr,
-    #         "number_of_epochs": number_of_epochs,
-    #     },
-    #     pls_path,
-    # )
+    # # torch.save(
+    # #     {
+    # #         "particles": particles,
+    # #         "observation_noise": pls.observation_noise,
+    # #         "best_lr": best_lr,
+    # #         "number_of_epochs": number_of_epochs,
+    # #     },
+    # #     pls_path,
+    # # )
     plot_pls_1d_particles_runner(
         pls=pls,
         particles=particles,
@@ -387,20 +440,14 @@ def main(
         plot_particles_path=plot_curve_path,
         plot_title=plot_title,
     )
-    pls_conformalised = ConformalisePLS(
-        x_calibration=experiment_data.validation.x,
-        y_calibration=experiment_data.validation.y,
-        pls=pls,
-        particles=particles,
-    )
-    plot_pls_1d_particles_runner(
-        pls=pls_conformalised,
-        particles=particles,
-        particle_name=f"{pls.name}-learned-conformalised",
-        experiment_data=experiment_data,
-        plot_particles_path=plot_curve_path,
-        plot_title=f"{plot_title} Conformalised",
-    )
+    # plot_pls_1d_particles_runner(
+    #     pls=pls_conformalised,
+    #     particles=particles,
+    #     particle_name=f"{pls.name}-learned-conformalised",
+    #     experiment_data=experiment_data,
+    #     plot_particles_path=plot_curve_path,
+    #     plot_title=f"{plot_title} Conformalised",
+    # )
 
 
 if __name__ == "__main__":
@@ -419,4 +466,3 @@ if __name__ == "__main__":
             outputs_path=OUTPUTS_PATH,
             include_gif=args.include_gif,
         )
-        break

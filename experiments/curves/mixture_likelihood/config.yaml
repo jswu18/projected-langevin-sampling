@@ -1,9 +1,9 @@
 data:
-  number_of_data_points: 250
+  number_of_data_points: 1000
   seed: 0
-  sigma_true: 0.2
-  bernoulli_probability_true: 0.75
-  bernoulli_shift_true: 10.0
+  sigma_true: 1.0
+  bernoulli_probability_true: 0.5
+  bernoulli_shift_true: 20.0
   train_data_percentage: 0.6
   validation_data_percentage: 0.2
 kernel:
@@ -16,14 +16,14 @@ kernel:
   early_stopper_patience: 1.0
 inducing_points:
   seed: 0
-  inducing_points_factor: 1
+  inducing_points_factor: 0.5
   inducing_points_power: 2
 pls:
-  number_of_particles: 500
+  number_of_particles: 1000
   simulation_duration: 1.0e-1
-  maximum_number_of_steps: 1.0e+5
+  maximum_number_of_steps: 1.0e+2
   number_of_step_searches: 3
-  step_size_upper: 1.0e-5
+  step_size_upper: 1.0e-1
   minimum_change_in_energy_potential: 0.01
   jitter: 0
   seed: 0
@@ -33,4 +33,4 @@ pls:
   observation_noise_upper: 1.0e+4
   observation_noise_lower: 1.0e-4
   number_of_observation_noise_searches: 0
-  early_stopper_patience: 1.0e-4
+  early_stopper_patience: 1.0e-3

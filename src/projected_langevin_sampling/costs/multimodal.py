@@ -33,29 +33,29 @@ class MultiModalCost(PLSCost):
         self.bernoulli_noise = bernoulli_noise
         self.y_train = y_train
 
-    def calculate_mode_likelihoods(
-        self, prediction_samples: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """
-        Constructs a likelihood from the prediction samples.
-        :param prediction_samples: The prediction samples of size (N, J).
-        :return: The likelihood of size (N, J).
-        """
-        likelihood_mode_1 = (
-            1 / torch.sqrt(2 * torch.tensor([torch.pi]) * self.observation_noise)
-        ) * torch.exp(
-            -0.5
-            * torch.square(prediction_samples - self.y_train[:, None])
-            / self.observation_noise
-        )
-        likelihood_mode_2 = (
-            1 / torch.sqrt(2 * torch.tensor([torch.pi]) * self.observation_noise)
-        ) * torch.exp(
-            -0.5
-            * torch.square(prediction_samples + self.shift - self.y_train[:, None])
-            / self.observation_noise
-        )
-        return likelihood_mode_1, likelihood_mode_2
+    # def calculate_mode_likelihoods(
+    #     self, prediction_samples: torch.Tensor
+    # ) -> Tuple[torch.Tensor, torch.Tensor]:
+    #     """
+    #     Constructs a likelihood from the prediction samples.
+    #     :param prediction_samples: The prediction samples of size (N, J).
+    #     :return: The likelihood of size (N, J).
+    #     """
+    #     likelihood_mode_1 = (
+    #         1 / torch.sqrt(2 * torch.tensor([torch.pi]) * self.observation_noise)
+    #     ) * torch.exp(
+    #         -0.5
+    #         * torch.square(self.y_train[:, None]-prediction_samples + self.shift )
+    #         / (self.observation_noise**2)
+    #     )
+    #     likelihood_mode_2 = (
+    #         1 / torch.sqrt(2 * torch.tensor([torch.pi]) * self.observation_noise)
+    #     ) * torch.exp(
+    #         -0.5
+    #         * torch.square( self.y_train[:, None]-prediction_samples)
+    #         / (self.observation_noise**2)
+    #     )
+    #     return likelihood_mode_1, likelihood_mode_2
 
     def predict(
         self,
@@ -81,62 +81,83 @@ class MultiModalCost(PLSCost):
             untransformed_train_prediction_samples
         )
 
-        # (J, N)
-        errors_mode_1 = (train_prediction_samples - self.y_train[:, None]).T
-        errors_mode_2 = (
-            train_prediction_samples + self.shift - self.y_train[:, None]
-        ).T
+        # (N, J)
+        # y - (f(x) + c)
+        # 0 - [-20, 20] - 10
+        # -10 + [20, -20]
+        # [10, -30]
+        errors_mode_1 = self.y_train[:, None] - train_prediction_samples + self.shift
+        # y - f(x)
+        errors_mode_2 = self.y_train[:, None] - train_prediction_samples
 
-        log_likelihood_mode_1 = -0.5 * torch.sum(
-            errors_mode_1**2 / self.observation_noise, dim=1
-        ) - 0.5 * torch.log(2 * torch.tensor([torch.pi]) * self.observation_noise)
+        # (N, J)
+        log_likelihood_mode_1 = -0.5 * (
+            torch.square(errors_mode_1) / (self.observation_noise**2)
+        ) - torch.log(
+            torch.sqrt(2 * torch.tensor([torch.pi]) * (self.observation_noise**2))
+        )
 
-        log_likelihood_mode_2 = -0.5 * torch.sum(
-            errors_mode_2**2 / self.observation_noise, dim=1
-        ) - 0.5 * torch.log(2 * torch.tensor([torch.pi]) * self.observation_noise)
+        log_likelihood_mode_2 = -0.5 * (
+            torch.square(errors_mode_2) / (self.observation_noise**2)
+        ) - torch.log(
+            torch.sqrt(2 * torch.tensor([torch.pi]) * (self.observation_noise**2))
+        )
 
         return -torch.logsumexp(
             torch.stack(
                 [
-                    self.bernoulli_noise * log_likelihood_mode_1,
-                    (1 - self.bernoulli_noise) * log_likelihood_mode_2,
+                    torch.log(torch.tensor(self.bernoulli_noise))
+                    + log_likelihood_mode_1,
+                    torch.log(torch.tensor(1 - self.bernoulli_noise))
+                    + log_likelihood_mode_2,
                 ]
             ),
             dim=0,
-        )
+        ).sum(axis=0)
 
-    def _calculate_cost_derivative_identity_link_function(
-        self, untransformed_train_prediction_samples: torch.Tensor
-    ) -> torch.Tensor:
-        """
-        This method is used when the link function is the identity.
-        :param untransformed_train_prediction_samples: The untransformed train prediction samples of size (N, J).
-        :return: The cost derivative of size (N, J).
-        """
-        train_prediction_samples = self.link_function(
-            untransformed_train_prediction_samples
-        )
-        # Gaussian likelihoods of size (N, J)
-        likelihood_mode_1, likelihood_mode_2 = self.calculate_mode_likelihoods(
-            prediction_samples=train_prediction_samples
-        )
-        likelihood = (
-            self.bernoulli_noise * likelihood_mode_1
-            + (1 - self.bernoulli_noise) * likelihood_mode_2
-        )
+    # def _calculate_cost_derivative_identity_link_function(
+    #     self, untransformed_train_prediction_samples: torch.Tensor
+    # ) -> torch.Tensor:
+    #     """
+    #     This method is used when the link function is the identity.
+    #     :param untransformed_train_prediction_samples: The untransformed train prediction samples of size (N, J).
+    #     :return: The cost derivative of size (N, J).
+    #     """
+    #     train_prediction_samples = self.link_function(
+    #         untransformed_train_prediction_samples
+    #     )
+    #     # Gaussian likelihoods of size (N, J)
+    #     likelihood_mode_1, likelihood_mode_2 = self.calculate_mode_likelihoods(
+    #         prediction_samples=train_prediction_samples
+    #     )
+    #     likelihood = (
+    #         self.bernoulli_noise * likelihood_mode_1
+    #         + (1 - self.bernoulli_noise) * likelihood_mode_2
+    #     )
 
-        # (N, J)
-        errors_mode_1 = train_prediction_samples - self.y_train[:, None]
-        errors_mode_2 = train_prediction_samples + self.shift - self.y_train[:, None]
+    #     likelihood_mode_1_unscaled = torch.exp(
+    #         -0.5
+    #         * torch.square(self.y_train[:, None]-train_prediction_samples + self.shift)
+    #         / (self.observation_noise**2)
+    #     )
+    #     likelihood_mode_2_unscaled = torch.exp(
+    #         -0.5
+    #         * torch.square( self.y_train[:, None]-train_prediction_samples)
+    #         / (self.observation_noise**2)
+    #     )
 
-        # (N, J)
-        return torch.divide(
-            self.bernoulli_noise * errors_mode_1 * likelihood_mode_1
-            + (1 - self.bernoulli_noise) * errors_mode_2 * likelihood_mode_2,
-            torch.sqrt(2 * torch.tensor([torch.pi]))
-            * (self.observation_noise**3)
-            * likelihood,
-        )
+    #     # (N, J)
+    #     errors_mode_1 = self.y_train[:, None] - train_prediction_samples + self.shift
+    #     errors_mode_2 = self.y_train[:, None] - train_prediction_samples
+
+    #     # (N, J)
+    #     return -torch.divide(
+    #         self.bernoulli_noise * errors_mode_1 * likelihood_mode_1_unscaled
+    #         + (1 - self.bernoulli_noise) * errors_mode_2 * likelihood_mode_2_unscaled,
+    #         torch.sqrt(2 * torch.tensor([torch.pi]))
+    #         * (self.observation_noise**3)
+    #         * likelihood,
+    #     )
 
     def calculate_cost_derivative(
         self,
@@ -149,11 +170,11 @@ class MultiModalCost(PLSCost):
         :param untransformed_train_prediction_samples: The untransformed train prediction samples of size (N, J).
         :return: The cost derivative of size (N, J).
         """
-        if isinstance(self.link_function, IdentityLinkFunction):
-            return self._calculate_cost_derivative_identity_link_function(
-                untransformed_train_prediction_samples=untransformed_train_prediction_samples
-            )
-        else:
-            return self._calculate_cost_derivative_autograd(
-                untransformed_train_prediction_samples=untransformed_train_prediction_samples
-            )
+        # if isinstance(self.link_function, IdentityLinkFunction):
+        #     return self._calculate_cost_derivative_identity_link_function(
+        #         untransformed_train_prediction_samples=untransformed_train_prediction_samples
+        #     )
+        # else:
+        return self._calculate_cost_derivative_autograd(
+            untransformed_train_prediction_samples=untransformed_train_prediction_samples
+        )
