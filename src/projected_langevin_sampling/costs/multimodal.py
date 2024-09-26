@@ -3,6 +3,7 @@ from typing import Tuple
 import gpytorch
 import torch
 
+
 from src.projected_langevin_sampling.costs.base import PLSCost
 from src.projected_langevin_sampling.link_functions import (
     IdentityLinkFunction,
@@ -178,3 +179,4 @@ class MultiModalCost(PLSCost):
         return self._calculate_cost_derivative_autograd(
             untransformed_train_prediction_samples=untransformed_train_prediction_samples
         )
+
