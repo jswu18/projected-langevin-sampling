@@ -120,9 +120,6 @@ class MultiModalCostVeit(PLSCost):
 
         #[N.J]
         cost = self.calculate_cost(train_prediction_samples,reduction=False)
-        likelihood = torch.exp(-cost)
-        #likelihood[likelihood<1e-10]= 1e-10
-
         residual = self.y_train[:, None]-train_prediction_samples
 
         # (N, J)
