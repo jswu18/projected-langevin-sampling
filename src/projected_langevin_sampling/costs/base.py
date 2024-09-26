@@ -74,9 +74,11 @@ class PLSCost(ABC):
             torch.vmap(
                 torch.func.jacfwd(self.calculate_cost),
                 in_dims=2,
-            )(untransformed_train_prediction_samples[:, None, :])
-            .reshape(untransformed_train_prediction_samples.T.shape)
-            .T
+            )(
+                untransformed_train_prediction_samples[:, None, :]
+            ).T.reshape(untransformed_train_prediction_samples.shape)
+            # .reshape(untransformed_train_prediction_samples.T.shape)
+            # .T
         )
 
     def sample_observation_noise(

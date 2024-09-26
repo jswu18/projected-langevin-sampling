@@ -78,3 +78,13 @@ class SquareLinkFunction(PLSLinkFunction):
 
     def transform(self, y: torch.Tensor) -> torch.Tensor:
         return torch.square(y)
+
+
+class LogisticGrowthLinkFunction(PLSLinkFunction):
+    """
+    The logistic growth link function.
+    This transform can be used for regression where the output space is R+.
+    """
+
+    def transform(self, y: torch.Tensor) -> torch.Tensor:
+        return torch.multiply(y, 1 - y)
