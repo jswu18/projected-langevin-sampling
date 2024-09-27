@@ -87,30 +87,26 @@ class MultiModalCost(PLSCost):
         # 0 - [-20, 20] - 10
         # -10 + [20, -20]
         # [10, -30]
-        errors_mode_1 = self.y_train[:, None] - train_prediction_samples + self.shift
+        errors_mode_1 = (
+             self.y_train[:, None] - train_prediction_samples+self.shift
+        )
         # y - f(x)
-        errors_mode_2 = self.y_train[:, None] - train_prediction_samples
+        errors_mode_2 = (self.y_train[:, None] - train_prediction_samples )
 
         # (N, J)
         log_likelihood_mode_1 = -0.5 * (
             torch.square(errors_mode_1) / (self.observation_noise**2)
-        ) - torch.log(
-            torch.sqrt(2 * torch.tensor([torch.pi]) * (self.observation_noise**2))
-        )
+        ) - torch.log(torch.sqrt(2 * torch.tensor([torch.pi]) * (self.observation_noise**2)))
 
         log_likelihood_mode_2 = -0.5 * (
             torch.square(errors_mode_2) / (self.observation_noise**2)
-        ) - torch.log(
-            torch.sqrt(2 * torch.tensor([torch.pi]) * (self.observation_noise**2))
-        )
+        ) - torch.log(torch.sqrt(2 * torch.tensor([torch.pi]) * (self.observation_noise**2)))
 
         return -torch.logsumexp(
             torch.stack(
                 [
-                    torch.log(torch.tensor(self.bernoulli_noise))
-                    + log_likelihood_mode_1,
-                    torch.log(torch.tensor(1 - self.bernoulli_noise))
-                    + log_likelihood_mode_2,
+                    torch.log(torch.tensor(self.bernoulli_noise)) +  log_likelihood_mode_1,
+                    torch.log(torch.tensor(1 - self.bernoulli_noise)) + log_likelihood_mode_2,
                 ]
             ),
             dim=0,
@@ -148,8 +144,8 @@ class MultiModalCost(PLSCost):
     #     )
 
     #     # (N, J)
-    #     errors_mode_1 = self.y_train[:, None] - train_prediction_samples + self.shift
-    #     errors_mode_2 = self.y_train[:, None] - train_prediction_samples
+    #     errors_mode_1 = self.y_train[:, None] - train_prediction_samples + self.shift  
+    #     errors_mode_2 = self.y_train[:, None] - train_prediction_samples 
 
     #     # (N, J)
     #     return -torch.divide(

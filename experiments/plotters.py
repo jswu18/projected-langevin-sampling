@@ -681,6 +681,7 @@ def animate_1d_pls_predictions(
     animation_duration: int = 10,
     max_particles_to_plot: int = 50,
     fps: int = 15,
+    init_particles: torch.Tensor | None = None,
 ) -> None:
     number_of_particles = min(number_of_particles, max_particles_to_plot)
     fig, ax = plt.subplots(figsize=(6, 4), layout="constrained")
@@ -693,18 +694,20 @@ def animate_1d_pls_predictions(
     )
     plt.xlim(x.min().cpu(), x.max().cpu())
     ax.autoscale(enable=False)  # turn off autoscale before plotting particles
-
-    particles = pls.initialise_particles(
-        number_of_particles=number_of_particles,
-        seed=seed,
-        noise_only=initial_particles_noise_only,
-    )
+    if init_particles is None:
+        particles = pls.initialise_particles(
+            number_of_particles=number_of_particles,
+            seed=seed,
+            noise_only=initial_particles_noise_only,
+        )
+    else:
+        particles = init_particles.clone()
     predictive_noise = pls.sample_predictive_noise(
         x=experiment_data.full.x,
         particles=particles,
     ).detach()
     observation_noise = pls.sample_observation_noise(
-        number_of_particles=number_of_particles,
+        number_of_particles=particles.shape[1],
         seed=seed,
     ).detach()
     predicted_samples = pls.predict_samples(

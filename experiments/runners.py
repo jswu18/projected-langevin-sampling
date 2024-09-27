@@ -283,6 +283,7 @@ def animate_pls_1d_particles_runner(
     animate_1d_untransformed_path: str | None = None,
     christmas_colours: bool = False,
     initial_particles_noise_only: bool = False,
+    init_particles: torch.Tensor | None = None,
 ):
     if best_lr is None:
         return
@@ -302,6 +303,7 @@ def animate_pls_1d_particles_runner(
                 f"{particle_name}.gif",
             ),
             christmas_colours=christmas_colours,
+            init_particles=init_particles,
         )
     if animate_1d_untransformed_path is not None:
         animate_1d_pls_untransformed_predictions(

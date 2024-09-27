@@ -19,7 +19,7 @@ inducing_points:
   inducing_points_factor: 0.5
   inducing_points_power: 2
 pls:
-  number_of_particles: 1000
+  number_of_particles: 500
   simulation_duration: 1.0e-1
   maximum_number_of_steps: 1.0e+2
   number_of_step_searches: 3
@@ -33,4 +33,4 @@ pls:
   observation_noise_upper: 1.0e+4
   observation_noise_lower: 1.0e-4
   number_of_observation_noise_searches: 0
-  early_stopper_patience: 1.0e-3
+  early_stopper_patience: 1.0e-4

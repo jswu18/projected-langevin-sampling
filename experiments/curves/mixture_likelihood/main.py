@@ -10,18 +10,15 @@ import yaml
 
 from experiments.constructors import (
     construct_average_ard_kernel,
-    construct_average_gaussian_likelihood,
 )
 from experiments.curves.curves import CURVE_FUNCTIONS, Curve
 from experiments.data import Data, ExperimentData, ProblemType
-from experiments.loaders import load_pls
 from experiments.plotters import (
     plot_1d_experiment_data,
     plot_1d_gp_prediction,
-    plot_1d_pls_prediction,
     plot_eigenvalues,
 )
-from experiments.preprocess import set_up_experiment, split_regression_data_intervals
+from experiments.preprocess import set_up_experiment
 from experiments.runners import (
     animate_pls_1d_particles_runner,
     exact_gp_runner,
@@ -30,11 +27,10 @@ from experiments.runners import (
     train_pls_runner,
 )
 from experiments.utils import create_directory
-from src.conformalise import ConformalisePLS
 from src.inducing_point_selectors import ConditionalVarianceInducingPointSelector
 from src.kernels.projected_langevin_sampling import PLSKernel
 from src.projected_langevin_sampling import ProjectedLangevinSampling
-from src.projected_langevin_sampling.basis import InducingPointBasis, OrthonormalBasis
+from src.projected_langevin_sampling.basis import OrthonormalBasis
 from src.projected_langevin_sampling.costs.multimodal import MultiModalCost
 from src.projected_langevin_sampling.link_functions import IdentityLinkFunction
 from src.utils import set_seed
@@ -266,7 +262,6 @@ def main(
         x_train=experiment_data.train.x,
     )
 
-    particle_init_noise = 1e-4
 
     ####
     # cost_val = []
@@ -315,7 +310,7 @@ def main(
     cost = MultiModalCost(
         observation_noise=data_config["sigma_true"],
         # y_train=1 * torch.ones((experiment_data.train.y.shape)),
-        y_train=experiment_data.train.y,
+        y_train=experiment_data_gp.train.y,
         # y_train = torch.tensor(y).reshape(1, 1),
         link_function=IdentityLinkFunction(),
         shift=data_config["bernoulli_shift_true"],
@@ -345,7 +340,7 @@ def main(
     cost = MultiModalCost(
         observation_noise=data_config["sigma_true"],
         # y_train=experiment_data_gp.train.y,
-        y_train=experiment_data.train.y,
+        y_train=experiment_data_gp.train.y,
         link_function=IdentityLinkFunction(),
         shift=data_config["bernoulli_shift_true"],
         bernoulli_noise=data_config["bernoulli_probability_true"],
@@ -354,34 +349,25 @@ def main(
     plot_title = "PLS for Multi-modal Regression"
     pls = ProjectedLangevinSampling(basis=onb_basis, cost=cost, name="pls-onb")
     set_seed(pls_config["seed"])
-    # particles = pls.initialise_particles(
-    #     number_of_particles=pls_config["number_of_particles"],
-    #     seed=pls_config["seed"],
-    #     noise_only=pls_config["initial_particles_noise_only"],
-    # )
-    particles = torch.normal(
+    particle_init_noise = 1e-4
+    init_particles = torch.normal(
         0,
         particle_init_noise,
         size=(onb_basis.approximation_dimension, pls_config["number_of_particles"]),
     )
-    # bernoulli_samples = torch.bernoulli(
-    #     torch.ones((pls_config["number_of_particles"]))
-    #     * data_config["bernoulli_probability_true"],
-    # )
     shift_scale = 1.8
-    particles += torch.linspace(
-        -8e-1, shift_scale * data_config["bernoulli_shift_true"], particles.shape[1]
+    init_particles += torch.linspace(
+        -8e-1, shift_scale * data_config["bernoulli_shift_true"], init_particles.shape[1]
     )[None, :]
-    # particles += 0.5 * shift_scale * data_config["bernoulli_shift_true"]
-    particles = (
+    init_particles = (
         math.sqrt(onb_basis.x_induce.shape[0])
         * onb_basis.eigenvectors.T
         @ torch.diag(torch.divide(1, torch.sqrt(onb_basis.eigenvalues)))
-        @ particles
+        @ init_particles
     )
     plot_pls_1d_particles_runner(
         pls=pls,
-        particles=particles,
+        particles=init_particles.clone(),
         particle_name=f"{pls.name}-initial",
         experiment_data=experiment_data,
         inducing_points=inducing_points,
@@ -393,15 +379,9 @@ def main(
         save_path=os.path.join(plot_curve_path, f"eigenvalues.png"),
         title=f"Eigenvalues",
     )
-    # # if os.path.exists(pls_path):
-    # #     pls, particles, best_lr, number_of_epochs = load_pls(
-    # #         pls=pls,
-    # #         model_path=pls_path,
-    # #     )
-    # # else:
     particles, best_lr, number_of_epochs = train_pls_runner(
         pls=pls,
-        particles=particles,
+        particles=init_particles.clone(),
         particle_name=pls.name,
         experiment_data=experiment_data,
         simulation_duration=pls_config["simulation_duration"],
@@ -422,15 +402,6 @@ def main(
         metric_to_optimise=pls_config["metric_to_optimise"],
         early_stopper_patience=pls_config["early_stopper_patience"],
     )
-    # # torch.save(
-    # #     {
-    # #         "particles": particles,
-    # #         "observation_noise": pls.observation_noise,
-    # #         "best_lr": best_lr,
-    # #         "number_of_epochs": number_of_epochs,
-    # #     },
-    # #     pls_path,
-    # # )
     plot_pls_1d_particles_runner(
         pls=pls,
         particles=particles,
@@ -440,15 +411,41 @@ def main(
         plot_particles_path=plot_curve_path,
         plot_title=plot_title,
     )
-    # plot_pls_1d_particles_runner(
-    #     pls=pls_conformalised,
-    #     particles=particles,
-    #     particle_name=f"{pls.name}-learned-conformalised",
-    #     experiment_data=experiment_data,
-    #     plot_particles_path=plot_curve_path,
-    #     plot_title=f"{plot_title} Conformalised",
-    # )
-
+    if include_gif:
+        particle_init_noise = 1e-4
+        set_seed(pls_config["seed"])
+        init_particles = torch.normal(
+            0,
+            particle_init_noise,
+            size=(onb_basis.approximation_dimension, 50),
+        )
+        shift_scale = 0.1
+        init_particles += torch.linspace(
+            -8e-1, shift_scale * data_config["bernoulli_shift_true"], 50
+        )[None, :]
+        init_particles = (
+            math.sqrt(onb_basis.x_induce.shape[0])
+            * onb_basis.eigenvectors.T
+            @ torch.diag(torch.divide(1, torch.sqrt(onb_basis.eigenvalues)))
+            @ init_particles
+        )
+        animate_pls_1d_particles_runner(
+            pls=pls,
+            number_of_particles=pls_config["number_of_particles"],
+            particle_name=pls.name,
+            experiment_data=experiment_data,
+            seed=pls_config["seed"],
+            best_lr=3e-4,
+            number_of_epochs=100,
+            animate_1d_path=plot_curve_path,
+            plot_title=plot_title,
+            animate_1d_untransformed_path=None,
+            christmas_colours=pls_config["christmas_colours"]
+            if "christmas_colours" in pls_config
+            else False,
+            initial_particles_noise_only=pls_config["initial_particles_noise_only"],
+            init_particles = init_particles.clone()
+        )
 
 if __name__ == "__main__":
     torch.set_default_dtype(torch.float64)
