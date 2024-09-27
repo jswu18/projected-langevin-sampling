@@ -79,7 +79,7 @@ def get_experiment_data(
         scale=1.0,
         df=degrees_of_freedom,
     ).sample(sample_shape=y_curve.shape)
-    experiment_data = set_up_experiment(
+    return set_up_experiment(
         name=curve_function.__name__,
         problem_type=ProblemType.REGRESSION,
         seed=seed,
@@ -89,7 +89,6 @@ def get_experiment_data(
         validation_data_percentage=validation_data_percentage,
         normalise=True,
     )
-    return experiment_data
 
 
 def plot_experiment_data(
