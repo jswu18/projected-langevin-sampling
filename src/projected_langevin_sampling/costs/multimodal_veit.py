@@ -6,8 +6,8 @@ import sys
 import os 
 import matplotlib.pyplot as plt
 
-#Uncomment this James. I dont know why I always have to add bs like that for relative imports to work
-sys.path.append(os.path.abspath('/Users/vdw/Library/CloudStorage/OneDrive-Personal/Code/function-space-gradient-flow'))
+# #Uncomment this James. I dont know why I always have to add bs like that for relative imports to work
+# sys.path.append(os.path.abspath('/Users/vdw/Library/CloudStorage/OneDrive-Personal/Code/function-space-gradient-flow'))
 
 from src.projected_langevin_sampling.costs.base import PLSCost
 from src.projected_langevin_sampling.link_functions import (

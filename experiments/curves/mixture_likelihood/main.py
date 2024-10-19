@@ -31,7 +31,8 @@ from src.inducing_point_selectors import ConditionalVarianceInducingPointSelecto
 from src.kernels.projected_langevin_sampling import PLSKernel
 from src.projected_langevin_sampling import ProjectedLangevinSampling
 from src.projected_langevin_sampling.basis import OrthonormalBasis
-from src.projected_langevin_sampling.costs.multimodal import MultiModalCost
+# from src.projected_langevin_sampling.costs.multimodal import MultiModalCost
+from src.projected_langevin_sampling.costs.multimodal_veit import MultiModalCostVeit as MultiModalCost
 from src.projected_langevin_sampling.link_functions import IdentityLinkFunction
 from src.utils import set_seed
 
@@ -310,7 +311,7 @@ def main(
     cost = MultiModalCost(
         observation_noise=data_config["sigma_true"],
         # y_train=1 * torch.ones((experiment_data.train.y.shape)),
-        y_train=experiment_data_gp.train.y,
+        y_train=experiment_data.train.y,
         # y_train = torch.tensor(y).reshape(1, 1),
         link_function=IdentityLinkFunction(),
         shift=data_config["bernoulli_shift_true"],
@@ -340,7 +341,7 @@ def main(
     cost = MultiModalCost(
         observation_noise=data_config["sigma_true"],
         # y_train=experiment_data_gp.train.y,
-        y_train=experiment_data_gp.train.y,
+        y_train=experiment_data.train.y,
         link_function=IdentityLinkFunction(),
         shift=data_config["bernoulli_shift_true"],
         bernoulli_noise=data_config["bernoulli_probability_true"],
