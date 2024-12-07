@@ -366,16 +366,16 @@ def plot_1d_pls_prediction_histogram(
     save_path: str,
     title: str | None = None,
     number_of_bins: int = 50,
+    max_particles_to_plot: int = 50,
 ):
     fig, ax = plt.subplots(1, 2, figsize=(10, 3), layout="constrained")
-    for i in range(predicted_samples.shape[1]):
+    for i in range(min(predicted_samples.shape[1], max_particles_to_plot)):
         fig, ax[0] = plot_1d_particle(
             fig=fig,
             ax=ax[0],
             x=x,
             y=untransformed_predicted_samples[:, i],
             add_label=i == 0,
-            alpha=0.1,
         )
     if title is not None:
         ax[0].set_title(f"$f(x)$")
