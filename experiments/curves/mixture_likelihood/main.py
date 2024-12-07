@@ -145,6 +145,7 @@ def generate_init_particles(
     initial_particle_noise: float,
     approximation_dimension: int,
     number_of_particles: int,
+    initial_particles_lower: float,
     initial_particles_shift_scale: float,
     bernoulli_shift_true: float,
     basis_dimension: int,
@@ -157,7 +158,7 @@ def generate_init_particles(
         size=(approximation_dimension, number_of_particles),
     )
     init_particles += torch.linspace(
-        -1e0, initial_particles_shift_scale * bernoulli_shift_true, number_of_particles
+        initial_particles_lower, initial_particles_shift_scale * bernoulli_shift_true, number_of_particles
     )[None, :]
     return (
         math.sqrt(basis_dimension)
@@ -318,6 +319,7 @@ def main(
             initial_particle_noise=pls_config["initial_particle_noise"],
             approximation_dimension=onb_basis.approximation_dimension,
             number_of_particles=pls_config["number_of_particles"],
+            initial_particles_lower=pls_config["initial_particles_lower"],
             initial_particles_shift_scale=pls_config[
                 "gif_initial_particles_shift_scale"
             ],
