@@ -1,7 +1,9 @@
-import torch
+import math
+
 import gpytorch
 import matplotlib.pyplot as plt
-import math
+import torch
+
 
 # Define the Gaussian Process Model
 class GPModel(gpytorch.models.ExactGP):
@@ -15,6 +17,7 @@ class GPModel(gpytorch.models.ExactGP):
         covar_x = self.covar_module(x)
         return gpytorch.distributions.MultivariateNormal(mean_x, covar_x)
 
+
 # Define input points where you want to sample
 train_x_all = torch.linspace(-20, 20, 150)
 # Number of random entries to select
@@ -27,35 +30,34 @@ train_x = train_x_all[indices]
 train_y = torch.zeros(train_x.size())  # We don't have training data
 # Training data is 100 points in [0,1] inclusi
 # ve regularly spaced
-#train_x = torch.linspace(0, 1, 100)
+# train_x = torch.linspace(0, 1, 100)
 
 
 def create_product_space(D, steps=100):
     # Create a list of D linspace tensors ranging from -1 to 1
     axes = [torch.linspace(-1, 1, steps) for _ in range(D)]
-    
+
     # Create the meshgrid for all D dimensions
-    grids = torch.meshgrid(*axes, indexing='ij')
-    
+    grids = torch.meshgrid(*axes, indexing="ij")
+
     # Stack the grid to form a (steps^D, D) array
     product_space = torch.stack(grids, dim=-1)
-    
+
     # Reshape the product space into (steps^D x D)
     reshaped_product_space = product_space.view(-1, D)
-    
+
     return reshaped_product_space
 
+
 # Example: Creating a 3D product space [-1,1] x [-1,1] x [-1,1]
-#product_space_3d = create_product_space(D=3, steps=10)
-#print(product_space_3d)  # Should output: torch.Size([1000000, 3])
+# product_space_3d = create_product_space(D=3, steps=10)
+# print(product_space_3d)  # Should output: torch.Size([1000000, 3])
 
 
 # Define likelihood
 likelihood = gpytorch.likelihoods.GaussianLikelihood()
 
-kernel = gpytorch.kernels.ScaleKernel(
-            gpytorch.kernels.RBFKernel()
-        )
+kernel = gpytorch.kernels.ScaleKernel(gpytorch.kernels.RBFKernel())
 
 # Instantiate the model
 model = GPModel(train_x, train_y, likelihood, kernel)
@@ -70,11 +72,9 @@ model.covar_module.base_kernel.lengthscale = 1  # Set lengthscale
 with torch.no_grad():
     train_y = model(train_x).sample()
 
-if __name__ == '__main__':
-    kernel = gpytorch.kernels.ScaleKernel(
-            gpytorch.kernels.RBFKernel()
-        )
-# Print all parameters
+if __name__ == "__main__":
+    kernel = gpytorch.kernels.ScaleKernel(gpytorch.kernels.RBFKernel())
+    # Print all parameters
     for param_name, param_value in kernel.named_parameters():
         print(f"{param_name}: {param_value.item()}")
 
