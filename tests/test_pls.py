@@ -46,6 +46,33 @@ def test_initialise_particles(
 
 
 @pytest.mark.parametrize(
+    "number_of_particles,seed,observation_noise",
+    [
+        [
+            3,
+            0,
+            torch.tensor([0.0, 0.0, 0.0]),
+        ],
+    ],
+)
+def test_sample_observation_noise(
+    number_of_particles: int,
+    seed: int,
+    observation_noise: torch.Tensor,
+):
+    pls = PLS(
+        basis=MockBasis(),
+        cost=MockCost(),
+    )
+    assert torch.allclose(
+        pls.sample_observation_noise(
+            number_of_particles=number_of_particles, seed=seed
+        ),
+        observation_noise,
+    )
+
+
+@pytest.mark.parametrize(
     "seed,particles,step_size,update",
     [
         [
@@ -131,6 +158,31 @@ def test_sample_predictive_noise(
         x=x,
     ).detach()
     assert torch.allclose(sampled_predict_noise, predict_noise)
+
+
+@pytest.mark.parametrize(
+    "seed,expected_cost",
+    [
+        [
+            0,
+            torch.tensor([[1.0]]),
+        ],
+    ],
+)
+def test_calculate_cost(
+    seed: int,
+    expected_cost: torch.Tensor,
+):
+    pls = PLS(
+        basis=MockBasis(),
+        cost=MockCost(),
+    )
+    set_seed(seed)
+    particles = pls.initialise_particles(number_of_particles=1, seed=seed)
+    cost = pls.calculate_cost(
+        particles=particles,
+    ).detach()
+    assert torch.allclose(cost, expected_cost)
 
 
 @pytest.mark.parametrize(
