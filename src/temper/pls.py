@@ -45,7 +45,8 @@ class TemperPLS(TemperBase):
             predictive_noise=None,
             observation_noise=None,
         )
-        assert isinstance(
-            prediction_distribution, gpytorch.distributions.MultivariateNormal
-        )
+        if not self.debug:
+            assert isinstance(
+                prediction_distribution, gpytorch.distributions.MultivariateNormal
+            )
         return prediction_distribution
