@@ -163,6 +163,83 @@ def test_conformal_gp_scale(
 
 
 @pytest.mark.parametrize(
+    "gp,x_calibration,y_calibration,expected_median",
+    [
+        [
+            ExactGP(
+                mean=gpytorch.means.ConstantMean(),
+                kernel=MockKernel(),
+                x=torch.tensor(
+                    [
+                        [1.1, 3.5, 3.5],
+                        [1.3, 7.5, 1.5],
+                        [2.5, 2.5, 0.5],
+                        [1.0, 2.0, 3.0],
+                        [1.5, 2.5, 3.5],
+                    ]
+                ),
+                y=torch.tensor([3.1, 3.4, 7.8, 0.9, 1.1]),
+                likelihood=gpytorch.likelihoods.GaussianLikelihood(),
+            ),
+            torch.tensor(
+                [
+                    [2.1, 2.5, 1.5],
+                    [6.3, 7.3, 1.5],
+                    [3.5, 2.8, 0.5],
+                    [4.0, 2.1, 2.0],
+                    [9.5, 2.3, 3.5],
+                ]
+            ),
+            torch.tensor([8.1, 3.0, 2.8, 7.9, 8.1]),
+            torch.tensor([4.9941, 16.6132, 9.1574, 9.4436, 22.5732]),
+        ],
+        [
+            SVGP(
+                mean=gpytorch.means.ConstantMean(),
+                kernel=MockKernel(),
+                x_induce=torch.tensor(
+                    [
+                        [1.1, 3.5, 3.5],
+                        [1.3, 7.5, 1.5],
+                        [2.5, 2.5, 0.5],
+                        [1.0, 2.0, 3.0],
+                        [1.5, 2.5, 3.5],
+                    ]
+                ),
+                likelihood=gpytorch.likelihoods.GaussianLikelihood(),
+            ),
+            torch.tensor(
+                [
+                    [2.1, 2.5, 1.5],
+                    [6.3, 7.3, 1.5],
+                    [3.5, 2.8, 0.5],
+                    [4.0, 2.1, 2.0],
+                    [9.5, 2.3, 3.5],
+                ]
+            ),
+            torch.tensor([8.1, 3.0, 2.8, 7.9, 8.1]),
+            torch.tensor([0.0048, 0.0084, 0.0038, 0.0070, 0.0138]),
+        ],
+    ],
+)
+def test_conformal_gp_median(
+    gp: GP_TYPE,
+    x_calibration: torch.Tensor,
+    y_calibration: torch.Tensor,
+    expected_median: torch.Tensor,
+):
+    gp.eval()
+    conformal_gp = ConformaliseGP(
+        gp=gp, x_calibration=x_calibration, y_calibration=y_calibration
+    )
+    assert torch.allclose(
+        conformal_gp.predict_median(x=x_calibration),
+        expected_median,
+        rtol=1e-1,
+    )
+
+
+@pytest.mark.parametrize(
     "particles,x_calibration,y_calibration",
     [
         [
@@ -254,28 +331,6 @@ def test_conformal_pls(
             torch.tensor([8.1, 3.0, 2.8, 7.9, 8.1]),
             327.94561767578125,
         ],
-        [
-            torch.tensor(
-                [
-                    [1.1, 3.5, 3.5],
-                    [1.3, 7.5, 1.5],
-                    [2.5, 2.5, 0.5],
-                    [1.0, 2.0, 3.0],
-                    [1.5, 2.5, 3.5],
-                ]
-            ),
-            torch.tensor(
-                [
-                    [2.1, 2.5, 1.5],
-                    [6.3, 7.3, 1.5],
-                    [3.5, 2.8, 0.5],
-                    [4.0, 2.1, 2.0],
-                    [9.5, 2.3, 3.5],
-                ]
-            ),
-            torch.tensor([8.1, 3.0, 2.8, 7.9, 8.1]),
-            327.94561767578125,
-        ],
     ],
 )
 def test_conformal_pls_scale(
@@ -299,4 +354,54 @@ def test_conformal_pls_scale(
             coverage=0.95,
         ),
         expected_average_interval_width,
+    )
+
+
+@pytest.mark.parametrize(
+    "particles,x_calibration,y_calibration,expected_median",
+    [
+        [
+            torch.tensor(
+                [
+                    [1.1, 3.5, 3.5],
+                    [1.3, 7.5, 1.5],
+                    [2.5, 2.5, 0.5],
+                    [1.0, 2.0, 3.0],
+                    [1.5, 2.5, 3.5],
+                ]
+            ),
+            torch.tensor(
+                [
+                    [2.1, 2.5, 1.5],
+                    [6.3, 7.3, 1.5],
+                    [3.5, 2.8, 0.5],
+                    [4.0, 2.1, 2.0],
+                    [9.5, 2.3, 3.5],
+                ]
+            ),
+            torch.tensor([8.1, 3.0, 2.8, 7.9, 8.1]),
+            torch.tensor([73.2000, 181.2000, 81.6000, 97.2000, 183.6000]),
+        ],
+    ],
+)
+def test_conformal_pls_median(
+    particles: torch.Tensor,
+    x_calibration: torch.Tensor,
+    y_calibration: torch.Tensor,
+    expected_median: torch.Tensor,
+):
+    conformal_pls = ConformalisePLS(
+        pls=PLS(
+            basis=MockBasis(),
+            cost=MockCost(),
+        ),
+        particles=particles,
+        x_calibration=x_calibration,
+        y_calibration=y_calibration,
+    )
+    assert torch.allclose(
+        conformal_pls.predict_median(
+            x=x_calibration,
+        ),
+        expected_median,
     )
