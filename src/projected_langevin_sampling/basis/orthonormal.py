@@ -26,9 +26,8 @@ class OrthonormalBasis(PLSBasis):
         x_induce: torch.Tensor,
         x_train: torch.Tensor,
         eigenvalue_threshold: float = 0.0,
-        additional_predictive_noise_distribution: Optional[
-            torch.distributions.Distribution
-        ] = None,
+        additional_predictive_noise_distribution: torch.distributions.Distribution
+        | None = None,
     ):
         super().__init__(
             additional_predictive_noise_distribution=additional_predictive_noise_distribution

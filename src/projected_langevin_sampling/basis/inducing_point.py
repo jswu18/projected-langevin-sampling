@@ -27,9 +27,8 @@ class InducingPointBasis(PLSBasis):
         x_induce: torch.Tensor,
         y_induce: torch.Tensor,
         x_train: torch.Tensor,
-        additional_predictive_noise_distribution: Optional[
-            torch.distributions.Distribution
-        ] = None,
+        additional_predictive_noise_distribution: torch.distributions.Distribution
+        | None = None,
     ):
         super().__init__(
             additional_predictive_noise_distribution=additional_predictive_noise_distribution
