@@ -71,7 +71,7 @@ from src.projected_langevin_sampling import PLS
         ],
     ],
 )
-def test_temper_gp(
+def test_conformal_gp(
     gp: GP_TYPE,
     x_calibration: torch.Tensor,
     y_calibration: torch.Tensor,
@@ -146,7 +146,7 @@ def test_temper_gp(
         ],
     ],
 )
-def test_temper_gp_scale(
+def test_conformal_gp_scale(
     gp: GP_TYPE,
     x_calibration: torch.Tensor,
     y_calibration: torch.Tensor,
@@ -209,7 +209,7 @@ def test_temper_gp_scale(
         ],
     ],
 )
-def test_temper_pls(
+def test_conformal_pls(
     particles: torch.Tensor,
     x_calibration: torch.Tensor,
     y_calibration: torch.Tensor,
@@ -278,7 +278,7 @@ def test_temper_pls(
         ],
     ],
 )
-def test_temper_pls_scale(
+def test_conformal_pls_scale(
     particles: torch.Tensor,
     x_calibration: torch.Tensor,
     y_calibration: torch.Tensor,
