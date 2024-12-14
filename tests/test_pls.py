@@ -1,3 +1,4 @@
+import numpy as np
 import pytest
 import torch
 
@@ -186,6 +187,56 @@ def test_calculate_cost(
 
 
 @pytest.mark.parametrize(
+    "seed,expected_cost_derivative",
+    [
+        [
+            0,
+            torch.tensor([[1.0]]),
+        ],
+    ],
+)
+def test_calculate_cost_derivative(
+    seed: int,
+    expected_cost_derivative: torch.Tensor,
+):
+    pls = PLS(
+        basis=MockBasis(),
+        cost=MockCost(),
+    )
+    set_seed(seed)
+    particles = pls.initialise_particles(number_of_particles=1, seed=seed)
+    cost_derivative = pls.calculate_cost_derivative(
+        particles=particles,
+    ).detach()
+    assert torch.allclose(cost_derivative, expected_cost_derivative)
+
+
+@pytest.mark.parametrize(
+    "seed,expected_energy_potential",
+    [
+        [
+            0,
+            0.0,
+        ],
+    ],
+)
+def test_calculate_energy_potential(
+    seed: int,
+    expected_energy_potential: torch.Tensor,
+):
+    pls = PLS(
+        basis=MockBasis(),
+        cost=MockCost(),
+    )
+    set_seed(seed)
+    particles = pls.initialise_particles(number_of_particles=1, seed=seed)
+    energy_potential = pls.calculate_energy_potential(
+        particles=particles,
+    )
+    assert np.allclose(energy_potential, expected_energy_potential)
+
+
+@pytest.mark.parametrize(
     "x,seed,particles,prediction",
     [
         [
@@ -208,7 +259,7 @@ def test_calculate_cost(
         ],
     ],
 )
-def test_predict_pls(
+def test_predict_samples(
     x: torch.Tensor,
     seed: int,
     particles: torch.Tensor,
@@ -223,5 +274,78 @@ def test_predict_pls(
         particles=particles,
         x=x,
     ).detach()
-    print(predicted_samples)
     assert torch.allclose(predicted_samples, prediction)
+
+
+@pytest.mark.parametrize(
+    "x,seed,particles",
+    [
+        [
+            torch.tensor(
+                [
+                    [3.0, 12.0, 3.0],
+                    [2.5, 2.5, 3.3],
+                ]
+            ),
+            0,
+            torch.tensor(
+                [
+                    [-4.177099609326439, 7.969579237856498, 10.277535644199697],
+                    [0.1856488604600999, -0.35420350057036537, -0.45677933473829735],
+                ]
+            ),
+        ],
+    ],
+)
+def test_predict(
+    x: torch.Tensor,
+    seed: int,
+    particles: torch.Tensor,
+):
+    pls = PLS(
+        basis=MockBasis(),
+        cost=MockCost(),
+    )
+    set_seed(seed)
+    predicted_distribution = pls.predict(
+        particles=particles,
+        x=x,
+    )
+    assert isinstance(predicted_distribution, torch.distributions.Normal)
+
+
+@pytest.mark.parametrize(
+    "x,seed,particles",
+    [
+        [
+            torch.tensor(
+                [
+                    [3.0, 12.0, 3.0],
+                    [2.5, 2.5, 3.3],
+                ]
+            ),
+            0,
+            torch.tensor(
+                [
+                    [-4.177099609326439, 7.969579237856498, 10.277535644199697],
+                    [0.1856488604600999, -0.35420350057036537, -0.45677933473829735],
+                ]
+            ),
+        ],
+    ],
+)
+def test_predict_call(
+    x: torch.Tensor,
+    seed: int,
+    particles: torch.Tensor,
+):
+    pls = PLS(
+        basis=MockBasis(),
+        cost=MockCost(),
+    )
+    set_seed(seed)
+    predicted_distribution = pls(
+        particles=particles,
+        x=x,
+    )
+    assert isinstance(predicted_distribution, torch.distributions.Normal)
