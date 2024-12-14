@@ -31,13 +31,10 @@ class MultiModalCost(PLSCost):
     def predict(
         self,
         prediction_samples: torch.Tensor,
-    ) -> gpytorch.distributions.MultivariateNormal:
-        """
-        Constructs a multivariate normal distribution from the prediction samples.
-        :param prediction_samples: The prediction samples of size (N, J).
-        :return: The multivariate normal distribution.
-        """
-        pass
+    ) -> None:
+        raise NotImplementedError(
+            "No Distribution is implemented for multi-modal costs"
+        )
 
     def calculate_cost(
         self, untransformed_train_prediction_samples: torch.Tensor
@@ -92,8 +89,7 @@ class MultiModalCost(PLSCost):
     ) -> torch.Tensor:
         """
         Calculates the cost derivative of the untransformed train prediction samples. These are the prediction samples
-        before being transformed by the link function. This method uses the autograd implementation if the link function
-        is not the identity.
+        before being transformed by the link function. This method ALWAYS uses the autograd implementation.
         :param untransformed_train_prediction_samples: The untransformed train prediction samples of size (N, J).
         :return: The cost derivative of size (N, J).
         """

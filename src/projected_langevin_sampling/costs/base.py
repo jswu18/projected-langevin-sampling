@@ -52,12 +52,15 @@ class PLSCost(ABC):
 
     @abstractmethod
     def calculate_cost_derivative(
-        self, untransformed_train_prediction_samples: torch.Tensor
+        self,
+        untransformed_train_prediction_samples: torch.Tensor,
+        force_autograd: bool = False,
     ) -> torch.Tensor:
         """
         Calculates the cost derivative of the untransformed train prediction samples. These are the prediction samples
         before being transformed by the link function.
         :param untransformed_train_prediction_samples: The untransformed train prediction samples of size (N, J).
+        :param force_autograd: An override to use autograd for the derivative calculation.
         :return: The cost derivative of size (N, J).
         """
         raise NotImplementedError()
