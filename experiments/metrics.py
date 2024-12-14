@@ -13,13 +13,9 @@ from experiments.plotters import plot_true_versus_predicted
 from experiments.utils import create_directory
 from src.conformalise import ConformaliseBase
 from src.conformalise.base import ConformalPrediction
-from src.conformalise.gp import ConformaliseGP
-from src.conformalise.pls import ConformalisePLS
-from src.distributions import NonParametric, StudentTMarginals
+from src.distributions import StudentTMarginals
 from src.gps import ExactGP, svGP
 from src.projected_langevin_sampling import ProjectedLangevinSampling
-from src.projected_langevin_sampling.costs.logistic_growth import LogisticGrowthCost
-from src.projected_langevin_sampling.costs.student_t import StudentTCost
 from src.temper import TemperBase
 from src.utils import set_seed
 
@@ -45,8 +41,6 @@ def calculate_mae(
         return prediction.loc.sub(y).abs().mean().item()
     elif isinstance(prediction, ConformalPrediction):
         return prediction.mean.sub(y).abs().mean().item()
-    elif isinstance(prediction, NonParametric):
-        return prediction.mean.sub(y).abs().mean().item()
     else:
         raise ValueError(f"Prediction type {type(prediction)} not supported")
 
@@ -71,8 +65,6 @@ def calculate_mse(
     elif isinstance(prediction, torch.distributions.studentT.StudentT):
         return prediction.loc.sub(y).pow(2).mean().item()
     elif isinstance(prediction, ConformalPrediction):
-        return prediction.mean.sub(y).pow(2).mean().item()
-    elif isinstance(prediction, NonParametric):
         return prediction.mean.sub(y).pow(2).mean().item()
     else:
         raise ValueError(f"Prediction type {type(prediction)} not supported")

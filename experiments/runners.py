@@ -303,7 +303,7 @@ def animate_pls_1d_particles_runner(
                 f"{particle_name}.gif",
             ),
             christmas_colours=christmas_colours,
-            init_particles=init_particles,
+            init_particles=init_particles.clone() if init_particles is not None else None,
         )
     if animate_1d_untransformed_path is not None:
         animate_1d_pls_untransformed_predictions(
@@ -321,6 +321,7 @@ def animate_pls_1d_particles_runner(
                 f"untransformed-{particle_name}.gif",
             ),
             christmas_colours=christmas_colours,
+            init_particles=init_particles.clone() if init_particles is not None else None,
         )
 
 

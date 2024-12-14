@@ -1,7 +1,7 @@
 import argparse
 import math
 import os
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict
 
 import gpytorch
 import matplotlib.pyplot as plt
@@ -10,7 +10,7 @@ import yaml
 
 from experiments.constructors import construct_average_ard_kernel
 from experiments.curves.curves import CURVE_FUNCTIONS, Curve
-from experiments.data import Data, ExperimentData, ProblemType
+from experiments.data import ExperimentData, ProblemType
 from experiments.plotters import (
     plot_1d_experiment_data,
     plot_1d_gp_prediction,
@@ -261,6 +261,7 @@ def main(
         initial_particle_noise=pls_config["initial_particle_noise"],
         approximation_dimension=onb_basis.approximation_dimension,
         number_of_particles=pls_config["number_of_particles"],
+        initial_particles_lower=pls_config["initial_particles_lower"],
         initial_particles_shift_scale=pls_config["initial_particles_shift_scale"],
         bernoulli_shift_true=data_config["bernoulli_shift_true"],
         basis_dimension=onb_basis.x_induce.shape[0],
@@ -336,9 +337,9 @@ def main(
             seed=pls_config["seed"],
             best_lr=pls_config["gif_lr"],
             number_of_epochs=pls_config["gif_number_of_epochs"],
-            animate_1d_path=plot_curve_path,
             plot_title=plot_title,
-            animate_1d_untransformed_path=None,
+            animate_1d_path=plot_curve_path,
+            animate_1d_untransformed_path=plot_curve_path,
             christmas_colours=pls_config["christmas_colours"]
             if "christmas_colours" in pls_config
             else False,

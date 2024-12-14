@@ -12,7 +12,7 @@ from tqdm import tqdm
 from experiments.data import Data, ExperimentData, ProblemType
 from src.conformalise import ConformaliseGP
 from src.conformalise.base import ConformaliseBase, ConformalPrediction
-from src.distributions import NonParametric, StudentTMarginals
+from src.distributions import StudentTMarginals
 from src.gps import ExactGP, svGP
 from src.kernels import PLSKernel
 from src.projected_langevin_sampling import ProjectedLangevinSampling
@@ -321,16 +321,6 @@ def plot_1d_pls_prediction(
                 mean=predicted_distribution.mean,
                 lower=predicted_distribution.lower,
                 upper=predicted_distribution.upper,
-                coverage=coverage,
-            )
-        elif isinstance(predicted_distribution, NonParametric):
-            fig, ax = plot_1d_non_parametric_prediction(
-                fig=fig,
-                ax=ax,
-                x=experiment_data.full.x,
-                mean=predicted_distribution.mean,
-                lower=predicted_distribution.quantile(0.5 - coverage / 2),
-                upper=predicted_distribution.quantile(0.5 + coverage / 2),
                 coverage=coverage,
             )
         else:
@@ -675,8 +665,8 @@ def animate_1d_pls_predictions(
     number_of_epochs: int,
     experiment_data: ExperimentData,
     x: torch.Tensor,
-    title: str,
     save_path: str,
+    title: str | None = None,
     christmas_colours: bool = False,
     animation_duration: int = 10,
     max_particles_to_plot: int = 50,
@@ -794,13 +784,14 @@ def animate_1d_pls_untransformed_predictions(
     number_of_epochs: int,
     experiment_data: ExperimentData,
     x: torch.Tensor,
-    title: str,
     save_path: str,
+    title: str | None = None,
     christmas_colours: bool = False,
     animation_duration: int = 10,
     max_particles_to_plot: int = 50,
     fps: int = 15,
     number_of_bins: int = 50,
+    init_particles: torch.Tensor | None = None,
 ) -> None:
     fig, ax = plt.subplots(3, 1, figsize=(6, 9), layout="constrained")
     fig, ax[0] = plot_1d_experiment_data(
@@ -812,17 +803,29 @@ def animate_1d_pls_untransformed_predictions(
     )
     ax[0].set_xlim(x.min().cpu(), x.max().cpu())
     ax[1].set_xlim(x.min().cpu(), x.max().cpu())
+    ax[1].set_ylim(ax[0].get_ylim())
+
+    # turn off autoscale before plotting particles
     ax[0].autoscale(
         enable=False, axis="x"
-    )  # turn off autoscale before plotting particles
+    )  
     ax[1].autoscale(
         enable=False, axis="x"
-    )  # turn off autoscale before plotting particles
-    particles = pls.initialise_particles(
-        number_of_particles=number_of_particles,
-        seed=seed,
-        noise_only=initial_particles_noise_only,
-    )
+    ) 
+    ax[0].autoscale(
+        enable=False, axis="y"
+    ) 
+    ax[1].autoscale(
+        enable=False, axis="y"
+    ) 
+    if init_particles is None:
+        particles = pls.initialise_particles(
+            number_of_particles=number_of_particles,
+            seed=seed,
+            noise_only=initial_particles_noise_only,
+        )
+    else:
+        particles = init_particles
     predictive_noise = pls.sample_predictive_noise(
         x=experiment_data.full.x,
         particles=particles,
@@ -887,7 +890,7 @@ def animate_1d_pls_untransformed_predictions(
         alpha=0.75,
         fill=True,
     )
-    ax[2].set_ylim(0, 1.5 * max(counts))
+    ax[2].set_ylim(0, 3 * max(counts))
     ax[2].autoscale(enable=False, axis="y")  # turn off autoscale
     ax[2].set_xlabel(f"$f(x)$ bin")
     ax[2].set_ylabel("count")
@@ -955,6 +958,8 @@ def animate_1d_pls_untransformed_predictions(
         ax[2].set_title(
             f"Histogram at $f(x={experiment_data.train.x[max_train_idx].item():.2f}) (t={step_size * particle_wrapper.num_updates:.2e})$"
         )
+        if title is not None:
+            plt.suptitle(title)
         progress_bar.update(n=1)
         return (transformed_samples_plotted[0],)
 
