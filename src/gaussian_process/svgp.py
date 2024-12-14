@@ -1,5 +1,3 @@
-from typing import Union
-
 import gpytorch
 import torch
 from gpytorch.models import ApproximateGP
