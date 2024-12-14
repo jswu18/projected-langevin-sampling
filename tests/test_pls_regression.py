@@ -3,7 +3,7 @@ import torch
 
 from mockers.basis import MockBasis
 from mockers.cost import MockCost
-from src.projected_langevin_sampling import ProjectedLangevinSampling
+from src.projected_langevin_sampling import PLS
 from src.utils import set_seed
 
 
@@ -35,7 +35,7 @@ def test_initialise_particles(
     seed: int,
     particles: torch.Tensor,
 ):
-    pls = ProjectedLangevinSampling(
+    pls = PLS(
         basis=MockBasis(),
         cost=MockCost(),
     )
@@ -88,7 +88,7 @@ def test_calculate_update(
     step_size: float,
     update: torch.Tensor,
 ):
-    pls = ProjectedLangevinSampling(
+    pls = PLS(
         basis=MockBasis(),
         cost=MockCost(),
     )
@@ -120,7 +120,7 @@ def test_sample_predictive_noise(
     seed: int,
     predict_noise: torch.Tensor,
 ):
-    pls = ProjectedLangevinSampling(
+    pls = PLS(
         basis=MockBasis(),
         cost=MockCost(),
     )
@@ -162,7 +162,7 @@ def test_predict_pls(
     particles: torch.Tensor,
     prediction: torch.Tensor,
 ):
-    pls = ProjectedLangevinSampling(
+    pls = PLS(
         basis=MockBasis(),
         cost=MockCost(),
     )

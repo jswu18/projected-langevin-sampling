@@ -2,7 +2,7 @@ import gpytorch
 import linear_operator
 import torch
 
-from src.kernels import PLSKernel
+from src.projected_langevin_sampling import PLSKernel
 
 
 class MockKernel(gpytorch.kernels.Kernel):
@@ -23,7 +23,7 @@ class MockKernel(gpytorch.kernels.Kernel):
         return x1 @ x2.transpose(-1, -2)
 
 
-class MockPLSKernel(PLSKernel):
+class MockProjectedLangevinSamplingKernel(PLSKernel):
     """
     A mock kernel used for testing that computes the inner product between the inputs.
     """

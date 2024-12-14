@@ -8,8 +8,7 @@ from tqdm import tqdm
 from experiments.data import Data
 from experiments.early_stopper import EarlyStopper
 from src.gps import ExactGP, svGP
-from src.kernels import PLSKernel
-from src.projected_langevin_sampling import ProjectedLangevinSampling
+from src.projected_langevin_sampling import PLS, PLSKernel
 from src.utils import set_seed
 
 
@@ -139,7 +138,7 @@ def train_svgp(
 
 
 def train_pls(
-    pls: ProjectedLangevinSampling,
+    pls: PLS,
     particles: torch.Tensor,
     number_of_epochs: int,
     step_size: float,

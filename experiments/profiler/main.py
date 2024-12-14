@@ -15,8 +15,8 @@ from experiments.runners import inducing_points_runner
 from experiments.utils import create_directory
 from src.gps import svGP
 from src.inducing_point_selectors import ConditionalVarianceInducingPointSelector
-from src.kernels.projected_langevin_sampling import PLSKernel
-from src.projected_langevin_sampling import ProjectedLangevinSampling
+from src.projected_langevin_sampling.kernels import PLSKernel
+from src.projected_langevin_sampling import PLS
 from src.projected_langevin_sampling.basis import OrthonormalBasis
 from src.projected_langevin_sampling.costs import GaussianCost
 from src.projected_langevin_sampling.link_functions import IdentityLinkFunction
@@ -67,7 +67,7 @@ def train_pls_for_profiler(
         y_train=experiment_data.train.y,
         link_function=IdentityLinkFunction(),
     )
-    pls = ProjectedLangevinSampling(
+    pls = PLS(
         basis=onb_basis,
         cost=cost,
     )

@@ -15,7 +15,7 @@ from src.conformalise import ConformaliseBase
 from src.conformalise.base import ConformalPrediction
 from src.distributions import StudentTMarginals
 from src.gps import ExactGP, svGP
-from src.projected_langevin_sampling import ProjectedLangevinSampling
+from src.projected_langevin_sampling import PLS
 from src.temper import TemperBase
 from src.utils import set_seed
 
@@ -148,7 +148,7 @@ def calculate_median_interval_width(
 
 def calculate_metrics(
     model: Union[
-        ExactGP, svGP, ProjectedLangevinSampling, TemperBase, ConformaliseBase
+        ExactGP, svGP, PLS, TemperBase, ConformaliseBase
     ],
     experiment_data: ExperimentData,
     model_name: str,
@@ -180,7 +180,7 @@ def calculate_metrics(
             prediction = model.likelihood(model(data.x))
         elif isinstance(model, ConformaliseBase):
             prediction = model(x=data.x, coverage=coverage)
-        elif isinstance(model, ProjectedLangevinSampling) and particles is not None:
+        elif isinstance(model, PLS) and particles is not None:
             prediction = model(x=data.x, particles=particles)
         else:
             raise ValueError(f"Model type {type(model)} not supported")

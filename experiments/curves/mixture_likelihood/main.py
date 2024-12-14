@@ -26,8 +26,8 @@ from experiments.runners import (
 )
 from experiments.utils import create_directory
 from src.inducing_point_selectors import ConditionalVarianceInducingPointSelector
-from src.kernels.projected_langevin_sampling import PLSKernel
-from src.projected_langevin_sampling import ProjectedLangevinSampling
+from src.projected_langevin_sampling.kernels import PLSKernel
+from src.projected_langevin_sampling import PLS
 from src.projected_langevin_sampling.basis import OrthonormalBasis
 from src.projected_langevin_sampling.costs.multimodal import MultiModalCost
 from src.projected_langevin_sampling.link_functions import IdentityLinkFunction
@@ -255,7 +255,7 @@ def main(
         bernoulli_noise=data_config["bernoulli_probability_true"],
     )
     plot_title = "PLS for Multi-modal Regression"
-    pls = ProjectedLangevinSampling(basis=onb_basis, cost=cost, name="pls-onb")
+    pls = PLS(basis=onb_basis, cost=cost, name="pls-onb")
     set_seed(pls_config["seed"])
     init_particles = generate_init_particles(
         initial_particle_noise=pls_config["initial_particle_noise"],
@@ -295,11 +295,6 @@ def main(
             "minimum_change_in_energy_potential"
         ],
         seed=pls_config["seed"],
-        observation_noise_upper=pls_config["observation_noise_upper"],
-        observation_noise_lower=pls_config["observation_noise_lower"],
-        number_of_observation_noise_searches=pls_config[
-            "number_of_observation_noise_searches"
-        ],
         plot_title=plot_title,
         plot_energy_potential_path=plot_curve_path,
         metric_to_optimise=pls_config["metric_to_optimise"],

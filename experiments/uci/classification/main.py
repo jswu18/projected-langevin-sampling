@@ -26,8 +26,7 @@ from experiments.uci.constants import (
     ClassificationDatasetSchema,
 )
 from src.inducing_point_selectors import ConditionalVarianceInducingPointSelector
-from src.kernels import PLSKernel
-from src.projected_langevin_sampling import ProjectedLangevinSampling
+from src.projected_langevin_sampling import PLS, PLSKernel
 from src.projected_langevin_sampling.basis import OrthonormalBasis
 from src.projected_langevin_sampling.costs import BernoulliCost
 from src.projected_langevin_sampling.link_functions import SigmoidLinkFunction
@@ -191,7 +190,7 @@ def main(
         link_function=SigmoidLinkFunction(),
     )
     pls_dict = {
-        "pls-onb": ProjectedLangevinSampling(
+        "pls-onb": PLS(
             basis=onb_basis,
             cost=cost,
         ),

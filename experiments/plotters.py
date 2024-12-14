@@ -14,8 +14,7 @@ from src.conformalise import ConformaliseGP
 from src.conformalise.base import ConformaliseBase, ConformalPrediction
 from src.distributions import StudentTMarginals
 from src.gps import ExactGP, svGP
-from src.kernels import PLSKernel
-from src.projected_langevin_sampling import ProjectedLangevinSampling
+from src.projected_langevin_sampling import PLS, PLSKernel
 from src.projected_langevin_sampling.basis import OrthonormalBasis
 from src.utils import set_seed
 
@@ -657,7 +656,7 @@ def plot_true_versus_predicted(
 
 
 def animate_1d_pls_predictions(
-    pls: ProjectedLangevinSampling,
+    pls: PLS,
     number_of_particles: int,
     initial_particles_noise_only: bool,
     seed: int,
@@ -776,7 +775,7 @@ def animate_1d_pls_predictions(
 
 
 def animate_1d_pls_untransformed_predictions(
-    pls: ProjectedLangevinSampling,
+    pls: PLS,
     number_of_particles: int,
     initial_particles_noise_only: bool,
     seed: int,

@@ -29,8 +29,7 @@ from experiments.runners import (
 )
 from experiments.utils import create_directory
 from src.inducing_point_selectors import ConditionalVarianceInducingPointSelector
-from src.kernels import PLSKernel
-from src.projected_langevin_sampling import ProjectedLangevinSampling
+from src.projected_langevin_sampling import PLS, PLSKernel
 from src.projected_langevin_sampling.basis import InducingPointBasis, OrthonormalBasis
 from src.projected_langevin_sampling.costs import BernoulliCost
 from src.projected_langevin_sampling.link_functions import (
@@ -228,19 +227,19 @@ def main(
         link_function=ProbitLinkFunction(),
     )
     pls_dict = {
-        "pls-onb-probit": ProjectedLangevinSampling(
+        "pls-onb-probit": PLS(
             basis=onb_basis,
             cost=probit_cost,
         ),
-        "pls-ipb-probit": ProjectedLangevinSampling(
+        "pls-ipb-probit": PLS(
             basis=ipb_basis,
             cost=probit_cost,
         ),
-        "pls-onb-sigmoid": ProjectedLangevinSampling(
+        "pls-onb-sigmoid": PLS(
             basis=onb_basis,
             cost=sigmoid_cost,
         ),
-        "pls-ipb-sigmoid": ProjectedLangevinSampling(
+        "pls-ipb-sigmoid": PLS(
             basis=ipb_basis,
             cost=sigmoid_cost,
         ),

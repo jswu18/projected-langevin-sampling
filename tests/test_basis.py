@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from mockers.kernel import MockKernel, MockPLSKernel
+from mockers.kernel import MockKernel, MockProjectedLangevinSamplingKernel
 from src.projected_langevin_sampling.basis import InducingPointBasis, OrthonormalBasis
 from src.utils import set_seed
 
@@ -57,7 +57,7 @@ def test_onb_approximation_dimension(
 ):
     assert (
         OrthonormalBasis(
-            kernel=MockPLSKernel(
+            kernel=MockProjectedLangevinSamplingKernel(
                 base_kernel=MockKernel(),
                 approximation_samples=x_induce,
             ),
@@ -101,7 +101,7 @@ def test_ipb_approximation_dimension(
 ):
     assert (
         InducingPointBasis(
-            kernel=MockPLSKernel(
+            kernel=MockProjectedLangevinSamplingKernel(
                 base_kernel=MockKernel(),
                 approximation_samples=x_induce,
             ),
@@ -174,7 +174,7 @@ def test_onb_initialised_particles(
 ):
     assert torch.allclose(
         OrthonormalBasis(
-            kernel=MockPLSKernel(
+            kernel=MockProjectedLangevinSamplingKernel(
                 base_kernel=MockKernel(),
                 approximation_samples=x_induce,
             ),
@@ -253,7 +253,7 @@ def test_ipb_initialised_particles(
 ):
     assert torch.allclose(
         InducingPointBasis(
-            kernel=MockPLSKernel(
+            kernel=MockProjectedLangevinSamplingKernel(
                 base_kernel=MockKernel(),
                 approximation_samples=x_induce,
             ),
@@ -314,7 +314,7 @@ def test_onb_predict_untransformed_samples(
 ):
     assert torch.allclose(
         OrthonormalBasis(
-            kernel=MockPLSKernel(
+            kernel=MockProjectedLangevinSamplingKernel(
                 base_kernel=MockKernel(),
                 approximation_samples=x_induce,
             ),
@@ -373,7 +373,7 @@ def test_ipb_predict_untransformed_samples(
 ):
     assert torch.allclose(
         InducingPointBasis(
-            kernel=MockPLSKernel(
+            kernel=MockProjectedLangevinSamplingKernel(
                 base_kernel=MockKernel(),
                 approximation_samples=x_induce,
             ),

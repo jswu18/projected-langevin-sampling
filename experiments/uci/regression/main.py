@@ -29,8 +29,7 @@ from experiments.uci.constants import DATASET_SCHEMA_MAPPING, RegressionDatasetS
 from src.conformalise import ConformalisePLS
 from src.conformalise.gp import ConformaliseGP
 from src.inducing_point_selectors import ConditionalVarianceInducingPointSelector
-from src.kernels import PLSKernel
-from src.projected_langevin_sampling import ProjectedLangevinSampling
+from src.projected_langevin_sampling import PLS, PLSKernel
 from src.projected_langevin_sampling.basis import InducingPointBasis, OrthonormalBasis
 from src.projected_langevin_sampling.costs import GaussianCost
 from src.projected_langevin_sampling.costs.student_t import StudentTCost
@@ -234,7 +233,7 @@ def main(
         #     basis=onb_basis,
         #     cost=gaussian_cost,
         # ),
-        "pls-student-onb": ProjectedLangevinSampling(
+        "pls-student-onb": PLS(
             basis=student_onb_basis,
             cost=student_cost,
         ),
@@ -297,22 +296,22 @@ def main(
             plots_path=plots_path,
             coverage=metrics_config["coverage"],
         )
-        # set_seed(pls_config["seed"])
-        # calculate_metrics(
-        #     model=TemperPLS(
-        #         pls=pls,
-        #         particles=particles,
-        #         x_calibration=experiment_data.validation.x,
-        #         y_calibration=experiment_data.validation.y,
-        #     ),
-        #     particles=particles,
-        #     model_name=f"{pls_name}-temper",
-        #     dataset_name=dataset_name,
-        #     experiment_data=experiment_data,
-        #     results_path=results_path,
-        #     plots_path=plots_path,
-        #     coverage=metrics_config["coverage"],
-        # )
+        set_seed(pls_config["seed"])
+        calculate_metrics(
+            model=TemperPLS(
+                pls=pls,
+                particles=particles,
+                x_calibration=experiment_data.validation.x,
+                y_calibration=experiment_data.validation.y,
+            ),
+            particles=particles,
+            model_name=f"{pls_name}-temper",
+            dataset_name=dataset_name,
+            experiment_data=experiment_data,
+            results_path=results_path,
+            plots_path=plots_path,
+            coverage=metrics_config["coverage"],
+        )
         set_seed(pls_config["seed"])
         calculate_metrics(
             model=ConformalisePLS(
@@ -397,20 +396,20 @@ def main(
             plots_path=plots_path,
             coverage=metrics_config["coverage"],
         )
-        # set_seed(svgp_config["seed"])
-        # calculate_metrics(
-        #     model=TemperGP(
-        #         gp=svgp,
-        #         x_calibration=experiment_data.validation.x,
-        #         y_calibration=experiment_data.validation.y,
-        #     ),
-        #     model_name=f"{model_name}-temper",
-        #     dataset_name=dataset_name,
-        #     experiment_data=experiment_data,
-        #     results_path=results_path,
-        #     plots_path=plots_path,
-        #     coverage=metrics_config["coverage"],
-        # )
+        set_seed(svgp_config["seed"])
+        calculate_metrics(
+            model=TemperGP(
+                gp=svgp,
+                x_calibration=experiment_data.validation.x,
+                y_calibration=experiment_data.validation.y,
+            ),
+            model_name=f"{model_name}-temper",
+            dataset_name=dataset_name,
+            experiment_data=experiment_data,
+            results_path=results_path,
+            plots_path=plots_path,
+            coverage=metrics_config["coverage"],
+        )
         set_seed(svgp_config["seed"])
         calculate_metrics(
             model=ConformaliseGP(

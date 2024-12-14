@@ -35,7 +35,6 @@ pls:
   initial_particle_noise:  1.0e-4
   observation_noise_upper: 1.0e+4
   observation_noise_lower: 1.0e-4
-  number_of_observation_noise_searches: 0
   early_stopper_patience: 1.0e-4
   gif_initial_particles_shift_scale: 0.1
   gif_lr: 3.0e-4

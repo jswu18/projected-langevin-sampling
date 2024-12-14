@@ -4,9 +4,10 @@ from src.projected_langevin_sampling.basis.base import PLSBasis
 from src.projected_langevin_sampling.costs.base import PLSCost
 
 
-class ProjectedLangevinSampling:
+class PLS:
     """
-    A class for the projected Langevin sampling. This class contains the basis and cost defining the function space
+    A class for the projected Langevin sampling model. 
+    This class contains the basis and cost defining the function space
     approximation and the desired output space respectively.
 
     N is the number of training points.

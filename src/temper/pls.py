@@ -1,7 +1,7 @@
 import gpytorch
 import torch
 
-from src.projected_langevin_sampling import ProjectedLangevinSampling
+from src.projected_langevin_sampling import PLS
 from src.projected_langevin_sampling.costs import GaussianCost
 from src.temper.base import TemperBase
 
@@ -16,7 +16,7 @@ class TemperPLS(TemperBase):
         self,
         x_calibration: torch.Tensor,
         y_calibration: torch.Tensor,
-        pls: ProjectedLangevinSampling,
+        pls: PLS,
         particles: torch.Tensor,
     ):
         assert isinstance(pls.cost, GaussianCost)
