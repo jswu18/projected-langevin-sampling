@@ -311,7 +311,7 @@ def test_predict(
         particles=particles,
         x=x,
     )
-    assert isinstance(predicted_distribution, torch.distributions.Normal)
+    assert isinstance(predicted_distribution, torch.distributions.MultivariateNormal)
 
 
 @pytest.mark.parametrize(
@@ -348,4 +348,4 @@ def test_predict_call(
         particles=particles,
         x=x,
     )
-    assert isinstance(predicted_distribution, torch.distributions.Normal)
+    assert isinstance(predicted_distribution, torch.distributions.MultivariateNormal)

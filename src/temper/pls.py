@@ -18,8 +18,11 @@ class TemperPLS(TemperBase):
         y_calibration: torch.Tensor,
         pls: PLS,
         particles: torch.Tensor,
+        debug: bool = False,
     ):
-        assert isinstance(pls.cost, GaussianCost)
+        self.debug = debug
+        if not self.debug:
+            assert isinstance(pls.cost, GaussianCost)
         self.pls = pls
         self.particles = particles
         super().__init__(
