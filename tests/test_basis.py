@@ -517,3 +517,142 @@ def test_ipb_calculate_energy_potential(
         ),
         expected_energy_potential,
     )
+
+
+@pytest.mark.parametrize(
+    "x_induce,x_train,eigenvalue_threshold,particles,x,expected_predictive_noise",
+    [
+        [
+            torch.tensor(
+                [
+                    [1.0, 2.0, 3.0],
+                    [1.5, 2.5, 3.5],
+                ]
+            ),
+            torch.tensor(
+                [
+                    [1.1, 3.5, 3.5],
+                    [1.3, 7.5, 1.5],
+                    [2.5, 2.5, 0.5],
+                    [1.0, 2.0, 3.0],
+                    [1.5, 2.5, 3.5],
+                ]
+            ),
+            0.0,
+            torch.tensor(
+                [
+                    [1.5409960746765137, -0.293428897857666, -2.1787893772125244],
+                    [0.5684312582015991, -1.0845223665237427, -1.3985954523086548],
+                ]
+            ),
+            torch.tensor(
+                [
+                    [3.0, 2.0, 3.2],
+                    [1.5, 6.5, 1.5],
+                ]
+            ),
+            torch.tensor(
+                [
+                    [0.0851, -0.1569, -0.2067],
+                    [3.1662, 4.6236, -1.2954],
+                    [1.3697, 1.4171, 0.7368],
+                    [3.9759, 6.4164, -2.9854],
+                ]
+            ),
+        ],
+    ],
+)
+def test_onb_sample_predictive_noise(
+    x_induce: torch.Tensor,
+    x_train: torch.Tensor,
+    eigenvalue_threshold: float,
+    particles: torch.Tensor,
+    x: torch.Tensor,
+    expected_predictive_noise: torch.Tensor,
+):
+    set_seed(0)
+    assert torch.allclose(
+        OrthonormalBasis(
+            kernel=MockProjectedLangevinSamplingKernel(
+                base_kernel=MockKernel(),
+                approximation_samples=x_induce,
+            ),
+            x_induce=x_induce,
+            x_train=x_train,
+            eigenvalue_threshold=eigenvalue_threshold,
+        ).sample_predictive_noise(
+            particles=particles,
+            x=x,
+        ),
+        expected_predictive_noise,
+        rtol=1e-3,
+    )
+
+
+@pytest.mark.parametrize(
+    "x_induce,y_induce,x_train,particles,x,expected_predictive_noise",
+    [
+        [
+            torch.tensor(
+                [
+                    [1.0, 2.0, 3.0],
+                    [1.5, 2.5, 3.5],
+                ]
+            ),
+            torch.tensor([2.1, 3.3]),
+            torch.tensor(
+                [
+                    [1.1, 3.5, 3.5],
+                    [1.3, 7.5, 1.5],
+                    [2.5, 2.5, 0.5],
+                    [1.0, 2.0, 3.0],
+                    [1.5, 2.5, 3.5],
+                ]
+            ),
+            torch.tensor(
+                [
+                    [1.5409960746765137, -0.293428897857666, -2.1787893772125244],
+                    [0.5684312582015991, -1.0845223665237427, -1.3985954523086548],
+                ]
+            ),
+            torch.tensor(
+                [
+                    [3.0, 2.0, 3.2],
+                    [1.5, 6.5, 1.5],
+                ]
+            ),
+            torch.tensor(
+                [
+                    [-6.1583, -4.5181, -2.5899],
+                    [-7.5110, -5.6522, -3.1141],
+                    [-7.8667, -7.4099, -2.3352],
+                    [-6.6571, -1.8080, -5.8250],
+                ]
+            ),
+        ],
+    ],
+)
+def test_ipb_sample_predictive_noise(
+    x_induce: torch.Tensor,
+    y_induce: torch.Tensor,
+    x_train: torch.Tensor,
+    particles: torch.Tensor,
+    x: torch.Tensor,
+    expected_predictive_noise: torch.Tensor,
+):
+    assert torch.allclose(
+        InducingPointBasis(
+            kernel=MockProjectedLangevinSamplingKernel(
+                base_kernel=MockKernel(),
+                approximation_samples=x_induce,
+            ),
+            x_induce=x_induce,
+            y_induce=y_induce,
+            x_train=x_train,
+        ).sample_predictive_noise(
+            particles=particles,
+            x=x,
+        ),
+        expected_predictive_noise,
+        rtol=1e-3,
+    )

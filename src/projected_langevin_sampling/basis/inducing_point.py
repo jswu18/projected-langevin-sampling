@@ -155,9 +155,9 @@ class InducingPointBasis(PLSBasis):
         self,
         particles: torch.Tensor,
         x: torch.Tensor,
-    ):
+    ) -> torch.Tensor:
         """
-        Calculates the predictive noise for a given input.
+        Samples the predictive noise for a given input.
         G([Z, x]) ~ N(0, r([Z, x], [Z, x]))
         :param particles: Particles of size (M, J)
         :param x: Test points of size (N*, D)
