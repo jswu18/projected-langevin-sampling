@@ -34,6 +34,7 @@ class GaussianCost(PLSCost):
         super().__init__(
             link_function=link_function, observation_noise=observation_noise
         )
+        self.observation_noise: float
         self.y_train = y_train
 
     def predict(

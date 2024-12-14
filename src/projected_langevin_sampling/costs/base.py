@@ -73,16 +73,12 @@ class PLSCost(ABC):
         :param untransformed_train_prediction_samples: The untransformed train prediction samples of size (N, J).
         :return: The cost derivative of size (N, J).
         """
-        return (
-            torch.vmap(
-                torch.func.jacfwd(self.calculate_cost),
-                in_dims=2,
-            )(
-                untransformed_train_prediction_samples[:, None, :]
-            ).T.reshape(untransformed_train_prediction_samples.shape)
-            # .reshape(untransformed_train_prediction_samples.T.shape)
-            # .T
-        )
+        return torch.vmap(
+            torch.func.jacfwd(self.calculate_cost),
+            in_dims=2,
+        )(
+            untransformed_train_prediction_samples[:, None, :]
+        ).T.reshape(untransformed_train_prediction_samples.shape)
 
     def sample_observation_noise(
         self,

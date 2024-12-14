@@ -107,7 +107,6 @@ class ConditionalVarianceInducingPointSelector(InducingPointSelector):
                 if int(next_idx) not in indices[: i + 1]:
                     indices[i + 1] = int(next_idx)
                     break
-            # indices[i + 1] = np.argmax(di)  # select first point, add to index 0
             # sum of di is tr(Kff-Qff), if this is small things are ok
             if np.sum(np.clip(di, 0, None)) < self.threshold:
                 indices = indices[:m]

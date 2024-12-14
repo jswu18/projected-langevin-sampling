@@ -272,8 +272,6 @@ def plot_1d_pls_prediction(
                 label="induce" if i == 0 else None,
                 zorder=1,
             )
-    # if not is_sample_untransformed:
-    #     ax.autoscale(enable=False)  # turn off autoscale before plotting particles
     if predicted_distribution:
         if isinstance(
             predicted_distribution, gpytorch.distributions.MultivariateNormal

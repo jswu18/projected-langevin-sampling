@@ -229,10 +229,10 @@ def main(
         scale=scale,
     )
     pls_dict = {
-        # "pls-onb": ProjectedLangevinSampling(
-        #     basis=onb_basis,
-        #     cost=gaussian_cost,
-        # ),
+        "pls-onb": PLS(
+            basis=onb_basis,
+            cost=gaussian_cost,
+        ),
         "pls-student-onb": PLS(
             basis=student_onb_basis,
             cost=student_cost,
@@ -432,69 +432,65 @@ if __name__ == "__main__":
     with open(args.config_path, "r") as file:
         loaded_config = yaml.safe_load(file)
     if args.data_seed == -1:
-        # data_seeds = [0, 1, 2, 3, 4]
-        data_seeds = [2, 3, 4]
+        data_seeds = [0, 1, 2, 3, 4]
     else:
         data_seeds = [args.data_seed]
 
     outputs_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "outputs")
     for data_seed in data_seeds:
         for dataset_schema in RegressionDatasetSchema:
-            # try:
-            #     main(
-            #         data_seed=data_seed,
-            #         dataset_name=str(dataset_schema.name),
-            #         data_config=loaded_config["data"],
-            #         kernel_config=loaded_config["kernel"],
-            #         inducing_points_config=loaded_config["inducing_points"],
-            #         pls_config=loaded_config["pls"],
-            #         svgp_config=loaded_config["svgp"],
-            #         metrics_config=loaded_config["metrics"],
-            #         outputs_path=outputs_path,
-            #     )
-            # except Exception as e:
-            #     print(f"Error with {dataset_schema.name=} and {data_seed=}:{e}")
-            main(
-                data_seed=data_seed,
-                dataset_name=str(dataset_schema.name),
-                data_config=loaded_config["data"],
-                kernel_config=loaded_config["kernel"],
-                inducing_points_config=loaded_config["inducing_points"],
-                pls_config=loaded_config["pls"],
-                svgp_config=loaded_config["svgp"],
-                metrics_config=loaded_config["metrics"],
-                outputs_path=outputs_path,
-            )
-            # try:
-            #     concatenate_metrics(
-            #         results_path=os.path.join(outputs_path, str(data_seed), "results"),
-            #         data_types=["train", "test"],
-            #         model_names=[
-            #             # "pls-onb",
-            #             # "pls-onb-temper",
-            #             "pls-onb-conformalise",
-            #             "pls-student-onb-conformalise",
-            #             # "svgp",
-            #             # "svgp-temper",
-            #             "svgp-conformalise",
-            #             "svgp-student-conformalise",
-            #         ],
-            #         datasets=list(RegressionDatasetSchema.__members__.keys()),
-            #         metrics=["mae", "mse", "nll", "average_interval_width", "coverage"],
-            #     )
-            # except Exception as e:
-            #     print(f"Error with concatenating metrics for {data_seed=}:{e}")
+            try:
+                main(
+                    data_seed=data_seed,
+                    dataset_name=str(dataset_schema.name),
+                    data_config=loaded_config["data"],
+                    kernel_config=loaded_config["kernel"],
+                    inducing_points_config=loaded_config["inducing_points"],
+                    pls_config=loaded_config["pls"],
+                    svgp_config=loaded_config["svgp"],
+                    metrics_config=loaded_config["metrics"],
+                    outputs_path=outputs_path,
+                )
+            except Exception as e:
+                print(f"Error with {dataset_schema.name=} and {data_seed=}:{e}")
+            try:
+                concatenate_metrics(
+                    results_path=os.path.join(outputs_path, str(data_seed), "results"),
+                    data_types=["train", "test"],
+                    model_names=[
+                        "pls-onb",
+                        "pls-onb-temper",
+                        "pls-onb-conformalise",
+                        "pls-student-onb",
+                        "pls-student-onb-temper",
+                        "pls-student-onb-conformalise",
+                        "svgp",
+                        "svgp-temper",
+                        "svgp-conformalise",
+                        "svgp-student",
+                        "svgp-student-temper",
+                        "svgp-student-conformalise",
+                    ],
+                    datasets=list(RegressionDatasetSchema.__members__.keys()),
+                    metrics=["mae", "mse", "nll", "average_interval_width", "coverage"],
+                )
+            except Exception as e:
+                print(f"Error with concatenating metrics for {data_seed=}:{e}")
             concatenate_metrics(
                 results_path=os.path.join(outputs_path, str(data_seed), "results"),
                 data_types=["train", "test"],
                 model_names=[
-                    # "pls-onb",
-                    # "pls-onb-temper",
+                    "pls-onb",
+                    "pls-onb-temper",
                     "pls-onb-conformalise",
+                    "pls-student-onb",
+                    "pls-student-onb-temper",
                     "pls-student-onb-conformalise",
-                    # "svgp",
-                    # "svgp-temper",
+                    "svgp",
+                    "svgp-temper",
                     "svgp-conformalise",
+                    "svgp-student",
+                    "svgp-student-temper",
                     "svgp-student-conformalise",
                 ],
                 datasets=list(RegressionDatasetSchema.__members__.keys()),

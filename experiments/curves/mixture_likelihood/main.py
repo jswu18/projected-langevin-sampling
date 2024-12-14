@@ -83,14 +83,6 @@ def get_experiment_data(
     experiment_data.full.y_untransformed = (
         y_curve + bernoulli_shift_true * bernoulli_noise
     )
-    # experiment_data.train.y_untransformed = experiment_data.train.y.clone()
-    # experiment_data.validation.y_untransformed = experiment_data.validation.y.clone()
-    # experiment_data.test.y_untransformed = experiment_data.test.y.clone()
-
-    # experiment_data.full.y += bernoulli_shift_true * bernoulli_noise
-    # experiment_data.train.y += bernoulli_shift_true * bernoulli_noise
-    # experiment_data.validation.y += bernoulli_shift_true * bernoulli_noise
-    # experiment_data.test.y += bernoulli_shift_true * bernoulli_noise
     return experiment_data
 
 

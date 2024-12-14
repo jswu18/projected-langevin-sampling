@@ -28,7 +28,7 @@ class PoissonCost(PLSCost):
         :param y_train: The training labels of size (N,).
         :param link_function: The link function to transform the prediction samples to the output space R+.
         """
-        super().__init__(link_function=link_function)
+        super().__init__(link_function=link_function, observation_noise=None)
         self.y_train = y_train
 
     def predict(

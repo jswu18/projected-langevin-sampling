@@ -24,6 +24,7 @@ class MultiModalCost(PLSCost):
         super().__init__(
             link_function=link_function, observation_noise=observation_noise
         )
+        self.observation_noise: float
         self.shift = shift
         self.bernoulli_noise = bernoulli_noise
         self.y_train = y_train
@@ -32,9 +33,7 @@ class MultiModalCost(PLSCost):
         self,
         prediction_samples: torch.Tensor,
     ) -> None:
-        raise NotImplementedError(
-            "No Distribution is implemented for multi-modal costs"
-        )
+        pass
 
     def calculate_cost(
         self, untransformed_train_prediction_samples: torch.Tensor
@@ -93,10 +92,6 @@ class MultiModalCost(PLSCost):
         :param untransformed_train_prediction_samples: The untransformed train prediction samples of size (N, J).
         :return: The cost derivative of size (N, J).
         """
-        # if isinstance(self.link_function, IdentityLinkFunction):
-        #     return self._calculate_cost_derivative_identity_link_function(
-        #         untransformed_train_prediction_samples=untransformed_train_prediction_samples
-        #     )
         return self._calculate_cost_derivative_autograd(
             untransformed_train_prediction_samples=untransformed_train_prediction_samples
         )
