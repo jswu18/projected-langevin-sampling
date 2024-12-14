@@ -6,7 +6,7 @@ from src.projected_langevin_sampling.costs.base import PLSCost
 
 class PLS:
     """
-    A class for the projected Langevin sampling model. 
+    A class for the projected Langevin sampling model.
     This class contains the basis and cost defining the function space
     approximation and the desired output space respectively.
 

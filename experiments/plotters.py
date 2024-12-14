@@ -805,18 +805,10 @@ def animate_1d_pls_untransformed_predictions(
     ax[1].set_ylim(ax[0].get_ylim())
 
     # turn off autoscale before plotting particles
-    ax[0].autoscale(
-        enable=False, axis="x"
-    )  
-    ax[1].autoscale(
-        enable=False, axis="x"
-    ) 
-    ax[0].autoscale(
-        enable=False, axis="y"
-    ) 
-    ax[1].autoscale(
-        enable=False, axis="y"
-    ) 
+    ax[0].autoscale(enable=False, axis="x")
+    ax[1].autoscale(enable=False, axis="x")
+    ax[0].autoscale(enable=False, axis="y")
+    ax[1].autoscale(enable=False, axis="y")
     if init_particles is None:
         particles = pls.initialise_particles(
             number_of_particles=number_of_particles,

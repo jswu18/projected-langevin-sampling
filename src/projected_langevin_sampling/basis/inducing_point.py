@@ -4,8 +4,8 @@ from typing import Optional
 import gpytorch
 import torch
 
-from src.projected_langevin_sampling.kernel import PLSKernel
 from src.projected_langevin_sampling.basis.base import PLSBasis
+from src.projected_langevin_sampling.kernel import PLSKernel
 from src.samplers import sample_multivariate_normal
 
 

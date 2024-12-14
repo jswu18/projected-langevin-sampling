@@ -157,7 +157,9 @@ def generate_init_particles(
         size=(approximation_dimension, number_of_particles),
     )
     init_particles += torch.linspace(
-        initial_particles_lower, initial_particles_shift_scale * bernoulli_shift_true, number_of_particles
+        initial_particles_lower,
+        initial_particles_shift_scale * bernoulli_shift_true,
+        number_of_particles,
     )[None, :]
     return (
         math.sqrt(basis_dimension)

@@ -147,9 +147,7 @@ def calculate_median_interval_width(
 
 
 def calculate_metrics(
-    model: Union[
-        ExactGP, svGP, PLS, TemperBase, ConformaliseBase
-    ],
+    model: Union[ExactGP, svGP, PLS, TemperBase, ConformaliseBase],
     experiment_data: ExperimentData,
     model_name: str,
     dataset_name: str,
