@@ -7,7 +7,7 @@ from tqdm import tqdm
 
 from experiments.data import Data
 from experiments.early_stopper import EarlyStopper
-from src.gps import ExactGP, svGP
+from src.gaussian_process import ExactGP, svGP
 from src.projected_langevin_sampling import PLS, PLSKernel
 from src.utils import set_seed
 

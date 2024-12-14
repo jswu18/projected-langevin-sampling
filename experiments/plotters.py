@@ -13,7 +13,7 @@ from experiments.data import Data, ExperimentData, ProblemType
 from src.conformalise import ConformaliseGP
 from src.conformalise.base import ConformaliseBase, ConformalPrediction
 from src.distributions import StudentTMarginals
-from src.gps import ExactGP, svGP
+from src.gaussian_process import ExactGP, svGP
 from src.projected_langevin_sampling import PLS, PLSKernel
 from src.projected_langevin_sampling.basis import OrthonormalBasis
 from src.utils import set_seed

@@ -25,8 +25,8 @@ from experiments.plotters import (
 from experiments.trainers import train_exact_gp, train_pls, train_svgp
 from experiments.utils import create_directory
 from src.conformalise import ConformalisePLS
-from src.gps import svGP
-from src.gps.exact_gp import ExactGP
+from src.gaussian_process import svGP
+from src.gaussian_process.exact_gp import ExactGP
 from src.inducing_point_selectors import InducingPointSelector
 from src.projected_langevin_sampling import PLS
 from src.samplers import sample_point

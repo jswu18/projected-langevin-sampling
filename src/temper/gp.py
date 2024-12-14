@@ -3,7 +3,7 @@ from typing import Union
 import gpytorch
 import torch
 
-from src.gps import ExactGP, svGP
+from src.gaussian_process import ExactGP, svGP
 from src.temper.base import TemperBase
 
 

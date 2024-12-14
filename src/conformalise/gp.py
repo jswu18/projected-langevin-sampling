@@ -5,7 +5,7 @@ import scipy
 import torch
 
 from src.conformalise.base import ConformaliseBase
-from src.gps import ExactGP, svGP
+from src.gaussian_process import ExactGP, svGP
 
 
 class ConformaliseGP(ConformaliseBase):

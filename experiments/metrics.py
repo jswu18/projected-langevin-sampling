@@ -14,7 +14,7 @@ from experiments.utils import create_directory
 from src.conformalise import ConformaliseBase
 from src.conformalise.base import ConformalPrediction
 from src.distributions import StudentTMarginals
-from src.gps import ExactGP, svGP
+from src.gaussian_process import ExactGP, svGP
 from src.projected_langevin_sampling import PLS
 from src.temper import TemperBase
 from src.utils import set_seed

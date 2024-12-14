@@ -13,10 +13,9 @@ from experiments.curves.curves import CURVE_FUNCTIONS
 from experiments.data import Data, ExperimentData, ProblemType
 from experiments.runners import inducing_points_runner
 from experiments.utils import create_directory
-from src.gps import svGP
+from src.gaussian_process import svGP
 from src.inducing_point_selectors import ConditionalVarianceInducingPointSelector
-from src.projected_langevin_sampling.kernels import PLSKernel
-from src.projected_langevin_sampling import PLS
+from src.projected_langevin_sampling import PLS, PLSKernel
 from src.projected_langevin_sampling.basis import OrthonormalBasis
 from src.projected_langevin_sampling.costs import GaussianCost
 from src.projected_langevin_sampling.link_functions import IdentityLinkFunction

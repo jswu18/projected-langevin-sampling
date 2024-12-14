@@ -26,8 +26,7 @@ from experiments.runners import (
 )
 from experiments.utils import create_directory
 from src.inducing_point_selectors import ConditionalVarianceInducingPointSelector
-from src.projected_langevin_sampling.kernels import PLSKernel
-from src.projected_langevin_sampling import PLS
+from src.projected_langevin_sampling import PLS, PLSKernel
 from src.projected_langevin_sampling.basis import OrthonormalBasis
 from src.projected_langevin_sampling.costs.multimodal import MultiModalCost
 from src.projected_langevin_sampling.link_functions import IdentityLinkFunction
