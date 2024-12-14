@@ -49,12 +49,7 @@ class MultiModalCost(PLSCost):
         )
 
         # (N, J)
-        # y - (f(x) + c)
-        # 0 - [-20, 20] - 10
-        # -10 + [20, -20]
-        # [10, -30]
         errors_mode_1 = self.y_train[:, None] - train_prediction_samples + self.shift
-        # y - f(x)
         errors_mode_2 = self.y_train[:, None] - train_prediction_samples
 
         # (N, J)
