@@ -1,4 +1,3 @@
-import gpytorch
 import torch
 
 from src.projected_langevin_sampling.costs.base import PLSCost

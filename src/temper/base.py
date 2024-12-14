@@ -35,11 +35,14 @@ class TemperBase(ABC):
         )
 
         # (2/N) * sum_i (y_i - m(x_i))^2 / sigma_i^2
-        return 2 * torch.mean(
-            torch.divide(
-                torch.square(y_calibration - y_prediction.mean),
-                torch.diag(y_prediction.covariance_matrix),
-            )
+        return (
+            2
+            * torch.mean(
+                torch.div(
+                    torch.square(y_calibration - y_prediction.mean),
+                    torch.diag(y_prediction.covariance_matrix),
+                )
+            ).item()
         )
 
     @abstractmethod

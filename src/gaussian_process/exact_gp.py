@@ -25,6 +25,6 @@ class ExactGP(gpytorch.models.ExactGP):
 
     def forward(self, x: torch.Tensor) -> gpytorch.distributions.MultivariateNormal:
         return gpytorch.distributions.MultivariateNormal(
-            mean=self.mean(x),
+            mean=torch.Tensor(self.mean(x)),
             covariance_matrix=self.kernel(x),
         )

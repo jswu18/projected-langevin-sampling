@@ -5,7 +5,7 @@ import torch
 from gpytorch.models import ApproximateGP
 
 
-class svGP(ApproximateGP):
+class SVGP(ApproximateGP):
     """
     A sparse variational Gaussian Process model following:
     https://docs.gpytorch.ai/en/stable/examples/04_Variational_and_Approximate_GPs/SVGP_Regression_CUDA.html
@@ -16,10 +16,7 @@ class svGP(ApproximateGP):
         mean: gpytorch.means.Mean,
         kernel: gpytorch.kernels.Kernel,
         x_induce: torch.Tensor,
-        likelihood: Union[
-            gpytorch.likelihoods.GaussianLikelihood,
-            gpytorch.likelihoods.BernoulliLikelihood,
-        ],
+        likelihood: gpytorch.likelihoods.Likelihood,
         learn_inducing_locations: bool = False,
     ):
         """
@@ -27,7 +24,7 @@ class svGP(ApproximateGP):
         :param mean: The GP mean function.
         :param kernel: The GP kernel function.
         :param x_induce: The inducing points of shape (M, D).
-        :param likelihood: The GP likelihood function. Either Gaussian or Bernoulli for regression or classification.
+        :param likelihood: The GP likelihood function.
         :param learn_inducing_locations: Whether to learn the inducing points.
         """
         variational_distribution = gpytorch.variational.CholeskyVariationalDistribution(
@@ -39,7 +36,7 @@ class svGP(ApproximateGP):
             variational_distribution,
             learn_inducing_locations=learn_inducing_locations,
         )
-        super(svGP, self).__init__(variational_strategy)
+        super(SVGP, self).__init__(variational_strategy)
         self.mean = mean
         self.kernel = kernel
         self.likelihood = likelihood
@@ -49,6 +46,6 @@ class svGP(ApproximateGP):
 
     def forward(self, x: torch.Tensor) -> gpytorch.distributions.Distribution:
         return gpytorch.distributions.MultivariateNormal(
-            mean=self.mean(x),
+            mean=torch.Tensor(self.mean(x)),
             covariance_matrix=self.kernel(x),
         )

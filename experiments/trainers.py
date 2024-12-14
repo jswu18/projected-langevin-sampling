@@ -1,4 +1,4 @@
-from typing import List, Tuple, Union
+from typing import List, Tuple
 
 import gpytorch
 import torch
@@ -7,7 +7,7 @@ from tqdm import tqdm
 
 from experiments.data import Data
 from experiments.early_stopper import EarlyStopper
-from src.gaussian_process import ExactGP, svGP
+from src.gaussian_process import SVGP, ExactGP
 from src.projected_langevin_sampling import PLS, PLSKernel
 from src.utils import set_seed
 
@@ -57,10 +57,7 @@ def train_svgp(
     inducing_points: Data,
     mean: gpytorch.means.Mean,
     kernel: gpytorch.kernels.Kernel,
-    likelihood: Union[
-        gpytorch.likelihoods.GaussianLikelihood,
-        gpytorch.likelihoods.BernoulliLikelihood,
-    ],
+    likelihood: gpytorch.likelihoods.Likelihood,
     seed: int,
     number_of_epochs: int,
     batch_size: int,
@@ -69,9 +66,9 @@ def train_svgp(
     learn_kernel_parameters: bool,
     early_stopper_patience: float,
     likelihood_noise: float | None = None,
-) -> Tuple[svGP | None, List[float] | None]:
+) -> Tuple[SVGP | None, List[float] | None]:
     set_seed(seed)
-    model = svGP(
+    model = SVGP(
         mean=mean,
         kernel=kernel,
         x_induce=inducing_points.x,
@@ -92,8 +89,10 @@ def train_svgp(
             likelihood, gpytorch.likelihoods.GaussianLikelihood
         ) or isinstance(likelihood, gpytorch.likelihoods.BernoulliLikelihood):
             model.likelihood.noise_covar.noise.data.fill_(likelihood_noise)
-        if isinstance(likelihood, gpytorch.likelihoods.StudentTLikelihood):
+        elif isinstance(likelihood, gpytorch.likelihoods.StudentTLikelihood):
             model.likelihood.noise.data.fill_(likelihood_noise)
+        else:
+            raise TypeError(f"Unknown Likelihood Type {type(model.likelihood)}")
     model.train()
     model.likelihood.train()
 

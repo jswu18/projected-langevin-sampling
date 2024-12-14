@@ -1,9 +1,9 @@
-from typing import Tuple, Union
+from typing import Tuple
 
 import gpytorch
 import torch
 
-from src.gaussian_process import ExactGP, svGP
+from src.gaussian_process import SVGP, ExactGP
 from src.projected_langevin_sampling import PLS
 
 
@@ -33,14 +33,10 @@ def load_svgp(
     x_induce: torch.Tensor,
     mean: gpytorch.means.Mean,
     kernel: gpytorch.kernels.Kernel,
-    likelihood: Union[
-        gpytorch.likelihoods.GaussianLikelihood,
-        gpytorch.likelihoods.BernoulliLikelihood,
-        gpytorch.likelihoods.StudentTLikelihood,
-    ],
+    likelihood: gpytorch.likelihoods.Likelihood,
     learn_inducing_locations: bool,
-) -> Tuple[svGP, torch.Tensor, float]:
-    model = svGP(
+) -> Tuple[SVGP, torch.Tensor, float]:
+    model = SVGP(
         x_induce=x_induce,
         mean=mean,
         kernel=kernel,

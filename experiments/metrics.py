@@ -1,5 +1,5 @@
 import os
-from typing import List, Union
+from typing import List
 
 import gpytorch
 import numpy as np
@@ -13,10 +13,10 @@ from experiments.plotters import plot_true_versus_predicted
 from experiments.utils import create_directory
 from src.conformalise import ConformaliseBase
 from src.conformalise.base import ConformalPrediction
+from src.custom_types import MODEL_TYPE
 from src.distributions import StudentTMarginals
-from src.gaussian_process import ExactGP, svGP
+from src.gaussian_process import SVGP, ExactGP
 from src.projected_langevin_sampling import PLS
-from src.temper import TemperBase
 from src.utils import set_seed
 
 
@@ -147,7 +147,7 @@ def calculate_median_interval_width(
 
 
 def calculate_metrics(
-    model: Union[ExactGP, svGP, PLS, TemperBase, ConformaliseBase],
+    model: MODEL_TYPE,
     experiment_data: ExperimentData,
     model_name: str,
     dataset_name: str,
@@ -174,7 +174,7 @@ def calculate_metrics(
         experiment_data.test.y.cpu()
 
         set_seed(0)
-        if isinstance(model, svGP) or isinstance(model, ExactGP):
+        if isinstance(model, SVGP) or isinstance(model, ExactGP):
             prediction = model.likelihood(model(data.x))
         elif isinstance(model, ConformaliseBase):
             prediction = model(x=data.x, coverage=coverage)

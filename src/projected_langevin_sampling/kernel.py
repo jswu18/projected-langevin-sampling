@@ -11,7 +11,7 @@ class PLSKernel(gpytorch.kernels.Kernel):
     k in the paper.
     """
 
-    is_stationary = False
+    is_stationary: bool = False
 
     def __init__(
         self,

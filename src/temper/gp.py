@@ -3,7 +3,8 @@ from typing import Union
 import gpytorch
 import torch
 
-from src.gaussian_process import ExactGP, svGP
+from src.gaussian_process.exact_gp import ExactGP
+from src.gaussian_process.svgp import SVGP
 from src.temper.base import TemperBase
 
 
@@ -14,7 +15,7 @@ class TemperGP(TemperBase):
 
     def __init__(
         self,
-        gp: Union[ExactGP, svGP],
+        gp: Union[ExactGP, SVGP],
         x_calibration: torch.Tensor,
         y_calibration: torch.Tensor,
     ):
@@ -33,6 +34,7 @@ class TemperGP(TemperBase):
         :param x: Input data of shape (N, D).
         :return: The predictive distribution.
         """
+        assert self.gp.likelihood is not None
         prediction = self.gp.likelihood(self.gp(x))
         assert isinstance(prediction, gpytorch.distributions.MultivariateNormal)
         return prediction

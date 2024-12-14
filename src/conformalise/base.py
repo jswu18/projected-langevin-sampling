@@ -87,7 +87,7 @@ class ConformaliseBase(ABC):
                 )
             ),
         )
-        return calibration.double()
+        return calibration.item()
 
     def predict_coverage(
         self, x: torch.Tensor, coverage: float

@@ -105,7 +105,7 @@ class OrthonormalBasis(PLSBasis):
         :param particles: The particles of size (M_k, J).
         :return: The untransformed predictions of size (N, J).
         """
-        return (
+        return torch.Tensor(
             self.base_gram_induce_train.T @ self.scaled_eigenvectors @ particles
         )  # k(X, Z) @ V_tilde @ U(t) of size (N, J)
 

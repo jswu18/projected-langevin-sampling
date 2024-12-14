@@ -1,4 +1,4 @@
-from typing import Dict, List, Tuple, Union
+from typing import Dict, List, Tuple
 
 import gpytorch
 import matplotlib.animation as animation
@@ -10,10 +10,10 @@ from torch.utils.data import DataLoader, TensorDataset
 from tqdm import tqdm
 
 from experiments.data import Data, ExperimentData, ProblemType
-from src.conformalise import ConformaliseGP
 from src.conformalise.base import ConformaliseBase, ConformalPrediction
+from src.custom_types import GP_TYPE
 from src.distributions import StudentTMarginals
-from src.gaussian_process import ExactGP, svGP
+from src.gaussian_process import SVGP
 from src.projected_langevin_sampling import PLS, PLSKernel
 from src.projected_langevin_sampling.basis import OrthonormalBasis
 from src.utils import set_seed
@@ -434,7 +434,7 @@ def plot_losses(
 
 
 def plot_1d_gp_prediction_and_inducing_points(
-    model: Union[ExactGP, svGP],
+    model: GP_TYPE,
     experiment_data: ExperimentData,
     title: str,
     save_path: str,
@@ -972,11 +972,7 @@ def animate_1d_gp_predictions(
     inducing_points: Data,
     mean: gpytorch.means.Mean,
     kernel: gpytorch.kernels.Kernel,
-    likelihood: Union[
-        gpytorch.likelihoods.GaussianLikelihood,
-        gpytorch.likelihoods.BernoulliLikelihood,
-        gpytorch.likelihoods.StudentTLikelihood,
-    ],
+    likelihood: gpytorch.likelihoods.Likelihood,
     seed: int,
     number_of_epochs: int,
     batch_size: int,
@@ -1010,7 +1006,7 @@ def animate_1d_gp_predictions(
     ax.autoscale(enable=False)  # turn off autoscale before plotting particles
 
     set_seed(seed)
-    model = svGP(
+    model = SVGP(
         mean=mean,
         kernel=kernel,
         x_induce=inducing_points.x,

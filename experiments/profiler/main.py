@@ -13,7 +13,7 @@ from experiments.curves.curves import CURVE_FUNCTIONS
 from experiments.data import Data, ExperimentData, ProblemType
 from experiments.runners import inducing_points_runner
 from experiments.utils import create_directory
-from src.gaussian_process import svGP
+from src.gaussian_process import SVGP
 from src.inducing_point_selectors import ConditionalVarianceInducingPointSelector
 from src.projected_langevin_sampling import PLS, PLSKernel
 from src.projected_langevin_sampling.basis import OrthonormalBasis
@@ -89,7 +89,7 @@ def train_svgp_for_profiler(
     number_of_epochs: int,
     learning_rate: float,
 ) -> None:
-    model = svGP(
+    model = SVGP(
         mean=gpytorch.means.ConstantMean(),
         kernel=kernel,
         x_induce=inducing_points.x,

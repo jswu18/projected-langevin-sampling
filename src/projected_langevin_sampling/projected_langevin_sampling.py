@@ -27,7 +27,7 @@ class PLS:
         self.name: str = name if name is not None else "pls"
 
     @property
-    def observation_noise(self) -> float:
+    def observation_noise(self) -> None | float:
         return self.cost.observation_noise
 
     @observation_noise.setter
@@ -166,7 +166,7 @@ class PLS:
         self,
         particles: torch.Tensor,
         x: torch.Tensor,
-        noise: torch.Tensor = None,
+        noise: torch.Tensor | None = None,
     ) -> torch.Tensor:
         return self.basis.predict_untransformed_samples(
             particles=particles,

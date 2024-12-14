@@ -1,7 +1,7 @@
 import math
 import os
 from copy import deepcopy
-from typing import List, Tuple, Union
+from typing import List, Tuple
 
 import gpytorch
 import numpy as np
@@ -25,7 +25,8 @@ from experiments.plotters import (
 from experiments.trainers import train_exact_gp, train_pls, train_svgp
 from experiments.utils import create_directory
 from src.conformalise import ConformalisePLS
-from src.gaussian_process import svGP
+from src.custom_types import PLS_TYPE
+from src.gaussian_process import SVGP
 from src.gaussian_process.exact_gp import ExactGP
 from src.inducing_point_selectors import InducingPointSelector
 from src.projected_langevin_sampling import PLS
@@ -188,7 +189,7 @@ def exact_gp_runner(
 
 
 def plot_pls_1d_particles_runner(
-    pls: Union[PLS, ConformalisePLS, TemperPLS],
+    pls: PLS_TYPE,
     particles: torch.Tensor,
     particle_name: str,
     experiment_data: ExperimentData,
@@ -452,11 +453,7 @@ def train_svgp_runner(
     inducing_points: Data,
     mean: gpytorch.means.Mean,
     kernel: gpytorch.kernels.Kernel,
-    likelihood: Union[
-        gpytorch.likelihoods.GaussianLikelihood,
-        gpytorch.likelihoods.BernoulliLikelihood,
-        gpytorch.likelihoods.StudentTLikelihood,
-    ],
+    likelihood: gpytorch.likelihoods.Likelihood,
     seed: int,
     number_of_epochs: int,
     batch_size: int,
@@ -470,7 +467,7 @@ def train_svgp_runner(
     plot_title: str | None = None,
     plot_loss_path: str | None = None,
     load_model: bool = True,
-) -> Tuple[svGP, List[float], float]:
+) -> Tuple[SVGP, List[float], float]:
     create_directory(models_path)
     best_loss = float("inf")
     losses_history = {}
