@@ -218,6 +218,15 @@ def test_calculate_cost_derivative(
     [
         [
             {
+                "link_function": SigmoidLinkFunction(),
+                "y_train": torch.tensor([0.0, 1.0]),
+            },
+            BernoulliCost,
+            torch.tensor([[0.1, 0.2], [0.9, 0.5]]).double(),
+            torch.tensor([[0.5250, 0.5498], [-0.2891, -0.3775]]).double(),
+        ],
+        [
+            {
                 "link_function": ProbitLinkFunction(),
                 "y_train": torch.tensor([0.0, 1.0]),
             },
