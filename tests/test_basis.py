@@ -1,6 +1,8 @@
+import numpy as np
 import pytest
 import torch
 
+from mockers.cost import MockCost
 from mockers.kernel import MockKernel, MockProjectedLangevinSamplingKernel
 from src.projected_langevin_sampling.basis import InducingPointBasis, OrthonormalBasis
 from src.utils import set_seed
@@ -305,7 +307,7 @@ def test_ipb_initialised_particles(
         ],
     ],
 )
-def test_onb_predict_untransformed_samples(
+def test_onb_calculate_untransformed_train_prediction_samples(
     x_induce: torch.Tensor,
     x_train: torch.Tensor,
     eigenvalue_threshold: float,
@@ -364,7 +366,7 @@ def test_onb_predict_untransformed_samples(
         ],
     ],
 )
-def test_ipb_predict_untransformed_samples(
+def test_ipb_calculate_untransformed_train_prediction_samples(
     x_induce: torch.Tensor,
     y_induce: torch.Tensor,
     x_train: torch.Tensor,
@@ -382,4 +384,136 @@ def test_ipb_predict_untransformed_samples(
             x_train=x_train,
         ).calculate_untransformed_train_prediction_samples(particles),
         untransformed_train_prediction_samples,
+    )
+
+
+@pytest.mark.parametrize(
+    "x_induce,x_train,eigenvalue_threshold,particles,untransformed_train_prediction_samples,expected_energy_potential",
+    [
+        [
+            torch.tensor(
+                [
+                    [1.0, 2.0, 3.0],
+                    [1.5, 2.5, 3.5],
+                ]
+            ),
+            torch.tensor(
+                [
+                    [1.1, 3.5, 3.5],
+                    [1.3, 7.5, 1.5],
+                    [2.5, 2.5, 0.5],
+                    [1.0, 2.0, 3.0],
+                    [1.5, 2.5, 3.5],
+                ]
+            ),
+            0.0,
+            torch.tensor(
+                [
+                    [1.5409960746765137, -0.293428897857666, -2.1787893772125244],
+                    [0.5684312582015991, -1.0845223665237427, -1.3985954523086548],
+                ]
+            ),
+            torch.tensor(
+                [
+                    [2.8012976646, -5.3903346062, -6.9202804565],
+                    [6.0996646881, -6.6724033356, -11.9823102951],
+                    [5.1316790581, -3.4285004139, -8.7493305206],
+                    [1.8773055077, -4.0070199966, -4.8781495094],
+                    [2.7915179729, -4.9768695831, -6.6556425095],
+                ]
+            ),
+            56.62522888183594,
+        ],
+    ],
+)
+def test_onb_calculate_energy_potential(
+    x_induce: torch.Tensor,
+    x_train: torch.Tensor,
+    eigenvalue_threshold: float,
+    particles: torch.Tensor,
+    untransformed_train_prediction_samples: torch.Tensor,
+    expected_energy_potential: float,
+):
+    assert np.allclose(
+        OrthonormalBasis(
+            kernel=MockProjectedLangevinSamplingKernel(
+                base_kernel=MockKernel(),
+                approximation_samples=x_induce,
+            ),
+            x_induce=x_induce,
+            x_train=x_train,
+            eigenvalue_threshold=eigenvalue_threshold,
+        ).calculate_energy_potential(
+            particles=particles,
+            cost=MockCost().calculate_cost(
+                untransformed_train_prediction_samples=untransformed_train_prediction_samples
+            ),
+        ),
+        expected_energy_potential,
+    )
+
+
+@pytest.mark.parametrize(
+    "x_induce,y_induce,x_train,particles,untransformed_train_prediction_samples,expected_energy_potential",
+    [
+        [
+            torch.tensor(
+                [
+                    [1.0, 2.0, 3.0],
+                    [1.5, 2.5, 3.5],
+                ]
+            ),
+            torch.tensor([2.1, 3.3]),
+            torch.tensor(
+                [
+                    [1.1, 3.5, 3.5],
+                    [1.3, 7.5, 1.5],
+                    [2.5, 2.5, 0.5],
+                    [1.0, 2.0, 3.0],
+                    [1.5, 2.5, 3.5],
+                ]
+            ),
+            torch.tensor(
+                [
+                    [1.5409960746765137, -0.293428897857666, -2.1787893772125244],
+                    [0.5684312582015991, -1.0845223665237427, -1.3985954523086548],
+                ]
+            ),
+            torch.tensor(
+                [
+                    [1.2656511068, -0.8267806172, -2.1464431286],
+                    [-6.1349906921, -5.1450047493, 4.8272337914],
+                    [-8.9970912933, -5.7714910507, 8.1600494385],
+                    [1.5409765244, -0.2934455872, -2.1787719727],
+                    [0.5684509277, -1.0845184326, -1.3986053467],
+                ]
+            ),
+            275.2294006347656,
+        ],
+    ],
+)
+def test_ipb_calculate_energy_potential(
+    x_induce: torch.Tensor,
+    y_induce: torch.Tensor,
+    x_train: torch.Tensor,
+    particles: torch.Tensor,
+    untransformed_train_prediction_samples: torch.Tensor,
+    expected_energy_potential: float,
+):
+    assert np.allclose(
+        InducingPointBasis(
+            kernel=MockProjectedLangevinSamplingKernel(
+                base_kernel=MockKernel(),
+                approximation_samples=x_induce,
+            ),
+            x_induce=x_induce,
+            y_induce=y_induce,
+            x_train=x_train,
+        ).calculate_energy_potential(
+            particles=particles,
+            cost=MockCost().calculate_cost(
+                untransformed_train_prediction_samples=untransformed_train_prediction_samples
+            ),
+        ),
+        expected_energy_potential,
     )
