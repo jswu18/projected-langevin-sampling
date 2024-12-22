@@ -51,6 +51,24 @@ parser.add_argument(
     help="Seed to use for the data split of the experiment.",
 )
 
+MODEL_NAMES = [
+    "pls-onb",
+    "pls-onb-temper",
+    "pls-onb-conformalise",
+    "pls-student-onb",
+    "pls-student-onb-temper",
+    "pls-student-onb-conformalise",
+    "svgp",
+    "svgp-temper",
+    "svgp-conformalise",
+    "svgp-student",
+    "svgp-student-temper",
+    "svgp-student-conformalise",
+]
+
+
+METRICS = ["mae", "mse", "nll", "average_interval_width", "coverage"]
+
 
 def get_experiment_data(
     seed: int,
@@ -432,7 +450,7 @@ if __name__ == "__main__":
     with open(args.config_path, "r") as file:
         loaded_config = yaml.safe_load(file)
     if args.data_seed == -1:
-        data_seeds = [0, 1, 2, 3, 4]
+        data_seeds = list(range(10))
     else:
         data_seeds = [args.data_seed]
 
@@ -457,42 +475,16 @@ if __name__ == "__main__":
                 concatenate_metrics(
                     results_path=os.path.join(outputs_path, str(data_seed), "results"),
                     data_types=["train", "test"],
-                    model_names=[
-                        "pls-onb",
-                        "pls-onb-temper",
-                        "pls-onb-conformalise",
-                        "pls-student-onb",
-                        "pls-student-onb-temper",
-                        "pls-student-onb-conformalise",
-                        "svgp",
-                        "svgp-temper",
-                        "svgp-conformalise",
-                        "svgp-student",
-                        "svgp-student-temper",
-                        "svgp-student-conformalise",
-                    ],
+                    model_names=MODEL_NAMES,
                     datasets=list(RegressionDatasetSchema.__members__.keys()),
-                    metrics=["mae", "mse", "nll", "average_interval_width", "coverage"],
+                    metrics=METRICS,
                 )
             except Exception as e:
                 print(f"Error with concatenating metrics for {data_seed=}:{e}")
             concatenate_metrics(
                 results_path=os.path.join(outputs_path, str(data_seed), "results"),
                 data_types=["train", "test"],
-                model_names=[
-                    "pls-onb",
-                    "pls-onb-temper",
-                    "pls-onb-conformalise",
-                    "pls-student-onb",
-                    "pls-student-onb-temper",
-                    "pls-student-onb-conformalise",
-                    "svgp",
-                    "svgp-temper",
-                    "svgp-conformalise",
-                    "svgp-student",
-                    "svgp-student-temper",
-                    "svgp-student-conformalise",
-                ],
+                model_names=MODEL_NAMES,
                 datasets=list(RegressionDatasetSchema.__members__.keys()),
-                metrics=["mae", "mse", "nll", "average_interval_width", "coverage"],
+                metrics=METRICS,
             )
