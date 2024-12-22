@@ -46,6 +46,8 @@ parser.add_argument(
     help="Seed to use for the data split of the experiment.",
 )
 
+METRICS = ["mae", "mse", "nll", "acc", "auc", "f1"]
+
 
 def get_experiment_data(
     seed: int,
@@ -314,7 +316,7 @@ if __name__ == "__main__":
     with open(args.config_path, "r") as file:
         loaded_config = yaml.safe_load(file)
     if args.data_seed == -1:
-        data_seeds = [0, 1, 2, 3, 4]
+        data_seeds = range(10)
     else:
         data_seeds = [args.data_seed]
     outputs_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "outputs")
@@ -344,7 +346,7 @@ if __name__ == "__main__":
                     "svgp",
                 ],
                 datasets=list(ClassificationDatasetSchema.__members__.keys()),
-                metrics=["mae", "mse", "nll", "acc", "auc", "f1"],
+                metrics=METRICS,
             )
         except Exception as e:
             print(f"Error with concatenating metrics for {data_seed=}:{e}")

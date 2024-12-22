@@ -2,7 +2,7 @@ import argparse
 import math
 import os
 from copy import deepcopy
-from typing import Any, Dict
+from typing import Any, Dict, Tuple
 
 import gpytorch
 import pandas as pd
@@ -106,6 +106,25 @@ def get_experiment_data(
     return experiment_data
 
 
+def estimate_student_parameters(
+    y_actual: torch.Tensor, predictions: list[torch.distributions.Distribution]
+) -> Tuple[float, float]:
+    residuals = (
+        torch.stack(
+            ([y_actual - prediction.mean for prediction in predictions]),
+            axis=1,
+        )
+        .mean(
+            axis=1,
+        )
+        .cpu()
+        .detach()
+        .numpy()
+    )
+    degrees_of_freedom, _, scale = scipy.stats.t.fit(residuals, floc=0)
+    return degrees_of_freedom, scale
+
+
 def main(
     data_seed: int,
     dataset_name: str,
@@ -206,29 +225,13 @@ def main(
     for model in subsample_gp_models:
         model.eval()
         model.likelihood.eval()
-    exact_gp_predictions = [
-        model.likelihood(model(experiment_data.train.x))
-        for model in subsample_gp_models
-    ]
-    residuals = (
-        torch.stack(
-            (
-                [
-                    experiment_data.train.y - prediction.mean
-                    for prediction in exact_gp_predictions
-                ]
-            ),
-            axis=1,
-        )
-        .mean(
-            axis=1,
-        )
-        .cpu()
-        .detach()
-        .numpy()
+    degrees_of_freedom, scale = estimate_student_parameters(
+        y_actual=torch.Tensor(experiment_data.train.y),
+        predictions=[
+            model.likelihood(model(experiment_data.train.x))
+            for model in subsample_gp_models
+        ],
     )
-    degrees_of_freedom, loc, scale = scipy.stats.t.fit(residuals, floc=0)
-    print(f"{loc=} and {scale=}")
     t_noise_distribution = torch.distributions.studentT.StudentT(
         loc=0.0,
         scale=likelihood.noise,
@@ -348,7 +351,7 @@ def main(
         )
 
     student_likelihood = gpytorch.likelihoods.StudentTLikelihood()
-    # hacky solution for now, should have this as a fixed value
+    # hacky solution, should have this as a fixed value
     student_likelihood.register_constraint(
         param_name="raw_deg_free",
         constraint=gpytorch.constraints.Interval(
