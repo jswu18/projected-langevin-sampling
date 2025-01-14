@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "function-space-gradient-flow"
+name = "projected-langevin-sampling"
 version = "0.0.0"
 description = "Implementation of Near-Optimal Approximations for Bayesian Inference in Function Space"
 authors = [
