@@ -1,4 +1,3 @@
-import gpytorch
 import torch
 
 from src.projected_langevin_sampling.costs.base import PLSCost
@@ -29,7 +28,7 @@ class PoissonCost(PLSCost):
         :param y_train: The training labels of size (N,).
         :param link_function: The link function to transform the prediction samples to the output space R+.
         """
-        super().__init__(link_function=link_function)
+        super().__init__(link_function=link_function, observation_noise=None)
         self.y_train = y_train
 
     def predict(
@@ -85,15 +84,17 @@ class PoissonCost(PLSCost):
     def calculate_cost_derivative(
         self,
         untransformed_train_prediction_samples: torch.Tensor,
+        force_autograd: bool = False,
     ) -> torch.Tensor:
         """
         Calculates the cost derivative of the untransformed train prediction samples. These are the prediction samples
         before being transformed by the link function. This method uses the autograd implementation if the link function
         is not the square link function.
         :param untransformed_train_prediction_samples: The untransformed train prediction samples of size (N, J).
+        :param force_autograd: An override to use autograd for the derivative calculation.
         :return: The cost derivative of size (N, J).
         """
-        if isinstance(self.link_function, SquareLinkFunction):
+        if isinstance(self.link_function, SquareLinkFunction) and not force_autograd:
             return self._calculate_cost_derivative_square_link_function(
                 untransformed_train_prediction_samples=untransformed_train_prediction_samples
             )

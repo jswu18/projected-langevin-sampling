@@ -1,16 +1,16 @@
-from typing import Tuple, Union
+from typing import Tuple
 
 import gpytorch
 import torch
 
-from src.gps import ExactGP, svGP
-from src.projected_langevin_sampling import ProjectedLangevinSampling
+from src.gaussian_process import SVGP, ExactGP
+from src.projected_langevin_sampling import PLS
 
 
 def load_pls(
-    pls: ProjectedLangevinSampling,
+    pls: PLS,
     model_path: str,
-) -> Tuple[ProjectedLangevinSampling, torch.Tensor, float, int]:
+) -> Tuple[PLS, torch.Tensor, float, int]:
     model_config = torch.load(
         model_path, map_location="cuda" if torch.cuda.is_available() else "cpu"
     )
@@ -33,14 +33,10 @@ def load_svgp(
     x_induce: torch.Tensor,
     mean: gpytorch.means.Mean,
     kernel: gpytorch.kernels.Kernel,
-    likelihood: Union[
-        gpytorch.likelihoods.GaussianLikelihood,
-        gpytorch.likelihoods.BernoulliLikelihood,
-        gpytorch.likelihoods.StudentTLikelihood,
-    ],
+    likelihood: gpytorch.likelihoods.Likelihood,
     learn_inducing_locations: bool,
-) -> Tuple[svGP, torch.Tensor, float]:
-    model = svGP(
+) -> Tuple[SVGP, torch.Tensor, float]:
+    model = SVGP(
         x_induce=x_induce,
         mean=mean,
         kernel=kernel,

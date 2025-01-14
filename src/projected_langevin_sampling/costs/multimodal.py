@@ -24,6 +24,7 @@ class MultiModalCost(PLSCost):
         super().__init__(
             link_function=link_function, observation_noise=observation_noise
         )
+        self.observation_noise: float
         self.shift = shift
         self.bernoulli_noise = bernoulli_noise
         self.y_train = y_train
@@ -31,12 +32,7 @@ class MultiModalCost(PLSCost):
     def predict(
         self,
         prediction_samples: torch.Tensor,
-    ) -> gpytorch.distributions.MultivariateNormal:
-        """
-        Constructs a multivariate normal distribution from the prediction samples.
-        :param prediction_samples: The prediction samples of size (N, J).
-        :return: The multivariate normal distribution.
-        """
+    ) -> None:
         pass
 
     def calculate_cost(
@@ -53,12 +49,7 @@ class MultiModalCost(PLSCost):
         )
 
         # (N, J)
-        # y - (f(x) + c)
-        # 0 - [-20, 20] - 10
-        # -10 + [20, -20]
-        # [10, -30]
         errors_mode_1 = self.y_train[:, None] - train_prediction_samples + self.shift
-        # y - f(x)
         errors_mode_2 = self.y_train[:, None] - train_prediction_samples
 
         # (N, J)
@@ -92,15 +83,10 @@ class MultiModalCost(PLSCost):
     ) -> torch.Tensor:
         """
         Calculates the cost derivative of the untransformed train prediction samples. These are the prediction samples
-        before being transformed by the link function. This method uses the autograd implementation if the link function
-        is not the identity.
+        before being transformed by the link function. This method ALWAYS uses the autograd implementation.
         :param untransformed_train_prediction_samples: The untransformed train prediction samples of size (N, J).
         :return: The cost derivative of size (N, J).
         """
-        # if isinstance(self.link_function, IdentityLinkFunction):
-        #     return self._calculate_cost_derivative_identity_link_function(
-        #         untransformed_train_prediction_samples=untransformed_train_prediction_samples
-        #     )
         return self._calculate_cost_derivative_autograd(
             untransformed_train_prediction_samples=untransformed_train_prediction_samples
         )

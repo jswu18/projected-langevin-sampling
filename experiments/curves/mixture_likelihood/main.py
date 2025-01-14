@@ -1,7 +1,7 @@
 import argparse
 import math
 import os
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict
 
 import gpytorch
 import matplotlib.pyplot as plt
@@ -10,7 +10,7 @@ import yaml
 
 from experiments.constructors import construct_average_ard_kernel
 from experiments.curves.curves import CURVE_FUNCTIONS, Curve
-from experiments.data import Data, ExperimentData, ProblemType
+from experiments.data import ExperimentData, ProblemType
 from experiments.plotters import (
     plot_1d_experiment_data,
     plot_1d_gp_prediction,
@@ -26,8 +26,7 @@ from experiments.runners import (
 )
 from experiments.utils import create_directory
 from src.inducing_point_selectors import ConditionalVarianceInducingPointSelector
-from src.kernels.projected_langevin_sampling import PLSKernel
-from src.projected_langevin_sampling import ProjectedLangevinSampling
+from src.projected_langevin_sampling import PLS, PLSKernel
 from src.projected_langevin_sampling.basis import OrthonormalBasis
 from src.projected_langevin_sampling.costs.multimodal import MultiModalCost
 from src.projected_langevin_sampling.link_functions import IdentityLinkFunction
@@ -84,14 +83,6 @@ def get_experiment_data(
     experiment_data.full.y_untransformed = (
         y_curve + bernoulli_shift_true * bernoulli_noise
     )
-    # experiment_data.train.y_untransformed = experiment_data.train.y.clone()
-    # experiment_data.validation.y_untransformed = experiment_data.validation.y.clone()
-    # experiment_data.test.y_untransformed = experiment_data.test.y.clone()
-
-    # experiment_data.full.y += bernoulli_shift_true * bernoulli_noise
-    # experiment_data.train.y += bernoulli_shift_true * bernoulli_noise
-    # experiment_data.validation.y += bernoulli_shift_true * bernoulli_noise
-    # experiment_data.test.y += bernoulli_shift_true * bernoulli_noise
     return experiment_data
 
 
@@ -158,7 +149,9 @@ def generate_init_particles(
         size=(approximation_dimension, number_of_particles),
     )
     init_particles += torch.linspace(
-        initial_particles_lower, initial_particles_shift_scale * bernoulli_shift_true, number_of_particles
+        initial_particles_lower,
+        initial_particles_shift_scale * bernoulli_shift_true,
+        number_of_particles,
     )[None, :]
     return (
         math.sqrt(basis_dimension)
@@ -255,12 +248,13 @@ def main(
         bernoulli_noise=data_config["bernoulli_probability_true"],
     )
     plot_title = "PLS for Multi-modal Regression"
-    pls = ProjectedLangevinSampling(basis=onb_basis, cost=cost, name="pls-onb")
+    pls = PLS(basis=onb_basis, cost=cost, name="pls-onb")
     set_seed(pls_config["seed"])
     init_particles = generate_init_particles(
         initial_particle_noise=pls_config["initial_particle_noise"],
         approximation_dimension=onb_basis.approximation_dimension,
         number_of_particles=pls_config["number_of_particles"],
+        initial_particles_lower=pls_config["initial_particles_lower"],
         initial_particles_shift_scale=pls_config["initial_particles_shift_scale"],
         bernoulli_shift_true=data_config["bernoulli_shift_true"],
         basis_dimension=onb_basis.x_induce.shape[0],
@@ -294,11 +288,6 @@ def main(
             "minimum_change_in_energy_potential"
         ],
         seed=pls_config["seed"],
-        observation_noise_upper=pls_config["observation_noise_upper"],
-        observation_noise_lower=pls_config["observation_noise_lower"],
-        number_of_observation_noise_searches=pls_config[
-            "number_of_observation_noise_searches"
-        ],
         plot_title=plot_title,
         plot_energy_potential_path=plot_curve_path,
         metric_to_optimise=pls_config["metric_to_optimise"],
@@ -336,9 +325,9 @@ def main(
             seed=pls_config["seed"],
             best_lr=pls_config["gif_lr"],
             number_of_epochs=pls_config["gif_number_of_epochs"],
-            animate_1d_path=plot_curve_path,
             plot_title=plot_title,
-            animate_1d_untransformed_path=None,
+            animate_1d_path=plot_curve_path,
+            animate_1d_untransformed_path=plot_curve_path,
             christmas_colours=pls_config["christmas_colours"]
             if "christmas_colours" in pls_config
             else False,

@@ -5,13 +5,14 @@ import scipy
 import torch
 
 from src.conformalise.base import ConformaliseBase
-from src.gps import ExactGP, svGP
+from src.gaussian_process.exact_gp import ExactGP
+from src.gaussian_process.svgp import SVGP
 
 
 class ConformaliseGP(ConformaliseBase):
     def __init__(
         self,
-        gp: Union[ExactGP, svGP],
+        gp: Union[ExactGP, SVGP],
         x_calibration: torch.Tensor,
         y_calibration: torch.Tensor,
     ):
@@ -37,6 +38,7 @@ class ConformaliseGP(ConformaliseBase):
         :param coverage: The coverage percentage.
         :return: Tuple of lower and upper bounds of shape (1, N).
         """
+        assert self.gp.likelihood is not None
         prediction = self.gp.likelihood(self.gp(x))
         confidence_interval_scale = scipy.stats.norm.interval(coverage)[1]
         lower_bound = prediction.mean - confidence_interval_scale * torch.sqrt(
@@ -59,4 +61,4 @@ class ConformaliseGP(ConformaliseBase):
         :param x: Input data of shape (N, D).
         :return: Median predictions of shape (1, N).
         """
-        return self.gp(x).mean
+        return torch.Tensor(self.gp(x).mean)

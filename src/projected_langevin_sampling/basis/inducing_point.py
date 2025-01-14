@@ -4,8 +4,8 @@ from typing import Optional
 import gpytorch
 import torch
 
-from src.kernels import PLSKernel
 from src.projected_langevin_sampling.basis.base import PLSBasis
+from src.projected_langevin_sampling.kernel import PLSKernel
 from src.samplers import sample_multivariate_normal
 
 
@@ -27,9 +27,8 @@ class InducingPointBasis(PLSBasis):
         x_induce: torch.Tensor,
         y_induce: torch.Tensor,
         x_train: torch.Tensor,
-        additional_predictive_noise_distribution: Optional[
-            torch.distributions.Distribution
-        ] = None,
+        additional_predictive_noise_distribution: torch.distributions.Distribution
+        | None = None,
     ):
         super().__init__(
             additional_predictive_noise_distribution=additional_predictive_noise_distribution
@@ -155,9 +154,9 @@ class InducingPointBasis(PLSBasis):
         self,
         particles: torch.Tensor,
         x: torch.Tensor,
-    ):
+    ) -> torch.Tensor:
         """
-        Calculates the predictive noise for a given input.
+        Samples the predictive noise for a given input.
         G([Z, x]) ~ N(0, r([Z, x], [Z, x]))
         :param particles: Particles of size (M, J)
         :param x: Test points of size (N*, D)

@@ -26,8 +26,7 @@ from experiments.uci.constants import (
     ClassificationDatasetSchema,
 )
 from src.inducing_point_selectors import ConditionalVarianceInducingPointSelector
-from src.kernels import PLSKernel
-from src.projected_langevin_sampling import ProjectedLangevinSampling
+from src.projected_langevin_sampling import PLS, PLSKernel
 from src.projected_langevin_sampling.basis import OrthonormalBasis
 from src.projected_langevin_sampling.costs import BernoulliCost
 from src.projected_langevin_sampling.link_functions import SigmoidLinkFunction
@@ -46,6 +45,8 @@ parser.add_argument(
     default=-1,
     help="Seed to use for the data split of the experiment.",
 )
+
+METRICS = ["mae", "mse", "nll", "acc", "auc", "f1"]
 
 
 def get_experiment_data(
@@ -191,7 +192,7 @@ def main(
         link_function=SigmoidLinkFunction(),
     )
     pls_dict = {
-        "pls-onb": ProjectedLangevinSampling(
+        "pls-onb": PLS(
             basis=onb_basis,
             cost=cost,
         ),
@@ -315,7 +316,7 @@ if __name__ == "__main__":
     with open(args.config_path, "r") as file:
         loaded_config = yaml.safe_load(file)
     if args.data_seed == -1:
-        data_seeds = [0, 1, 2, 3, 4]
+        data_seeds = range(10)
     else:
         data_seeds = [args.data_seed]
     outputs_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "outputs")
@@ -345,7 +346,7 @@ if __name__ == "__main__":
                     "svgp",
                 ],
                 datasets=list(ClassificationDatasetSchema.__members__.keys()),
-                metrics=["mae", "mse", "nll", "acc", "auc", "f1"],
+                metrics=METRICS,
             )
         except Exception as e:
             print(f"Error with concatenating metrics for {data_seed=}:{e}")
