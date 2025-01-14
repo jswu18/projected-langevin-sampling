@@ -26,6 +26,12 @@ Unlike variational inference which is restricts the model approximation class, P
   <img src="examples/poisson_regression.gif" width="50%" />
 </p>
 
+PLS is also able to model the multimodality that arises from the uncertainty about the presence of an unknown constant shift.
+
+<p align="center">
+  <img src="examples/multimodal_regression.gif" width="50%" />
+</p>
+
 ## Environment Installation
 
 To set up the Python environment for this project, please follow the instructions below:
