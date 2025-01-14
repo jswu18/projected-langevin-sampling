@@ -1,9 +1,10 @@
 [tool.poetry]
 name = "function-space-gradient-flow"
 version = "0.0.0"
-description = "Implementation of Projected Langevin Sampling for Function Space Gradient Flows"
+description = "Implementation of Near-Optimal Approximations for Bayesian Inference in Function Space"
 authors = [
-    "James Wu <jswu18@gmail.com>"
+    "James Wu <jswu18@gmail.com>",
+    "Veit D. Wild <veit.wild@stats.ox.ac.uk>"
 ]
 readme = "README.md"
 package-mode = false
