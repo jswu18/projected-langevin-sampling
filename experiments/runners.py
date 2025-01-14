@@ -8,9 +8,8 @@ import numpy as np
 import sklearn
 import torch
 from sklearn.neighbors import NearestNeighbors
-from tqdm import tqdm
 
-from experiments.data import Data, ExperimentData, ProblemType
+from experiments.data import Data, ExperimentData
 from experiments.loaders import load_ard_exact_gp_model, load_svgp
 from experiments.metrics import calculate_mae, calculate_mse, calculate_nll
 from experiments.plotters import (
