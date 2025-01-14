@@ -1,4 +1,4 @@
-# Projected Langevin Sampling for Function Space Gradient Flows
+# Near-Optimal Approximations for Bayesian Inference in Function Space
 
 ## Abstract
 
