@@ -30,7 +30,7 @@ from src.conformalise import ConformalisePLS
 from src.conformalise.gp import ConformaliseGP
 from src.inducing_point_selectors import ConditionalVarianceInducingPointSelector
 from src.projected_langevin_sampling import PLS, PLSKernel
-from src.projected_langevin_sampling.basis import InducingPointBasis, OrthonormalBasis
+from src.projected_langevin_sampling.basis import OrthonormalBasis
 from src.projected_langevin_sampling.costs import GaussianCost
 from src.projected_langevin_sampling.costs.student_t import StudentTCost
 from src.projected_langevin_sampling.link_functions import IdentityLinkFunction
