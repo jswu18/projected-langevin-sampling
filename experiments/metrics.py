@@ -1,5 +1,5 @@
 import os
-from typing import List, Union
+from typing import List
 
 import gpytorch
 import numpy as np
@@ -13,14 +13,10 @@ from experiments.plotters import plot_true_versus_predicted
 from experiments.utils import create_directory
 from src.conformalise import ConformaliseBase
 from src.conformalise.base import ConformalPrediction
-from src.conformalise.gp import ConformaliseGP
-from src.conformalise.pls import ConformalisePLS
-from src.distributions import NonParametric, StudentTMarginals
-from src.gps import ExactGP, svGP
-from src.projected_langevin_sampling import ProjectedLangevinSampling
-from src.projected_langevin_sampling.costs.logistic_growth import LogisticGrowthCost
-from src.projected_langevin_sampling.costs.student_t import StudentTCost
-from src.temper import TemperBase
+from src.custom_types import MODEL_TYPE
+from src.distributions import StudentTMarginals
+from src.gaussian_process import SVGP, ExactGP
+from src.projected_langevin_sampling import PLS
 from src.utils import set_seed
 
 
@@ -44,8 +40,6 @@ def calculate_mae(
     elif isinstance(prediction, torch.distributions.studentT.StudentT):
         return prediction.loc.sub(y).abs().mean().item()
     elif isinstance(prediction, ConformalPrediction):
-        return prediction.mean.sub(y).abs().mean().item()
-    elif isinstance(prediction, NonParametric):
         return prediction.mean.sub(y).abs().mean().item()
     else:
         raise ValueError(f"Prediction type {type(prediction)} not supported")
@@ -71,8 +65,6 @@ def calculate_mse(
     elif isinstance(prediction, torch.distributions.studentT.StudentT):
         return prediction.loc.sub(y).pow(2).mean().item()
     elif isinstance(prediction, ConformalPrediction):
-        return prediction.mean.sub(y).pow(2).mean().item()
-    elif isinstance(prediction, NonParametric):
         return prediction.mean.sub(y).pow(2).mean().item()
     else:
         raise ValueError(f"Prediction type {type(prediction)} not supported")
@@ -155,9 +147,7 @@ def calculate_median_interval_width(
 
 
 def calculate_metrics(
-    model: Union[
-        ExactGP, svGP, ProjectedLangevinSampling, TemperBase, ConformaliseBase
-    ],
+    model: MODEL_TYPE,
     experiment_data: ExperimentData,
     model_name: str,
     dataset_name: str,
@@ -184,11 +174,11 @@ def calculate_metrics(
         experiment_data.test.y.cpu()
 
         set_seed(0)
-        if isinstance(model, svGP) or isinstance(model, ExactGP):
+        if isinstance(model, SVGP) or isinstance(model, ExactGP):
             prediction = model.likelihood(model(data.x))
         elif isinstance(model, ConformaliseBase):
             prediction = model(x=data.x, coverage=coverage)
-        elif isinstance(model, ProjectedLangevinSampling) and particles is not None:
+        elif isinstance(model, PLS) and particles is not None:
             prediction = model(x=data.x, particles=particles)
         else:
             raise ValueError(f"Model type {type(model)} not supported")

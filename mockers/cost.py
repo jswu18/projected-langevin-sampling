@@ -27,7 +27,7 @@ class MockCost(PLSCost):
         :param prediction_samples: The prediction samples of size (N, J).
         :return: The predictive distribution.
         """
-        return torch.distributions.Normal(0, 1)
+        return torch.distributions.MultivariateNormal(torch.zeros((1,)), torch.eye(1))
 
     def calculate_cost(
         self, untransformed_train_prediction_samples: torch.Tensor

@@ -1,10 +1,9 @@
 import math
-from typing import Optional
 
 import torch
 
-from src.kernels import PLSKernel
 from src.projected_langevin_sampling.basis.base import PLSBasis
+from src.projected_langevin_sampling.kernel import PLSKernel
 from src.samplers import sample_multivariate_normal
 
 
@@ -26,9 +25,8 @@ class OrthonormalBasis(PLSBasis):
         x_induce: torch.Tensor,
         x_train: torch.Tensor,
         eigenvalue_threshold: float = 0.0,
-        additional_predictive_noise_distribution: Optional[
-            torch.distributions.Distribution
-        ] = None,
+        additional_predictive_noise_distribution: torch.distributions.Distribution
+        | None = None,
     ):
         super().__init__(
             additional_predictive_noise_distribution=additional_predictive_noise_distribution
@@ -105,7 +103,7 @@ class OrthonormalBasis(PLSBasis):
         :param particles: The particles of size (M_k, J).
         :return: The untransformed predictions of size (N, J).
         """
-        return (
+        return torch.Tensor(
             self.base_gram_induce_train.T @ self.scaled_eigenvectors @ particles
         )  # k(X, Z) @ V_tilde @ U(t) of size (N, J)
 

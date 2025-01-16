@@ -11,7 +11,7 @@ class RandomInducingPointSelector(InducingPointSelector):
         self,
         x: torch.Tensor,
         m: int,
-        kernel: gpytorch.kernels.Kernel = None,
+        kernel: gpytorch.kernels.Kernel | None = None,
         **params,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         indices = torch.randperm(x.shape[0])[:m]

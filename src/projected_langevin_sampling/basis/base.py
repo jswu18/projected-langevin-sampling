@@ -40,6 +40,8 @@ class PLSBasis(ABC):
         self,
         number_of_particles: int,
         seed: int | None = None,
+        mean: float = 0.0,
+        stdev: float = 1.0,
     ) -> torch.Tensor:
         """
         Initialises the noise for each particle with a standard normal distribution.
@@ -51,8 +53,8 @@ class PLSBasis(ABC):
         if seed is not None:
             generator = torch.Generator().manual_seed(seed)
         return torch.normal(
-            mean=0.0,
-            std=1.0,
+            mean=mean,
+            std=stdev,
             size=(
                 self.approximation_dimension,
                 number_of_particles,

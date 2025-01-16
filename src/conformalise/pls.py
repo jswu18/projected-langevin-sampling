@@ -3,7 +3,7 @@ from typing import Tuple
 import torch
 
 from src.conformalise.base import ConformaliseBase
-from src.projected_langevin_sampling import ProjectedLangevinSampling
+from src.projected_langevin_sampling import PLS
 
 
 class ConformalisePLS(ConformaliseBase):
@@ -11,7 +11,7 @@ class ConformalisePLS(ConformaliseBase):
         self,
         x_calibration: torch.Tensor,
         y_calibration: torch.Tensor,
-        pls: ProjectedLangevinSampling,
+        pls: PLS,
         particles: torch.Tensor,
     ):
         self.pls = pls

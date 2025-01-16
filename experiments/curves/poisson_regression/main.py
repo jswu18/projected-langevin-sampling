@@ -23,8 +23,7 @@ from experiments.runners import (
 )
 from experiments.utils import create_directory
 from src.inducing_point_selectors import ConditionalVarianceInducingPointSelector
-from src.kernels.projected_langevin_sampling import PLSKernel
-from src.projected_langevin_sampling import ProjectedLangevinSampling
+from src.projected_langevin_sampling import PLS, PLSKernel
 from src.projected_langevin_sampling.basis import InducingPointBasis, OrthonormalBasis
 from src.projected_langevin_sampling.costs import PoissonCost
 from src.projected_langevin_sampling.link_functions import SquareLinkFunction
@@ -200,11 +199,11 @@ def main(
         link_function=SquareLinkFunction(),
     )
     pls_dict = {
-        "pls-onb": ProjectedLangevinSampling(
+        "pls-onb": PLS(
             basis=onb_basis,
             cost=cost,
         ),
-        "pls-ipb": ProjectedLangevinSampling(
+        "pls-ipb": PLS(
             basis=ipb_basis,
             cost=cost,
         ),
@@ -245,11 +244,6 @@ def main(
                     "minimum_change_in_energy_potential"
                 ],
                 seed=pls_config["seed"],
-                observation_noise_upper=pls_config["observation_noise_upper"],
-                observation_noise_lower=pls_config["observation_noise_lower"],
-                number_of_observation_noise_searches=pls_config[
-                    "number_of_observation_noise_searches"
-                ],
                 plot_title=plot_title,
                 plot_energy_potential_path=plot_curve_path,
                 metric_to_optimise=pls_config["metric_to_optimise"],
@@ -282,7 +276,7 @@ def main(
                 best_lr=best_lr,
                 number_of_epochs=number_of_epochs,
                 plot_title=plot_title,
-                animate_1d_path=None,
+                animate_1d_path=plot_curve_path,
                 animate_1d_untransformed_path=plot_curve_path,
                 christmas_colours=pls_config["christmas_colours"]
                 if "christmas_colours" in pls_config

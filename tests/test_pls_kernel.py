@@ -2,7 +2,7 @@ import pytest
 import torch
 
 from mockers.kernel import MockKernel
-from src.kernels import PLSKernel
+from src.projected_langevin_sampling import PLSKernel
 
 
 @pytest.mark.parametrize(

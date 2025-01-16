@@ -35,8 +35,7 @@ from experiments.runners import (
 from experiments.utils import create_directory, str2bool
 from src.conformalise import ConformaliseGP, ConformalisePLS
 from src.inducing_point_selectors import ConditionalVarianceInducingPointSelector
-from src.kernels.projected_langevin_sampling import PLSKernel
-from src.projected_langevin_sampling import ProjectedLangevinSampling
+from src.projected_langevin_sampling import PLS, PLSKernel
 from src.projected_langevin_sampling.basis import OrthonormalBasis
 from src.projected_langevin_sampling.costs import GaussianCost
 from src.projected_langevin_sampling.link_functions import IdentityLinkFunction
@@ -217,7 +216,7 @@ def main(
         link_function=IdentityLinkFunction(),
     )
     plot_title = "PLS for Regression"
-    pls = ProjectedLangevinSampling(basis=onb_basis, cost=cost, name="pls-onb")
+    pls = PLS(basis=onb_basis, cost=cost, name="pls-onb")
     pls_path = os.path.join(models_path, f"{pls.name}.pth")
     set_seed(pls_config["seed"])
     particles = pls.initialise_particles(
@@ -252,11 +251,6 @@ def main(
                 "minimum_change_in_energy_potential"
             ],
             seed=pls_config["seed"],
-            observation_noise_upper=pls_config["observation_noise_upper"],
-            observation_noise_lower=pls_config["observation_noise_lower"],
-            number_of_observation_noise_searches=pls_config[
-                "number_of_observation_noise_searches"
-            ],
             plot_title=plot_title,
             plot_energy_potential_path=plot_curve_path,
             metric_to_optimise=pls_config["metric_to_optimise"],

@@ -1,16 +1,15 @@
 import math
 import os
 from copy import deepcopy
-from typing import List, Tuple, Union
+from typing import List, Tuple
 
 import gpytorch
 import numpy as np
 import sklearn
 import torch
 from sklearn.neighbors import NearestNeighbors
-from tqdm import tqdm
 
-from experiments.data import Data, ExperimentData, ProblemType
+from experiments.data import Data, ExperimentData
 from experiments.loaders import load_ard_exact_gp_model, load_svgp
 from experiments.metrics import calculate_mae, calculate_mse, calculate_nll
 from experiments.plotters import (
@@ -24,12 +23,12 @@ from experiments.plotters import (
 )
 from experiments.trainers import train_exact_gp, train_pls, train_svgp
 from experiments.utils import create_directory
-from src.bisection_search import LogBisectionSearch
 from src.conformalise import ConformalisePLS
-from src.gps import svGP
-from src.gps.exact_gp import ExactGP
+from src.custom_types import PLS_TYPE
+from src.gaussian_process import SVGP
+from src.gaussian_process.exact_gp import ExactGP
 from src.inducing_point_selectors import InducingPointSelector
-from src.projected_langevin_sampling import ProjectedLangevinSampling
+from src.projected_langevin_sampling import PLS
 from src.samplers import sample_point
 from src.temper.pls import TemperPLS
 from src.utils import set_seed
@@ -189,7 +188,7 @@ def exact_gp_runner(
 
 
 def plot_pls_1d_particles_runner(
-    pls: Union[ProjectedLangevinSampling, ConformalisePLS, TemperPLS],
+    pls: PLS_TYPE,
     particles: torch.Tensor,
     particle_name: str,
     experiment_data: ExperimentData,
@@ -200,7 +199,7 @@ def plot_pls_1d_particles_runner(
     number_of_particles_to_plot: int | None = None,
 ) -> None:
     create_directory(plot_particles_path)
-    if isinstance(pls, ProjectedLangevinSampling):
+    if isinstance(pls, PLS):
         predicted_distribution = pls.predict(
             x=experiment_data.full.x,
             particles=particles,
@@ -217,7 +216,7 @@ def plot_pls_1d_particles_runner(
     else:
         raise TypeError(f"Unknown PLS type: {type(pls)}")
     predicted_samples = None
-    if isinstance(pls, ProjectedLangevinSampling):
+    if isinstance(pls, PLS):
         predicted_samples = pls.predict_samples(
             x=experiment_data.full.x,
             particles=particles[:, :number_of_particles_to_plot]
@@ -271,7 +270,7 @@ def plot_pls_1d_particles_runner(
 
 
 def animate_pls_1d_particles_runner(
-    pls: ProjectedLangevinSampling,
+    pls: PLS,
     number_of_particles: int,
     particle_name: str,
     experiment_data: ExperimentData,
@@ -303,7 +302,9 @@ def animate_pls_1d_particles_runner(
                 f"{particle_name}.gif",
             ),
             christmas_colours=christmas_colours,
-            init_particles=init_particles,
+            init_particles=init_particles.clone()
+            if init_particles is not None
+            else None,
         )
     if animate_1d_untransformed_path is not None:
         animate_1d_pls_untransformed_predictions(
@@ -321,11 +322,14 @@ def animate_pls_1d_particles_runner(
                 f"untransformed-{particle_name}.gif",
             ),
             christmas_colours=christmas_colours,
+            init_particles=init_particles.clone()
+            if init_particles is not None
+            else None,
         )
 
 
 def train_pls_runner(
-    pls: ProjectedLangevinSampling,
+    pls: PLS,
     particle_name: str,
     experiment_data: ExperimentData,
     simulation_duration: float,
@@ -336,9 +340,6 @@ def train_pls_runner(
     minimum_change_in_energy_potential: float,
     seed: int,
     particles: torch.Tensor,
-    observation_noise_upper: float = 0,
-    observation_noise_lower: float = 0,
-    number_of_observation_noise_searches: int = 0,
     plot_title: str | None = None,
     plot_energy_potential_path: str | None = None,
     metric_to_optimise: str = "nll",
@@ -430,15 +431,6 @@ def train_pls_runner(
                 < minimum_change_in_energy_potential
             ):
                 break
-    if number_of_observation_noise_searches:
-        pls.observation_noise = pls_observation_noise_search(
-            data=experiment_data.train,
-            model=pls,
-            particles=particles_out,
-            observation_noise_upper=observation_noise_upper,
-            observation_noise_lower=observation_noise_lower,
-            number_of_searches=number_of_observation_noise_searches,
-        )
     if energy_potentials_history and plot_energy_potential_path is not None:
         create_directory(plot_energy_potential_path)
         plot_energy_potentials(
@@ -454,64 +446,13 @@ def train_pls_runner(
     return particles_out, best_lr, len(energy_potentials_history[best_lr])
 
 
-def pls_observation_noise_search(
-    data: Data,
-    model: ProjectedLangevinSampling,
-    particles: torch.Tensor,
-    observation_noise_upper: float,
-    observation_noise_lower: float,
-    number_of_searches: int,
-) -> float:
-    bisection_search = LogBisectionSearch(
-        lower=observation_noise_lower,
-        upper=observation_noise_upper,
-        soft_update=True,
-    )
-    searches_iter = tqdm(range(number_of_searches), desc="PLS Noise Search")
-    for _ in searches_iter:
-        model.observation_noise = torch.tensor(bisection_search.lower)
-        set_seed(0)
-        lower_nll = calculate_nll(
-            prediction=model.predict(
-                x=data.x,
-                particles=particles,
-            ),
-            y=data.y,
-        )
-        model.observation_noise = torch.tensor(bisection_search.upper)
-        set_seed(0)
-        upper_nll = calculate_nll(
-            prediction=model.predict(
-                x=data.x,
-                particles=particles,
-            ),
-            y=data.y,
-        )
-        searches_iter.set_postfix(
-            lower_nll=lower_nll,
-            upper_nll=upper_nll,
-            current=bisection_search.current,
-            upper=bisection_search.upper,
-            lower=bisection_search.lower,
-        )
-        if lower_nll < upper_nll:
-            bisection_search.update_upper()
-        else:
-            bisection_search.update_lower()
-    return bisection_search.current
-
-
 def train_svgp_runner(
     model_name: str,
     experiment_data: ExperimentData,
     inducing_points: Data,
     mean: gpytorch.means.Mean,
     kernel: gpytorch.kernels.Kernel,
-    likelihood: Union[
-        gpytorch.likelihoods.GaussianLikelihood,
-        gpytorch.likelihoods.BernoulliLikelihood,
-        gpytorch.likelihoods.StudentTLikelihood,
-    ],
+    likelihood: gpytorch.likelihoods.Likelihood,
     seed: int,
     number_of_epochs: int,
     batch_size: int,
@@ -525,7 +466,7 @@ def train_svgp_runner(
     plot_title: str | None = None,
     plot_loss_path: str | None = None,
     load_model: bool = True,
-) -> Tuple[svGP, List[float], float]:
+) -> Tuple[SVGP, List[float], float]:
     create_directory(models_path)
     best_loss = float("inf")
     losses_history = {}

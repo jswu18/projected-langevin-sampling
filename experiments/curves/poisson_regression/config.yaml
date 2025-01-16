@@ -29,7 +29,6 @@ pls:
   initial_particles_noise_only: True
   observation_noise_upper: 1.0e+4
   observation_noise_lower: 1.0e-4
-  number_of_observation_noise_searches: 0
   early_stopper_patience: 1.0e-3
 svgp:
   seed: 0

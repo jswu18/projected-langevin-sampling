@@ -2,7 +2,7 @@ import argparse
 import math
 import os
 from copy import deepcopy
-from typing import Any, Dict
+from typing import Any, Dict, Tuple
 
 import gpytorch
 import pandas as pd
@@ -29,9 +29,8 @@ from experiments.uci.constants import DATASET_SCHEMA_MAPPING, RegressionDatasetS
 from src.conformalise import ConformalisePLS
 from src.conformalise.gp import ConformaliseGP
 from src.inducing_point_selectors import ConditionalVarianceInducingPointSelector
-from src.kernels import PLSKernel
-from src.projected_langevin_sampling import ProjectedLangevinSampling
-from src.projected_langevin_sampling.basis import InducingPointBasis, OrthonormalBasis
+from src.projected_langevin_sampling import PLS, PLSKernel
+from src.projected_langevin_sampling.basis import OrthonormalBasis
 from src.projected_langevin_sampling.costs import GaussianCost
 from src.projected_langevin_sampling.costs.student_t import StudentTCost
 from src.projected_langevin_sampling.link_functions import IdentityLinkFunction
@@ -51,6 +50,24 @@ parser.add_argument(
     default=-1,
     help="Seed to use for the data split of the experiment.",
 )
+
+MODEL_NAMES = [
+    "pls-onb",
+    "pls-onb-temper",
+    "pls-onb-conformalise",
+    "pls-student-onb",
+    "pls-student-onb-temper",
+    "pls-student-onb-conformalise",
+    "svgp",
+    "svgp-temper",
+    "svgp-conformalise",
+    "svgp-student",
+    "svgp-student-temper",
+    "svgp-student-conformalise",
+]
+
+
+METRICS = ["mae", "mse", "nll", "average_interval_width", "coverage"]
 
 
 def get_experiment_data(
@@ -87,6 +104,25 @@ def get_experiment_data(
         normalise=True,
     )
     return experiment_data
+
+
+def estimate_student_parameters(
+    y_actual: torch.Tensor, predictions: list[torch.distributions.Distribution]
+) -> Tuple[float, float]:
+    residuals = (
+        torch.stack(
+            ([y_actual - prediction.mean for prediction in predictions]),
+            axis=1,
+        )
+        .mean(
+            axis=1,
+        )
+        .cpu()
+        .detach()
+        .numpy()
+    )
+    degrees_of_freedom, _, scale = scipy.stats.t.fit(residuals, floc=0)
+    return degrees_of_freedom, scale
 
 
 def main(
@@ -189,29 +225,13 @@ def main(
     for model in subsample_gp_models:
         model.eval()
         model.likelihood.eval()
-    exact_gp_predictions = [
-        model.likelihood(model(experiment_data.train.x))
-        for model in subsample_gp_models
-    ]
-    residuals = (
-        torch.stack(
-            (
-                [
-                    experiment_data.train.y - prediction.mean
-                    for prediction in exact_gp_predictions
-                ]
-            ),
-            axis=1,
-        )
-        .mean(
-            axis=1,
-        )
-        .cpu()
-        .detach()
-        .numpy()
+    degrees_of_freedom, scale = estimate_student_parameters(
+        y_actual=torch.Tensor(experiment_data.train.y),
+        predictions=[
+            model.likelihood(model(experiment_data.train.x))
+            for model in subsample_gp_models
+        ],
     )
-    degrees_of_freedom, loc, scale = scipy.stats.t.fit(residuals, floc=0)
-    print(f"{loc=} and {scale=}")
     t_noise_distribution = torch.distributions.studentT.StudentT(
         loc=0.0,
         scale=likelihood.noise,
@@ -230,11 +250,11 @@ def main(
         scale=scale,
     )
     pls_dict = {
-        # "pls-onb": ProjectedLangevinSampling(
-        #     basis=onb_basis,
-        #     cost=gaussian_cost,
-        # ),
-        "pls-student-onb": ProjectedLangevinSampling(
+        "pls-onb": PLS(
+            basis=onb_basis,
+            cost=gaussian_cost,
+        ),
+        "pls-student-onb": PLS(
             basis=student_onb_basis,
             cost=student_cost,
         ),
@@ -297,22 +317,22 @@ def main(
             plots_path=plots_path,
             coverage=metrics_config["coverage"],
         )
-        # set_seed(pls_config["seed"])
-        # calculate_metrics(
-        #     model=TemperPLS(
-        #         pls=pls,
-        #         particles=particles,
-        #         x_calibration=experiment_data.validation.x,
-        #         y_calibration=experiment_data.validation.y,
-        #     ),
-        #     particles=particles,
-        #     model_name=f"{pls_name}-temper",
-        #     dataset_name=dataset_name,
-        #     experiment_data=experiment_data,
-        #     results_path=results_path,
-        #     plots_path=plots_path,
-        #     coverage=metrics_config["coverage"],
-        # )
+        set_seed(pls_config["seed"])
+        calculate_metrics(
+            model=TemperPLS(
+                pls=pls,
+                particles=particles,
+                x_calibration=experiment_data.validation.x,
+                y_calibration=experiment_data.validation.y,
+            ),
+            particles=particles,
+            model_name=f"{pls_name}-temper",
+            dataset_name=dataset_name,
+            experiment_data=experiment_data,
+            results_path=results_path,
+            plots_path=plots_path,
+            coverage=metrics_config["coverage"],
+        )
         set_seed(pls_config["seed"])
         calculate_metrics(
             model=ConformalisePLS(
@@ -331,7 +351,7 @@ def main(
         )
 
     student_likelihood = gpytorch.likelihoods.StudentTLikelihood()
-    # hacky solution for now, should have this as a fixed value
+    # hacky solution, should have this as a fixed value
     student_likelihood.register_constraint(
         param_name="raw_deg_free",
         constraint=gpytorch.constraints.Interval(
@@ -397,20 +417,20 @@ def main(
             plots_path=plots_path,
             coverage=metrics_config["coverage"],
         )
-        # set_seed(svgp_config["seed"])
-        # calculate_metrics(
-        #     model=TemperGP(
-        #         gp=svgp,
-        #         x_calibration=experiment_data.validation.x,
-        #         y_calibration=experiment_data.validation.y,
-        #     ),
-        #     model_name=f"{model_name}-temper",
-        #     dataset_name=dataset_name,
-        #     experiment_data=experiment_data,
-        #     results_path=results_path,
-        #     plots_path=plots_path,
-        #     coverage=metrics_config["coverage"],
-        # )
+        set_seed(svgp_config["seed"])
+        calculate_metrics(
+            model=TemperGP(
+                gp=svgp,
+                x_calibration=experiment_data.validation.x,
+                y_calibration=experiment_data.validation.y,
+            ),
+            model_name=f"{model_name}-temper",
+            dataset_name=dataset_name,
+            experiment_data=experiment_data,
+            results_path=results_path,
+            plots_path=plots_path,
+            coverage=metrics_config["coverage"],
+        )
         set_seed(svgp_config["seed"])
         calculate_metrics(
             model=ConformaliseGP(
@@ -433,71 +453,41 @@ if __name__ == "__main__":
     with open(args.config_path, "r") as file:
         loaded_config = yaml.safe_load(file)
     if args.data_seed == -1:
-        # data_seeds = [0, 1, 2, 3, 4]
-        data_seeds = [2, 3, 4]
+        data_seeds = list(range(10))
     else:
         data_seeds = [args.data_seed]
 
     outputs_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "outputs")
     for data_seed in data_seeds:
         for dataset_schema in RegressionDatasetSchema:
-            # try:
-            #     main(
-            #         data_seed=data_seed,
-            #         dataset_name=str(dataset_schema.name),
-            #         data_config=loaded_config["data"],
-            #         kernel_config=loaded_config["kernel"],
-            #         inducing_points_config=loaded_config["inducing_points"],
-            #         pls_config=loaded_config["pls"],
-            #         svgp_config=loaded_config["svgp"],
-            #         metrics_config=loaded_config["metrics"],
-            #         outputs_path=outputs_path,
-            #     )
-            # except Exception as e:
-            #     print(f"Error with {dataset_schema.name=} and {data_seed=}:{e}")
-            main(
-                data_seed=data_seed,
-                dataset_name=str(dataset_schema.name),
-                data_config=loaded_config["data"],
-                kernel_config=loaded_config["kernel"],
-                inducing_points_config=loaded_config["inducing_points"],
-                pls_config=loaded_config["pls"],
-                svgp_config=loaded_config["svgp"],
-                metrics_config=loaded_config["metrics"],
-                outputs_path=outputs_path,
-            )
-            # try:
-            #     concatenate_metrics(
-            #         results_path=os.path.join(outputs_path, str(data_seed), "results"),
-            #         data_types=["train", "test"],
-            #         model_names=[
-            #             # "pls-onb",
-            #             # "pls-onb-temper",
-            #             "pls-onb-conformalise",
-            #             "pls-student-onb-conformalise",
-            #             # "svgp",
-            #             # "svgp-temper",
-            #             "svgp-conformalise",
-            #             "svgp-student-conformalise",
-            #         ],
-            #         datasets=list(RegressionDatasetSchema.__members__.keys()),
-            #         metrics=["mae", "mse", "nll", "average_interval_width", "coverage"],
-            #     )
-            # except Exception as e:
-            #     print(f"Error with concatenating metrics for {data_seed=}:{e}")
+            try:
+                main(
+                    data_seed=data_seed,
+                    dataset_name=str(dataset_schema.name),
+                    data_config=loaded_config["data"],
+                    kernel_config=loaded_config["kernel"],
+                    inducing_points_config=loaded_config["inducing_points"],
+                    pls_config=loaded_config["pls"],
+                    svgp_config=loaded_config["svgp"],
+                    metrics_config=loaded_config["metrics"],
+                    outputs_path=outputs_path,
+                )
+            except Exception as e:
+                print(f"Error with {dataset_schema.name=} and {data_seed=}:{e}")
+            try:
+                concatenate_metrics(
+                    results_path=os.path.join(outputs_path, str(data_seed), "results"),
+                    data_types=["train", "test"],
+                    model_names=MODEL_NAMES,
+                    datasets=list(RegressionDatasetSchema.__members__.keys()),
+                    metrics=METRICS,
+                )
+            except Exception as e:
+                print(f"Error with concatenating metrics for {data_seed=}:{e}")
             concatenate_metrics(
                 results_path=os.path.join(outputs_path, str(data_seed), "results"),
                 data_types=["train", "test"],
-                model_names=[
-                    # "pls-onb",
-                    # "pls-onb-temper",
-                    "pls-onb-conformalise",
-                    "pls-student-onb-conformalise",
-                    # "svgp",
-                    # "svgp-temper",
-                    "svgp-conformalise",
-                    "svgp-student-conformalise",
-                ],
+                model_names=MODEL_NAMES,
                 datasets=list(RegressionDatasetSchema.__members__.keys()),
-                metrics=["mae", "mse", "nll", "average_interval_width", "coverage"],
+                metrics=METRICS,
             )
