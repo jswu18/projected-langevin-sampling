@@ -16,8 +16,10 @@ To motivate the use of the Projected Langevin Sampling (PLS) algorithm, we provi
 In the regression and classification visualisations below, we see that the particles are randomly initialised, but quickly converge to the data:
 
 <p align="center">
-  <img src="examples/regression.gif" width="49%" />
-  <img src="examples/classification.gif" width="49%" />
+  <img src="examples/regression.gif" width="50%" />
+</p>
+<p align="center">
+  <img src="examples/classification.gif" width="50%" />
 </p>
 
 Unlike variational inference which is restricts the model approximation class, PLS is a much more flexible framework. In the example below, we show that PLS can perfectly model a bimodal posterior with synthetic data for Poisson regression from an unknown rate function modelled as $f^2$. Variational approaches such as SVGP are limited by their Gaussian assumptions, making it difficult to model such data.
