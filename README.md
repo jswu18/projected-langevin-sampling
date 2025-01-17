@@ -22,7 +22,7 @@ In the regression and classification visualisations below, we see that the parti
   <img src="examples/classification.gif" width="50%" />
 </p>
 
-Unlike variational inference which is restricts the model approximation class, PLS is a much more flexible framework. In the example below, we show that PLS can perfectly model a bimodal posterior with synthetic data for Poisson regression from an unknown rate function modelled as $f^2$. Variational approaches such as SVGP are limited by their Gaussian assumptions, making it difficult to model such data.
+Unlike variational inference which restricts the model approximation class, PLS is a much more flexible framework. In the example below, we show that PLS can perfectly model a bimodal posterior with synthetic data for Poisson regression from an unknown rate function modelled as $f^2$. Variational approaches such as SVGP are limited by their Gaussian assumptions, making it difficult to model such data.
 
 <p align="center">
   <img src="examples/poisson_regression.gif" width="50%" />
