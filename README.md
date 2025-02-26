@@ -11,6 +11,8 @@ Interestingly, the algorithm as a special case recovers the posterior arising fr
 However, whereas the SVGP posterior is parametrically constrained to be a Gaussian process, our method is based on a variational family that can freely explore the space of all probability measures on $\mathbb{R}^M$ . 
 Due to this additional flexibility, we can show that our method is provably close to the optimal $M$-dimensional variational approximation of the Bayesian posterior $\pi^*$ for convex and Lipschitz continuous negative log likelihoods and indeed coincides with SVGP for a Gaussian likelihood.
 
+[Link to the full paper](https://www.arxiv.org/abs/2502.18279)
+
 ## Visualisations
 To motivate the use of the Projected Langevin Sampling (PLS) algorithm, we provide some visualisations of the algorithm for different 1D tasks.
 In the regression and classification visualisations below, we see that the particles are randomly initialised, but quickly converge to the data:
