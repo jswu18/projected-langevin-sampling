@@ -18,19 +18,17 @@ __pycache__
 *pytest_cache
 /**/*pytest_cache
 
-
-# Plots
-/**/**/*png
+# Coverage
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
 
 # Experiment UCI datasets
 /experiments/uci/datasets
 
 # Experiment outputs
-/**/**/**/outputs
-
-
-# YAMLs
-/**/**/**/*yaml
+**/outputs/
 
 # Shell scripts
 /**/**/shell_commands

@@ -180,10 +180,10 @@ We now construct the PLS model. This involves constructing the PLS kernel (kerne
 
 ```python
 from src.projected_langevin_sampling import PLSKernel
+from src.projected_langevin_sampling import PLS
 from src.projected_langevin_sampling.basis import OrthonormalBasis
 from src.projected_langevin_sampling.costs import GaussianCost
 from src.projected_langevin_sampling.link_functions import IdentityLinkFunction
-from src.projected_langevin_sampling import ProjectedLangevinSampling
 
 pls_kernel = PLSKernel(
     base_kernel=kernel,
@@ -199,7 +199,7 @@ cost = GaussianCost(
     y_train=y,
     link_function=IdentityLinkFunction(),
 )
-pls = ProjectedLangevinSampling(
+pls = PLS(
     basis=onb_basis,
     cost=cost,
 )
