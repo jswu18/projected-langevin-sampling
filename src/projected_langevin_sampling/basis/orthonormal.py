@@ -44,7 +44,7 @@ class OrthonormalBasis(PLSBasis):
             self.base_gram_induce = self.base_gram_induce.to(device="cuda")
             self.base_gram_induce_train = self.base_gram_induce_train.to(device="cuda")
         self.eigenvalues, self.eigenvectors = torch.linalg.eigh(
-            (1 / self.x_induce.shape[0]) * self.base_gram_induce.evaluate()
+            (1 / self.x_induce.shape[0]) * self.base_gram_induce.to_dense()
         )
 
         # Remove eigenvalues and eigenvectors below the threshold. By default, this will
