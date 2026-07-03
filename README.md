@@ -40,16 +40,16 @@ PLS is also able to model the multimodality that arises from the uncertainty abo
 
 To set up the Python environment for this project, please follow the instructions below:
 
-1. Install `poetry`
+1. Install `uv`
 
 ```shell
-pip install poetry
+pip install uv
 ```
 
-2. Install dependencies (note that the `.lock` file is for CPU use)
+2. Install dependencies
 
 ```shell
-poetry install
+uv sync
 ```
 
 3. It may be necessary to set the `PYTHONPATH` environment variable to the root of the repository
