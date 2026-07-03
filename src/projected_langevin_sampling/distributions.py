@@ -24,7 +24,7 @@ class StudentTMarginals:
         :param y: The y values of shape (n,).
         :return: The average log probability.
         """
-        return -torch.tensor(
+        return -self.loc.new_tensor(
             np.mean(
                 [
                     gpytorch.distributions.base_distributions.StudentT(

@@ -6,10 +6,10 @@ import torch
 from mockers.basis import MockBasis
 from mockers.cost import MockCost
 from mockers.kernel import MockKernel
-from src.custom_types import GP_TYPE
-from src.gaussian_process import SVGP, ExactGP
-from src.projected_langevin_sampling import PLS
-from src.temper import TemperGP, TemperPLS
+from projected_langevin_sampling import PLS
+from projected_langevin_sampling.custom_types import GP_TYPE
+from projected_langevin_sampling.gaussian_process import SVGP, ExactGP
+from projected_langevin_sampling.temper import TemperGP, TemperPLS
 
 
 @pytest.mark.parametrize(

@@ -2,7 +2,7 @@ import gpytorch
 import linear_operator
 import torch
 
-from src.projected_langevin_sampling import PLSKernel
+from projected_langevin_sampling import PLSKernel
 
 
 class MockKernel(gpytorch.kernels.Kernel):

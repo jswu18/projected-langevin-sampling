@@ -40,32 +40,28 @@ class PLSKernel(gpytorch.kernels.Kernel):
         approximation_samples_list = [self.approximation_samples]
         if additional_approximation_samples is not None:
             approximation_samples_list.append(additional_approximation_samples)
-        approximation_samples = torch.cat(approximation_samples_list, dim=0).unique(
-            dim=0
+        approximation_samples = torch.cat(
+            [
+                samples.to(device=x1.device, dtype=x1.dtype)
+                for samples in approximation_samples_list
+            ],
+            dim=0,
+        ).unique(dim=0)
+        base_kernel = self.base_kernel.to(
+            device=x1.device,
+            dtype=x1.dtype,
         )
         number_of_approximation_samples = approximation_samples.shape[0]
-        if torch.cuda.is_available():
-            gram_x1_sample = self.base_kernel.cuda().forward(
-                x1=x1,
-                x2=approximation_samples,
-                last_dim_is_batch=last_dim_is_batch,
-            )
-            gram_x2_sample = self.base_kernel.cuda().forward(
-                x1=x2,
-                x2=approximation_samples,
-                last_dim_is_batch=last_dim_is_batch,
-            )
-        else:
-            gram_x1_sample = self.base_kernel.forward(
-                x1=x1,
-                x2=approximation_samples,
-                last_dim_is_batch=last_dim_is_batch,
-            )
-            gram_x2_sample = self.base_kernel.forward(
-                x1=x2,
-                x2=approximation_samples,
-                last_dim_is_batch=last_dim_is_batch,
-            )
+        gram_x1_sample = base_kernel.forward(
+            x1=x1,
+            x2=approximation_samples,
+            last_dim_is_batch=last_dim_is_batch,
+        )
+        gram_x2_sample = base_kernel.forward(
+            x1=x2.to(device=x1.device, dtype=x1.dtype),
+            x2=approximation_samples,
+            last_dim_is_batch=last_dim_is_batch,
+        )
         res = torch.mul(
             torch.div(1, number_of_approximation_samples),
             (gram_x1_sample @ gram_x2_sample.T),

@@ -1,7 +1,7 @@
 import torch
 
-from src.projected_langevin_sampling.costs.base import PLSCost
-from src.projected_langevin_sampling.link_functions import IdentityLinkFunction
+from projected_langevin_sampling.costs.base import PLSCost
+from projected_langevin_sampling.link_functions import IdentityLinkFunction
 
 
 class MockCost(PLSCost):

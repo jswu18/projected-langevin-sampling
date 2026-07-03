@@ -3,7 +3,9 @@ from typing import Tuple
 import gpytorch
 import torch
 
-from src.inducing_point_selectors.base import InducingPointSelector
+from projected_langevin_sampling.inducing_point_selectors.base import (
+    InducingPointSelector,
+)
 
 
 class RandomInducingPointSelector(InducingPointSelector):

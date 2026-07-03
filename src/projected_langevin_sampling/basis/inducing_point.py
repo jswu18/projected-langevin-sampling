@@ -3,16 +3,19 @@ import math
 import gpytorch
 import torch
 
-from src.projected_langevin_sampling.basis.base import PLSBasis
-from src.projected_langevin_sampling.kernel import PLSKernel
-from src.samplers import sample_multivariate_normal
+from projected_langevin_sampling.basis.base import PLSBasis
+from projected_langevin_sampling.kernel import PLSKernel
+from projected_langevin_sampling.samplers import sample_multivariate_normal
 
 
 class InducingPointBasis(PLSBasis):
     """
-    A Non-orthonormal basis approximation of the function space using inducing points (IP).
-    The base class for projected Langevin sampling with particles on a function space
-    approximated by a set of M inducing points.
+    Non-orthonormal inducing-point basis approximation.
+
+    This basis keeps particles directly in an inducing-point representation. It
+    is useful for appendix/generalized variants and comparison experiments, but
+    it is not the Nyström/Kosambi-Karhunen-Loeve eigenbasis used for the main
+    PLS algorithm in the paper.
 
     N is the number of training points.
     M is the dimensionality of the function space approximation.
@@ -44,10 +47,6 @@ class InducingPointBasis(PLSBasis):
         self.base_gram_induce_train = self.kernel.base_kernel(
             x1=x_induce, x2=x_train
         )  # k(Z, X) of size (M, N)
-        if torch.cuda.is_available():
-            self.gram_induce = self.gram_induce.to(device="cuda")
-            self.base_gram_induce = self.base_gram_induce.to(device="cuda")
-            self.base_gram_induce_train = self.base_gram_induce_train.to(device="cuda")
 
     @property
     def approximation_dimension(self) -> int:
@@ -73,6 +72,8 @@ class InducingPointBasis(PLSBasis):
         particle_noise = self._initialise_particles_noise(
             number_of_particles=number_of_particles,
             seed=seed,
+            device=self.x_induce.device,
+            dtype=self.x_induce.dtype,
         )
         return (
             particle_noise if noise_only else (self.y_induce[:, None] + particle_noise)
@@ -131,7 +132,7 @@ class InducingPointBasis(PLSBasis):
             self.base_gram_induce, particles
         )  # k(Z, Z)^{-1} @ U(t) of size (M, J)
         noise_vector = sample_multivariate_normal(
-            mean=torch.zeros(particles.shape[0]),
+            mean=particles.new_zeros(particles.shape[0]),
             cov=self.base_gram_induce,
             size=(particles.shape[1],),
         ).T  # e ~ N(0, k(Z, Z)) of size (M, J)
@@ -191,14 +192,22 @@ class InducingPointBasis(PLSBasis):
             dim=0,
         )  # (M+N*, M+N*)
         predictive_noise = sample_multivariate_normal(
-            mean=torch.zeros(noise_covariance.shape[0]),
+            mean=torch.zeros(
+                noise_covariance.shape[0],
+                device=noise_covariance.device,
+                dtype=noise_covariance.dtype,
+            ),
             cov=noise_covariance,
             size=(particles.shape[1],),
         ).T  # (M+N*, J)
         if self.additional_predictive_noise_distribution is not None:
-            predictive_noise += self.additional_predictive_noise_distribution.sample(
-                predictive_noise.shape
-            ).reshape(predictive_noise.shape)
+            predictive_noise += (
+                self.additional_predictive_noise_distribution.sample(
+                    predictive_noise.shape
+                )
+                .reshape(predictive_noise.shape)
+                .to(device=predictive_noise.device, dtype=predictive_noise.dtype)
+            )
         return predictive_noise
 
     def predict_untransformed_samples(

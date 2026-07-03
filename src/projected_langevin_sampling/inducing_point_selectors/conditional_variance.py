@@ -4,7 +4,9 @@ import gpytorch
 import numpy as np
 import torch
 
-from src.inducing_point_selectors.base import InducingPointSelector
+from projected_langevin_sampling.inducing_point_selectors.base import (
+    InducingPointSelector,
+)
 
 
 class ConditionalVarianceInducingPointSelector(InducingPointSelector):
@@ -67,8 +69,9 @@ class ConditionalVarianceInducingPointSelector(InducingPointSelector):
             x1=x,
             x2=x,
         )
+        gram = gram.to_dense()
         gram = gram if gram.ndim == 2 else gram[0, :, :]
-        di = gram.cpu().diagonal().detach().numpy() + jitter
+        di = gram.diagonal().detach().cpu().numpy() + jitter
         indices[0] = np.argmax(di)  # select first point, add to index 0
         ci = np.zeros(
             (m - 1, number_of_training_points)
@@ -83,8 +86,9 @@ class ConditionalVarianceInducingPointSelector(InducingPointSelector):
                     x1=x,
                     x2=new_induce_data,
                 )
-                .cpu()
+                .to_dense()
                 .detach()
+                .cpu()
                 .numpy()
             )
             gram_matrix_raw = (

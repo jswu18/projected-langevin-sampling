@@ -25,12 +25,15 @@ from experiments.uci.constants import (
     DATASET_SCHEMA_MAPPING,
     ClassificationDatasetSchema,
 )
-from src.inducing_point_selectors import ConditionalVarianceInducingPointSelector
-from src.projected_langevin_sampling import PLS, PLSKernel
-from src.projected_langevin_sampling.basis import OrthonormalBasis
-from src.projected_langevin_sampling.costs import BernoulliCost
-from src.projected_langevin_sampling.link_functions import SigmoidLinkFunction
-from src.utils import set_seed
+from experiments.utils import get_default_device
+from projected_langevin_sampling import PLS, PLSKernel
+from projected_langevin_sampling.basis import OrthonormalBasis
+from projected_langevin_sampling.costs import BernoulliCost
+from projected_langevin_sampling.inducing_point_selectors import (
+    ConditionalVarianceInducingPointSelector,
+)
+from projected_langevin_sampling.link_functions import SigmoidLinkFunction
+from projected_langevin_sampling.utils import set_seed
 
 parser = argparse.ArgumentParser(
     description="Main script for UCI classification data experiments."
@@ -130,6 +133,7 @@ def main(
             dataset_name=dataset_name,
         )
         experiment_data.save(experiment_data_path)
+    experiment_data.to(device=get_default_device())
     likelihood = gpytorch.likelihoods.DirichletClassificationLikelihood(
         experiment_data.train.y, learn_additional_noise=True
     )
@@ -160,9 +164,9 @@ def main(
     experiment_data.train.y = y_train_labels
     average_ard_kernel = construct_average_ard_kernel(
         kernels=[model.kernel for model in subsample_gp_models],
-    )
+    ).to(device=experiment_data.train.x.device, dtype=experiment_data.train.x.dtype)
     if os.path.exists(inducing_points_path):
-        inducing_points = torch.load(inducing_points_path)
+        inducing_points = torch.load(inducing_points_path, weights_only=False)
     else:
         inducing_points = inducing_points_runner(
             seed=inducing_points_config["seed"],
@@ -178,6 +182,10 @@ def main(
             kernel=average_ard_kernel,
         )
         torch.save(inducing_points, inducing_points_path)
+    inducing_points.to(
+        device=experiment_data.train.x.device,
+        dtype=experiment_data.train.x.dtype,
+    )
     pls_kernel = PLSKernel(
         base_kernel=average_ard_kernel,
         approximation_samples=inducing_points.x,

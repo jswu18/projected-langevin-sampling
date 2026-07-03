@@ -4,8 +4,11 @@ import numpy as np
 import pytest
 import torch
 
-from src.samplers import sample_multivariate_normal, sample_point
-from src.utils import set_seed
+from projected_langevin_sampling.samplers import (
+    sample_multivariate_normal,
+    sample_point,
+)
+from projected_langevin_sampling.utils import set_seed
 
 
 @pytest.mark.parametrize(
@@ -63,6 +66,30 @@ def test_sample_multivariate_normal(
         seed=seed,
     )
     assert np.allclose(sample, expected_sample, rtol=1e-3)
+
+
+def test_sample_multivariate_normal_retries_eigh_failures(monkeypatch) -> None:
+    original_eigh = torch.linalg.eigh
+    call_count = 0
+
+    def failing_once(cov: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            raise torch.linalg.LinAlgError("forced failure")
+        return original_eigh(cov)
+
+    monkeypatch.setattr(torch.linalg, "eigh", failing_once)
+
+    sample = sample_multivariate_normal(
+        mean=torch.zeros((2,)),
+        cov=torch.eye(2),
+        size=(2,),
+        seed=0,
+    )
+
+    assert call_count == 2
+    assert sample.shape == (2, 2)
 
 
 @pytest.mark.parametrize(

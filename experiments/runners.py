@@ -23,15 +23,15 @@ from experiments.plotters import (
 )
 from experiments.trainers import train_exact_gp, train_pls, train_svgp
 from experiments.utils import create_directory
-from src.conformalise import ConformalisePLS
-from src.custom_types import PLS_TYPE
-from src.gaussian_process import SVGP
-from src.gaussian_process.exact_gp import ExactGP
-from src.inducing_point_selectors import InducingPointSelector
-from src.projected_langevin_sampling import PLS
-from src.samplers import sample_point
-from src.temper.pls import TemperPLS
-from src.utils import set_seed
+from projected_langevin_sampling import PLS
+from projected_langevin_sampling.conformalise import ConformalisePLS
+from projected_langevin_sampling.custom_types import PLS_TYPE
+from projected_langevin_sampling.gaussian_process import SVGP
+from projected_langevin_sampling.gaussian_process.exact_gp import ExactGP
+from projected_langevin_sampling.inducing_point_selectors import InducingPointSelector
+from projected_langevin_sampling.samplers import sample_point
+from projected_langevin_sampling.temper.pls import TemperPLS
+from projected_langevin_sampling.utils import set_seed
 
 
 def inducing_points_runner(
@@ -133,6 +133,8 @@ def exact_gp_runner(
                 likelihood=likelihood,
                 mean=mean,
                 kernel=deepcopy(kernel),
+                device=experiment_data.train.x.device,
+                dtype=experiment_data.train.x.dtype,
             )
         else:
             data = load_subsample_data(

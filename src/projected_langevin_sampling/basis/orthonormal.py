@@ -2,15 +2,19 @@ import math
 
 import torch
 
-from src.projected_langevin_sampling.basis.base import PLSBasis
-from src.projected_langevin_sampling.kernel import PLSKernel
-from src.samplers import sample_multivariate_normal
+from projected_langevin_sampling.basis.base import PLSBasis
+from projected_langevin_sampling.kernel import PLSKernel
+from projected_langevin_sampling.samplers import sample_multivariate_normal
 
 
 class OrthonormalBasis(PLSBasis):
     """
-    The base class for projected Langevin sampling with particles on a function space approximated by an orthonormal basis (ONB)
-    constructed from a set of M inducing points through the eigendecomposition of the kernel matrix.
+    Main-paper projected Langevin sampling basis.
+
+    This basis represents particles in the Nyström/Kosambi-Karhunen-Loeve
+    eigenbasis constructed from M inducing points through the eigendecomposition
+    of the kernel matrix. This is the basis used for the main PLS algorithm
+    described in the paper.
 
     N is the number of training points.
     M is the number of inducing points.
@@ -39,10 +43,6 @@ class OrthonormalBasis(PLSBasis):
         self.base_gram_induce_train = self.kernel.base_kernel(
             x1=x_induce, x2=x_train
         )  # k(Z, X) of size (M, N)
-        # move to gpu if available
-        if torch.cuda.is_available():
-            self.base_gram_induce = self.base_gram_induce.to(device="cuda")
-            self.base_gram_induce_train = self.base_gram_induce_train.to(device="cuda")
         self.eigenvalues, self.eigenvectors = torch.linalg.eigh(
             (1 / self.x_induce.shape[0]) * self.base_gram_induce.to_dense()
         )
@@ -93,6 +93,8 @@ class OrthonormalBasis(PLSBasis):
         return self._initialise_particles_noise(
             number_of_particles=number_of_particles,
             seed=seed,
+            device=self.x_induce.device,
+            dtype=self.x_induce.dtype,
         )
 
     def calculate_untransformed_train_prediction_samples(
@@ -103,9 +105,9 @@ class OrthonormalBasis(PLSBasis):
         :param particles: The particles of size (M_k, J).
         :return: The untransformed predictions of size (N, J).
         """
-        return torch.Tensor(
+        return (
             self.base_gram_induce_train.T @ self.scaled_eigenvectors @ particles
-        )  # k(X, Z) @ V_tilde @ U(t) of size (N, J)
+        ).to_dense()  # k(X, Z) @ V_tilde @ U(t) of size (N, J)
 
     def calculate_energy_potential(
         self, particles: torch.Tensor, cost: torch.Tensor
@@ -139,8 +141,12 @@ class OrthonormalBasis(PLSBasis):
         """
         # TODO: just sample IID from univariate normal
         noise_vector = sample_multivariate_normal(
-            mean=torch.zeros(particles.shape[0]),
-            cov=torch.eye(particles.shape[0]),
+            mean=particles.new_zeros(particles.shape[0]),
+            cov=torch.eye(
+                particles.shape[0],
+                device=particles.device,
+                dtype=particles.dtype,
+            ),
             size=(particles.shape[1],),
         ).T  # e ~ N(0, k(Z, Z)) of size (M, J)
 
@@ -203,14 +209,22 @@ class OrthonormalBasis(PLSBasis):
             dim=0,
         )  # (M+N*, M+N*)
         predictive_noise = sample_multivariate_normal(
-            mean=torch.zeros(noise_covariance.shape[0]),
+            mean=torch.zeros(
+                noise_covariance.shape[0],
+                device=noise_covariance.device,
+                dtype=noise_covariance.dtype,
+            ),
             cov=noise_covariance,
             size=(particles.shape[1],),
         ).T  # (M+N*, J)
         if self.additional_predictive_noise_distribution is not None:
-            predictive_noise += self.additional_predictive_noise_distribution.sample(
-                predictive_noise.shape
-            ).reshape(predictive_noise.shape)
+            predictive_noise += (
+                self.additional_predictive_noise_distribution.sample(
+                    predictive_noise.shape
+                )
+                .reshape(predictive_noise.shape)
+                .to(device=predictive_noise.device, dtype=predictive_noise.dtype)
+            )
         return predictive_noise
 
     def predict_untransformed_samples(
@@ -230,8 +244,6 @@ class OrthonormalBasis(PLSBasis):
             x1=x,
             x2=self.x_induce,
         ).to_dense()
-        if torch.cuda.is_available():
-            base_gram_x_induce = base_gram_x_induce.cuda()
         if noise is None:
             noise = self.sample_predictive_noise(
                 particles=particles,

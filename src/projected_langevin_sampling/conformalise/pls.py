@@ -2,8 +2,8 @@ from typing import Tuple
 
 import torch
 
-from src.conformalise.base import ConformaliseBase
-from src.projected_langevin_sampling import PLS
+from projected_langevin_sampling import PLS
+from projected_langevin_sampling.conformalise.base import ConformaliseBase
 
 
 class ConformalisePLS(ConformaliseBase):

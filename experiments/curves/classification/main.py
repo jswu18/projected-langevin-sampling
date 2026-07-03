@@ -27,16 +27,18 @@ from experiments.runners import (
     train_pls_runner,
     train_svgp_runner,
 )
-from experiments.utils import create_directory
-from src.inducing_point_selectors import ConditionalVarianceInducingPointSelector
-from src.projected_langevin_sampling import PLS, PLSKernel
-from src.projected_langevin_sampling.basis import InducingPointBasis, OrthonormalBasis
-from src.projected_langevin_sampling.costs import BernoulliCost
-from src.projected_langevin_sampling.link_functions import (
+from experiments.utils import create_directory, get_default_device
+from projected_langevin_sampling import PLS, PLSKernel
+from projected_langevin_sampling.basis import InducingPointBasis, OrthonormalBasis
+from projected_langevin_sampling.costs import BernoulliCost
+from projected_langevin_sampling.inducing_point_selectors import (
+    ConditionalVarianceInducingPointSelector,
+)
+from projected_langevin_sampling.link_functions import (
     ProbitLinkFunction,
     SigmoidLinkFunction,
 )
-from src.utils import set_seed
+from projected_langevin_sampling.utils import set_seed
 
 parser = argparse.ArgumentParser(
     description="Main script for toy binary classification experiments."
@@ -143,6 +145,7 @@ def main(
         number_of_test_intervals=data_config["number_of_test_intervals"],
         total_number_of_intervals=data_config["total_number_of_intervals"],
     )
+    experiment_data.to(device=get_default_device())
     data_path = os.path.join(
         outputs_path, "data", type(curve_function).__name__.lower()
     )

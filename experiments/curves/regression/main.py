@@ -32,14 +32,16 @@ from experiments.runners import (
     train_pls_runner,
     train_svgp_runner,
 )
-from experiments.utils import create_directory, str2bool
-from src.conformalise import ConformaliseGP, ConformalisePLS
-from src.inducing_point_selectors import ConditionalVarianceInducingPointSelector
-from src.projected_langevin_sampling import PLS, PLSKernel
-from src.projected_langevin_sampling.basis import OrthonormalBasis
-from src.projected_langevin_sampling.costs import GaussianCost
-from src.projected_langevin_sampling.link_functions import IdentityLinkFunction
-from src.utils import set_seed
+from experiments.utils import create_directory, get_default_device, str2bool
+from projected_langevin_sampling import PLS, PLSKernel
+from projected_langevin_sampling.basis import OrthonormalBasis
+from projected_langevin_sampling.conformalise import ConformaliseGP, ConformalisePLS
+from projected_langevin_sampling.costs import GaussianCost
+from projected_langevin_sampling.inducing_point_selectors import (
+    ConditionalVarianceInducingPointSelector,
+)
+from projected_langevin_sampling.link_functions import IdentityLinkFunction
+from projected_langevin_sampling.utils import set_seed
 
 parser = argparse.ArgumentParser(
     description="Main script for toy regression experiments."
@@ -149,6 +151,7 @@ def main(
         total_number_of_intervals=data_config["total_number_of_intervals"],
         validation_data_percentage=data_config["validation_data_percentage"],
     )
+    experiment_data.to(device=get_default_device())
     data_path = os.path.join(
         outputs_path, "data", type(curve_function).__name__.lower()
     )
@@ -211,7 +214,7 @@ def main(
         x_train=experiment_data.train.x,
     )
     cost = GaussianCost(
-        observation_noise=float(likelihood.noise),
+        observation_noise=float(likelihood.noise.detach()),
         y_train=experiment_data.train.y,
         link_function=IdentityLinkFunction(),
     )
@@ -334,7 +337,7 @@ def main(
                 "number_of_learning_rate_searches"
             ],
             is_fixed=True,
-            observation_noise=float(likelihood.noise),
+            observation_noise=float(likelihood.noise.detach()),
             early_stopper_patience=svgp_config["early_stopper_patience"],
             models_path=os.path.join(models_path, f"{model_name}-kernel-iterations"),
             plot_title=plot_title,

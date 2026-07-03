@@ -1,7 +1,7 @@
 import torch
 
-from src.projected_langevin_sampling.costs.base import PLSCost
-from src.projected_langevin_sampling.link_functions import PLSLinkFunction
+from projected_langevin_sampling.costs.base import PLSCost
+from projected_langevin_sampling.link_functions import PLSLinkFunction
 
 
 class MultiModalCost(PLSCost):
@@ -50,26 +50,29 @@ class MultiModalCost(PLSCost):
         # (N, J)
         errors_mode_1 = self.y_train[:, None] - train_prediction_samples + self.shift
         errors_mode_2 = self.y_train[:, None] - train_prediction_samples
+        normalizer = torch.sqrt(
+            train_prediction_samples.new_tensor(
+                2 * torch.pi * (self.observation_noise**2)
+            )
+        )
 
         # (N, J)
         log_likelihood_mode_1 = -0.5 * (
             torch.square(errors_mode_1) / (self.observation_noise**2)
-        ) - torch.log(
-            torch.sqrt(2 * torch.tensor([torch.pi]) * (self.observation_noise**2))
-        )
+        ) - torch.log(normalizer)
 
         log_likelihood_mode_2 = -0.5 * (
             torch.square(errors_mode_2) / (self.observation_noise**2)
-        ) - torch.log(
-            torch.sqrt(2 * torch.tensor([torch.pi]) * (self.observation_noise**2))
-        )
+        ) - torch.log(normalizer)
 
         return -torch.logsumexp(
             torch.stack(
                 [
-                    torch.log(torch.tensor(self.bernoulli_noise))
+                    torch.log(train_prediction_samples.new_tensor(self.bernoulli_noise))
                     + log_likelihood_mode_1,
-                    torch.log(torch.tensor(1 - self.bernoulli_noise))
+                    torch.log(
+                        train_prediction_samples.new_tensor(1 - self.bernoulli_noise)
+                    )
                     + log_likelihood_mode_2,
                 ]
             ),

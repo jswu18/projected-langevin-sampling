@@ -52,11 +52,18 @@ pip install uv
 uv sync
 ```
 
-3. It may be necessary to set the `PYTHONPATH` environment variable to the root of the repository
+The project is installed into the uv environment as the `projected_langevin_sampling`
+package, so examples and tests should not require setting `PYTHONPATH`.
 
-```shell
-export PYTHONPATH=$PWD
-```
+## Basis Choices and Paper Correspondence
+
+The implementation exposes two basis classes:
+
+- `OrthonormalBasis` is the main paper algorithm path. It uses the
+  Nyström/Kosambi-Karhunen-Loeve eigenbasis constructed from inducing points and
+  is the default choice for reproducing the proposed PLS method.
+- `InducingPointBasis` is a non-orthonormal inducing-point approximation used for
+  appendix/generalized variants and comparison experiments.
 
 ## Example Usage
 
@@ -80,7 +87,7 @@ import torch
 from typing import Tuple
 import matplotlib.pyplot as plt
 
-from src.utils import set_seed
+from projected_langevin_sampling.utils import set_seed
 set_seed(0)
 
 # Enable 64 bit
@@ -139,7 +146,7 @@ In this example, we use the greedy selection method from [Burt et al. (2020)](ht
 We do this by constructing an ARD kernel with the `gpytorch` library. For our example, we manually set the lengthscale and outputscale of the kernel. 
 
 ```python
-from src.inducing_point_selectors import ConditionalVarianceInducingPointSelector
+from projected_langevin_sampling.inducing_point_selectors import ConditionalVarianceInducingPointSelector
 
 kernel = gpytorch.kernels.ScaleKernel(gpytorch.kernels.RBFKernel())
 kernel.base_kernel.lengthscale = 0.15
@@ -179,11 +186,11 @@ plt.show()
 We now construct the PLS model. This involves constructing the PLS kernel (kernel r in the paper), choosing a basis for our function space approximation, a cost function, and a link function. For this regression example, we use an orthonormal basis for our function space approximation, a Gaussian cost function, and an identity link function. Moreover, we must choose the observation noise for our Gaussian cost function. Having simulated the data, we know that the observation noise is 0.1, however we set it to 0.5 to demonstrate the tempering step later on.
 
 ```python
-from src.projected_langevin_sampling import PLSKernel
-from src.projected_langevin_sampling import PLS
-from src.projected_langevin_sampling.basis import OrthonormalBasis
-from src.projected_langevin_sampling.costs import GaussianCost
-from src.projected_langevin_sampling.link_functions import IdentityLinkFunction
+from projected_langevin_sampling import PLSKernel
+from projected_langevin_sampling import PLS
+from projected_langevin_sampling.basis import OrthonormalBasis
+from projected_langevin_sampling.costs import GaussianCost
+from projected_langevin_sampling.link_functions import IdentityLinkFunction
 
 pls_kernel = PLSKernel(
     base_kernel=kernel,
@@ -302,7 +309,7 @@ In practice this would be a held-out validation set but for the purposes of this
 We can visualise the tempered prediction below:
 
 ```python
-from src.temper import TemperPLS
+from projected_langevin_sampling.temper import TemperPLS
 
 def plot_prediction(
     fig: plt.Figure,

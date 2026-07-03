@@ -26,16 +26,19 @@ from experiments.runners import (
     train_svgp_runner,
 )
 from experiments.uci.constants import DATASET_SCHEMA_MAPPING, RegressionDatasetSchema
-from src.conformalise import ConformalisePLS
-from src.conformalise.gp import ConformaliseGP
-from src.inducing_point_selectors import ConditionalVarianceInducingPointSelector
-from src.projected_langevin_sampling import PLS, PLSKernel
-from src.projected_langevin_sampling.basis import OrthonormalBasis
-from src.projected_langevin_sampling.costs import GaussianCost
-from src.projected_langevin_sampling.costs.student_t import StudentTCost
-from src.projected_langevin_sampling.link_functions import IdentityLinkFunction
-from src.temper import TemperGP, TemperPLS
-from src.utils import set_seed
+from experiments.utils import get_default_device
+from projected_langevin_sampling import PLS, PLSKernel
+from projected_langevin_sampling.basis import OrthonormalBasis
+from projected_langevin_sampling.conformalise import ConformalisePLS
+from projected_langevin_sampling.conformalise.gp import ConformaliseGP
+from projected_langevin_sampling.costs import GaussianCost
+from projected_langevin_sampling.costs.student_t import StudentTCost
+from projected_langevin_sampling.inducing_point_selectors import (
+    ConditionalVarianceInducingPointSelector,
+)
+from projected_langevin_sampling.link_functions import IdentityLinkFunction
+from projected_langevin_sampling.temper import TemperGP, TemperPLS
+from projected_langevin_sampling.utils import set_seed
 
 parser = argparse.ArgumentParser(
     description="Main script for UCI regression data experiments."
@@ -165,6 +168,7 @@ def main(
             dataset_name=dataset_name,
         )
         experiment_data.save(experiment_data_path)
+    experiment_data.to(device=get_default_device())
 
     subsample_gp_models = exact_gp_runner(
         experiment_data=experiment_data,
@@ -185,9 +189,9 @@ def main(
     )
     average_ard_kernel = construct_average_ard_kernel(
         kernels=[model.kernel for model in subsample_gp_models]
-    )
+    ).to(device=experiment_data.train.x.device, dtype=experiment_data.train.x.dtype)
     if os.path.exists(inducing_points_path):
-        inducing_points = torch.load(inducing_points_path)
+        inducing_points = torch.load(inducing_points_path, weights_only=False)
     else:
         inducing_points = inducing_points_runner(
             seed=inducing_points_config["seed"],
@@ -203,9 +207,13 @@ def main(
             kernel=average_ard_kernel,
         )
         torch.save(inducing_points, inducing_points_path)
+    inducing_points.to(
+        device=experiment_data.train.x.device,
+        dtype=experiment_data.train.x.dtype,
+    )
     likelihood = construct_average_gaussian_likelihood(
         likelihoods=[model.likelihood for model in subsample_gp_models]
-    )
+    ).to(device=experiment_data.train.x.device, dtype=experiment_data.train.x.dtype)
 
     pls_kernel = PLSKernel(
         base_kernel=average_ard_kernel,
@@ -217,7 +225,7 @@ def main(
         x_train=experiment_data.train.x,
     )
     gaussian_cost = GaussianCost(
-        observation_noise=float(likelihood.noise),
+        observation_noise=float(likelihood.noise.detach()),
         y_train=experiment_data.train.y,
         link_function=IdentityLinkFunction(),
     )
@@ -226,7 +234,7 @@ def main(
         model.eval()
         model.likelihood.eval()
     degrees_of_freedom, scale = estimate_student_parameters(
-        y_actual=torch.Tensor(experiment_data.train.y),
+        y_actual=experiment_data.train.y,
         predictions=[
             model.likelihood(model(experiment_data.train.x))
             for model in subsample_gp_models
@@ -234,7 +242,7 @@ def main(
     )
     t_noise_distribution = torch.distributions.studentT.StudentT(
         loc=0.0,
-        scale=likelihood.noise,
+        scale=likelihood.noise.detach(),
         df=degrees_of_freedom,
     )
     student_onb_basis = OrthonormalBasis(
@@ -317,22 +325,23 @@ def main(
             plots_path=plots_path,
             coverage=metrics_config["coverage"],
         )
-        set_seed(pls_config["seed"])
-        calculate_metrics(
-            model=TemperPLS(
-                pls=pls,
+        if isinstance(pls.cost, GaussianCost):
+            set_seed(pls_config["seed"])
+            calculate_metrics(
+                model=TemperPLS(
+                    pls=pls,
+                    particles=particles,
+                    x_calibration=experiment_data.validation.x,
+                    y_calibration=experiment_data.validation.y,
+                ),
                 particles=particles,
-                x_calibration=experiment_data.validation.x,
-                y_calibration=experiment_data.validation.y,
-            ),
-            particles=particles,
-            model_name=f"{pls_name}-temper",
-            dataset_name=dataset_name,
-            experiment_data=experiment_data,
-            results_path=results_path,
-            plots_path=plots_path,
-            coverage=metrics_config["coverage"],
-        )
+                model_name=f"{pls_name}-temper",
+                dataset_name=dataset_name,
+                experiment_data=experiment_data,
+                results_path=results_path,
+                plots_path=plots_path,
+                coverage=metrics_config["coverage"],
+            )
         set_seed(pls_config["seed"])
         calculate_metrics(
             model=ConformalisePLS(
@@ -391,7 +400,7 @@ def main(
                     "number_of_learning_rate_searches"
                 ],
                 is_fixed=True,
-                observation_noise=float(likelihood.noise),
+                observation_noise=float(likelihood.noise.detach()),
                 early_stopper_patience=svgp_config["early_stopper_patience"],
                 models_path=os.path.join(
                     models_path, f"{model_name}-kernel-iterations"
@@ -417,20 +426,21 @@ def main(
             plots_path=plots_path,
             coverage=metrics_config["coverage"],
         )
-        set_seed(svgp_config["seed"])
-        calculate_metrics(
-            model=TemperGP(
-                gp=svgp,
-                x_calibration=experiment_data.validation.x,
-                y_calibration=experiment_data.validation.y,
-            ),
-            model_name=f"{model_name}-temper",
-            dataset_name=dataset_name,
-            experiment_data=experiment_data,
-            results_path=results_path,
-            plots_path=plots_path,
-            coverage=metrics_config["coverage"],
-        )
+        if isinstance(svgp.likelihood, gpytorch.likelihoods.GaussianLikelihood):
+            set_seed(svgp_config["seed"])
+            calculate_metrics(
+                model=TemperGP(
+                    gp=svgp,
+                    x_calibration=experiment_data.validation.x,
+                    y_calibration=experiment_data.validation.y,
+                ),
+                model_name=f"{model_name}-temper",
+                dataset_name=dataset_name,
+                experiment_data=experiment_data,
+                results_path=results_path,
+                plots_path=plots_path,
+                coverage=metrics_config["coverage"],
+            )
         set_seed(svgp_config["seed"])
         calculate_metrics(
             model=ConformaliseGP(

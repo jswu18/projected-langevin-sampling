@@ -4,8 +4,8 @@ import torch
 
 from mockers.basis import MockBasis
 from mockers.cost import MockCost
-from src.projected_langevin_sampling import PLS
-from src.utils import set_seed
+from projected_langevin_sampling import PLS
+from projected_langevin_sampling.utils import set_seed
 
 
 @pytest.mark.parametrize(
