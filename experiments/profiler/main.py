@@ -12,13 +12,15 @@ from torch.profiler import ProfilerActivity, profile, record_function
 from experiments.curves.curves import CURVE_FUNCTIONS
 from experiments.data import Data, ExperimentData, ProblemType
 from experiments.runners import inducing_points_runner
-from experiments.utils import create_directory
-from src.gaussian_process import SVGP
-from src.inducing_point_selectors import ConditionalVarianceInducingPointSelector
-from src.projected_langevin_sampling import PLS, PLSKernel
-from src.projected_langevin_sampling.basis import OrthonormalBasis
-from src.projected_langevin_sampling.costs import GaussianCost
-from src.projected_langevin_sampling.link_functions import IdentityLinkFunction
+from experiments.utils import create_directory, get_default_device
+from projected_langevin_sampling import PLS, PLSKernel
+from projected_langevin_sampling.basis import OrthonormalBasis
+from projected_langevin_sampling.costs import GaussianCost
+from projected_langevin_sampling.gaussian_process import SVGP
+from projected_langevin_sampling.inducing_point_selectors import (
+    ConditionalVarianceInducingPointSelector,
+)
+from projected_langevin_sampling.link_functions import IdentityLinkFunction
 
 parser = argparse.ArgumentParser(
     description="Main script for profiling PLS and svGP models."
@@ -224,15 +226,19 @@ def run_experiment(
             seed=seed,
         )
         experiment_data.save(experiment_data_path)
+    experiment_data.to(device=get_default_device())
     ard_kernel = gpytorch.kernels.ScaleKernel(
         gpytorch.kernels.RBFKernel(ard_num_dims=experiment_data.train.x.shape[1])
+    ).to(
+        device=experiment_data.train.x.device,
+        dtype=experiment_data.train.x.dtype,
     )
 
     induce_data_dir = os.path.join(data_dir, f"m_{number_induce_points}")
     create_directory(induce_data_dir)
     inducing_points_path = os.path.join(induce_data_dir, "inducing_points.pth")
     if os.path.exists(inducing_points_path):
-        inducing_points = torch.load(inducing_points_path)
+        inducing_points = torch.load(inducing_points_path, weights_only=False)
         print(f"Loaded inducing points from {inducing_points_path=}")
     else:
         inducing_points = inducing_points_runner(
@@ -243,6 +249,10 @@ def run_experiment(
             kernel=ard_kernel,
         )
         torch.save(inducing_points, inducing_points_path)
+    inducing_points.to(
+        device=experiment_data.train.x.device,
+        dtype=experiment_data.train.x.dtype,
+    )
     pls_kernel = PLSKernel(
         base_kernel=ard_kernel,
         approximation_samples=inducing_points.x,

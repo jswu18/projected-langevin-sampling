@@ -7,9 +7,9 @@ from tqdm import tqdm
 
 from experiments.data import Data
 from experiments.early_stopper import EarlyStopper
-from src.gaussian_process import SVGP, ExactGP
-from src.projected_langevin_sampling import PLS, PLSKernel
-from src.utils import set_seed
+from projected_langevin_sampling import PLS, PLSKernel
+from projected_langevin_sampling.gaussian_process import SVGP, ExactGP
+from projected_langevin_sampling.utils import set_seed
 
 
 def train_exact_gp(
@@ -32,6 +32,7 @@ def train_exact_gp(
         y=data.y,
         likelihood=likelihood,
     )
+    model = model.to(device=data.x.device, dtype=data.x.dtype)
     likelihood = model.likelihood
     model.train()
     likelihood.train()
@@ -75,6 +76,7 @@ def train_svgp(
         likelihood=likelihood,
         learn_inducing_locations=learn_inducing_locations,
     )
+    model = model.to(device=train_data.x.device, dtype=train_data.x.dtype)
     early_stopper = EarlyStopper(patience=early_stopper_patience)
     all_params = set(model.parameters())
     if not learn_kernel_parameters:
@@ -104,10 +106,10 @@ def train_svgp(
     )
     mll = gpytorch.mlls.VariationalELBO(
         model.likelihood, model, num_data=train_data.x.shape[0]
+    ).to(
+        device=train_data.x.device,
+        dtype=train_data.x.dtype,
     )
-    if torch.cuda.is_available():
-        model = model.cuda()
-        mll = mll.cuda()
 
     train_dataset = TensorDataset(train_data.x, train_data.y)
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
@@ -120,6 +122,10 @@ def train_svgp(
     for _ in epochs_iter:
         try:
             for x_batch, y_batch in train_loader:
+                x_batch = x_batch.to(
+                    device=train_data.x.device, dtype=train_data.x.dtype
+                )
+                y_batch = y_batch.to(device=train_data.y.device)
                 optimizer.zero_grad()
                 loss = -mll(model(x_batch), y_batch)
                 loss.backward()

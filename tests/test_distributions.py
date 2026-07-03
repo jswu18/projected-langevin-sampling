@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 import torch
 
-from src.distributions import StudentTMarginals
+from projected_langevin_sampling.distributions import StudentTMarginals
 
 
 @pytest.mark.parametrize(

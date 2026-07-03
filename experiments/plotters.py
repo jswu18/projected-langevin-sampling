@@ -10,13 +10,16 @@ from torch.utils.data import DataLoader, TensorDataset
 from tqdm import tqdm
 
 from experiments.data import Data, ExperimentData, ProblemType
-from src.conformalise.base import ConformaliseBase, ConformalPrediction
-from src.custom_types import GP_TYPE
-from src.distributions import StudentTMarginals
-from src.gaussian_process import SVGP
-from src.projected_langevin_sampling import PLS, PLSKernel
-from src.projected_langevin_sampling.basis import OrthonormalBasis
-from src.utils import set_seed
+from projected_langevin_sampling import PLS, PLSKernel
+from projected_langevin_sampling.basis import OrthonormalBasis
+from projected_langevin_sampling.conformalise.base import (
+    ConformaliseBase,
+    ConformalPrediction,
+)
+from projected_langevin_sampling.custom_types import GP_TYPE
+from projected_langevin_sampling.distributions import StudentTMarginals
+from projected_langevin_sampling.gaussian_process import SVGP
+from projected_langevin_sampling.utils import set_seed
 
 _DATA_COLORS = {
     "train": "tab:blue",
@@ -1011,6 +1014,10 @@ def animate_1d_gp_predictions(
         likelihood=likelihood,
         learn_inducing_locations=learn_inducing_locations,
     )
+    model = model.to(
+        device=experiment_data.train.x.device,
+        dtype=experiment_data.train.x.dtype,
+    )
     model.train()
     all_params = set(model.parameters())
 
@@ -1031,9 +1038,10 @@ def animate_1d_gp_predictions(
     )
     mll = gpytorch.mlls.VariationalELBO(
         model.likelihood, model, num_data=experiment_data.train.x.shape[0]
+    ).to(
+        device=experiment_data.train.x.device,
+        dtype=experiment_data.train.x.dtype,
     )
-    if torch.cuda.is_available():
-        mll = mll.cuda()
 
     train_dataset = TensorDataset(experiment_data.train.x, experiment_data.train.y)
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
@@ -1088,6 +1096,11 @@ def animate_1d_gp_predictions(
     def animate(iteration: int):
         for _ in range((number_of_epochs // (animation_duration * fps)) + 1):
             for x_batch, y_batch in train_loader:
+                x_batch = x_batch.to(
+                    device=experiment_data.train.x.device,
+                    dtype=experiment_data.train.x.dtype,
+                )
+                y_batch = y_batch.to(device=experiment_data.train.y.device)
                 optimizer.zero_grad()
                 output = model(x_batch)
                 loss = -mll(output, y_batch)

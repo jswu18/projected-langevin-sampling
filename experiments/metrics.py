@@ -11,13 +11,14 @@ import torch
 from experiments.data import ExperimentData
 from experiments.plotters import plot_true_versus_predicted
 from experiments.utils import create_directory
-from src.conformalise import ConformaliseBase
-from src.conformalise.base import ConformalPrediction
-from src.custom_types import MODEL_TYPE
-from src.distributions import StudentTMarginals
-from src.gaussian_process import SVGP, ExactGP
-from src.projected_langevin_sampling import PLS
-from src.utils import set_seed
+from projected_langevin_sampling import PLS
+from projected_langevin_sampling.conformalise import ConformaliseBase
+from projected_langevin_sampling.conformalise.base import ConformalPrediction
+from projected_langevin_sampling.custom_types import MODEL_TYPE
+from projected_langevin_sampling.distributions import StudentTMarginals
+from projected_langevin_sampling.gaussian_process import SVGP, ExactGP
+from projected_langevin_sampling.temper import TemperBase
+from projected_langevin_sampling.utils import set_seed
 
 
 def calculate_mae(
@@ -176,6 +177,8 @@ def calculate_metrics(
         set_seed(0)
         if isinstance(model, SVGP) or isinstance(model, ExactGP):
             prediction = model.likelihood(model(data.x))
+        elif isinstance(model, TemperBase):
+            prediction = model(x=data.x)
         elif isinstance(model, ConformaliseBase):
             prediction = model(x=data.x, coverage=coverage)
         elif isinstance(model, PLS) and particles is not None:

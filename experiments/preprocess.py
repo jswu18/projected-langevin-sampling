@@ -6,6 +6,10 @@ from sklearn.model_selection import train_test_split
 from experiments.data import Data, ExperimentData, ProblemType
 
 
+def _clone_tensor(value: torch.Tensor) -> torch.Tensor:
+    return torch.as_tensor(value).clone()
+
+
 def _split_regression_data_intervals(
     seed: int,
     x: torch.Tensor,
@@ -141,12 +145,12 @@ def split_regression_data(
         random_state=seed,
     )
     return (
-        torch.tensor(x_train),
-        torch.tensor(y_train),
-        torch.tensor(x_test),
-        torch.tensor(y_test),
-        torch.tensor(x_validation),
-        torch.tensor(y_validation),
+        _clone_tensor(x_train),
+        _clone_tensor(y_train),
+        _clone_tensor(x_test),
+        _clone_tensor(y_test),
+        _clone_tensor(x_validation),
+        _clone_tensor(y_validation),
     )
 
 
@@ -200,16 +204,16 @@ def set_up_experiment(
     experiment_data = ExperimentData(
         name=name,
         problem_type=problem_type,
-        full=Data(x=torch.tensor(x), y=torch.tensor(y), name="full"),
-        train=Data(x=torch.tensor(x_train), y=torch.tensor(y_train), name="train"),
+        full=Data(x=_clone_tensor(x), y=_clone_tensor(y), name="full"),
+        train=Data(x=_clone_tensor(x_train), y=_clone_tensor(y_train), name="train"),
         validation=Data(
-            x=torch.tensor(x_validation),
-            y=torch.tensor(y_validation),
+            x=_clone_tensor(x_validation),
+            y=_clone_tensor(y_validation),
             name="validation",
         )
         if validation_data_percentage > 0
         else None,
-        test=Data(x=torch.tensor(x_test), y=torch.tensor(y_test), name="test"),
+        test=Data(x=_clone_tensor(x_test), y=_clone_tensor(y_test), name="test"),
         y_mean=y_mean,
         y_std=y_std,
     )

@@ -6,11 +6,11 @@ import torch
 from mockers.basis import MockBasis
 from mockers.cost import MockCost
 from mockers.kernel import MockKernel
-from src.conformalise import ConformaliseGP, ConformalisePLS
-from src.conformalise.base import ConformalPrediction
-from src.custom_types import GP_TYPE
-from src.gaussian_process import SVGP, ExactGP
-from src.projected_langevin_sampling import PLS
+from projected_langevin_sampling import PLS
+from projected_langevin_sampling.conformalise import ConformaliseGP, ConformalisePLS
+from projected_langevin_sampling.conformalise.base import ConformalPrediction
+from projected_langevin_sampling.custom_types import GP_TYPE
+from projected_langevin_sampling.gaussian_process import SVGP, ExactGP
 
 
 @pytest.mark.parametrize(

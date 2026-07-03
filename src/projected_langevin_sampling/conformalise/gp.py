@@ -4,9 +4,9 @@ import gpytorch
 import scipy
 import torch
 
-from src.conformalise.base import ConformaliseBase
-from src.gaussian_process.exact_gp import ExactGP
-from src.gaussian_process.svgp import SVGP
+from projected_langevin_sampling.conformalise.base import ConformaliseBase
+from projected_langevin_sampling.gaussian_process.exact_gp import ExactGP
+from projected_langevin_sampling.gaussian_process.svgp import SVGP
 
 
 class ConformaliseGP(ConformaliseBase):
@@ -61,4 +61,4 @@ class ConformaliseGP(ConformaliseBase):
         :param x: Input data of shape (N, D).
         :return: Median predictions of shape (1, N).
         """
-        return torch.Tensor(self.gp(x).mean)
+        return self.gp(x).mean

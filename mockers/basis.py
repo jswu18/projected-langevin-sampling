@@ -1,6 +1,6 @@
 import torch
 
-from src.projected_langevin_sampling.basis.base import PLSBasis
+from projected_langevin_sampling.basis.base import PLSBasis
 
 
 class MockBasis(PLSBasis):

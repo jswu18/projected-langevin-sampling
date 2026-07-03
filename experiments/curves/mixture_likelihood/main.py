@@ -24,13 +24,15 @@ from experiments.runners import (
     plot_pls_1d_particles_runner,
     train_pls_runner,
 )
-from experiments.utils import create_directory
-from src.inducing_point_selectors import ConditionalVarianceInducingPointSelector
-from src.projected_langevin_sampling import PLS, PLSKernel
-from src.projected_langevin_sampling.basis import OrthonormalBasis
-from src.projected_langevin_sampling.costs.multimodal import MultiModalCost
-from src.projected_langevin_sampling.link_functions import IdentityLinkFunction
-from src.utils import set_seed
+from experiments.utils import create_directory, get_default_device
+from projected_langevin_sampling import PLS, PLSKernel
+from projected_langevin_sampling.basis import OrthonormalBasis
+from projected_langevin_sampling.costs.multimodal import MultiModalCost
+from projected_langevin_sampling.inducing_point_selectors import (
+    ConditionalVarianceInducingPointSelector,
+)
+from projected_langevin_sampling.link_functions import IdentityLinkFunction
+from projected_langevin_sampling.utils import set_seed
 
 parser = argparse.ArgumentParser(
     description="Main script for toy multi-modal regression experiments."
@@ -182,6 +184,7 @@ def main(
         train_data_percentage=data_config["train_data_percentage"],
         validation_data_percentage=data_config["validation_data_percentage"],
     )
+    experiment_data.to(device=get_default_device())
     plot_experiment_data(
         experiment_data=experiment_data,
         title=f"{curve_function.__name__} data",

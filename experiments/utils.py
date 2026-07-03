@@ -3,6 +3,12 @@ import os
 import shutil
 from typing import Union
 
+import torch
+
+
+def get_default_device() -> torch.device:
+    return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 
 def create_directory(directory: str) -> None:
     """

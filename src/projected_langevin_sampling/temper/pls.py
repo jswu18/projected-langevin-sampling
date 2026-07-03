@@ -1,9 +1,9 @@
 import gpytorch
 import torch
 
-from src.projected_langevin_sampling import PLS
-from src.projected_langevin_sampling.costs import GaussianCost
-from src.temper.base import TemperBase
+from projected_langevin_sampling import PLS
+from projected_langevin_sampling.costs import GaussianCost
+from projected_langevin_sampling.temper.base import TemperBase
 
 
 class TemperPLS(TemperBase):

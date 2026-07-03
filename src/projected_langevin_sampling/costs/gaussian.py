@@ -1,8 +1,8 @@
 import gpytorch
 import torch
 
-from src.projected_langevin_sampling.costs.base import PLSCost
-from src.projected_langevin_sampling.link_functions import (
+from projected_langevin_sampling.costs.base import PLSCost
+from projected_langevin_sampling.link_functions import (
     IdentityLinkFunction,
     PLSLinkFunction,
 )

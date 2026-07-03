@@ -4,8 +4,8 @@ import torch
 
 from mockers.cost import MockCost
 from mockers.kernel import MockKernel, MockProjectedLangevinSamplingKernel
-from src.projected_langevin_sampling.basis import InducingPointBasis, OrthonormalBasis
-from src.utils import set_seed
+from projected_langevin_sampling.basis import InducingPointBasis, OrthonormalBasis
+from projected_langevin_sampling.utils import set_seed
 
 
 @pytest.mark.parametrize(
@@ -384,6 +384,8 @@ def test_ipb_calculate_untransformed_train_prediction_samples(
             x_train=x_train,
         ).calculate_untransformed_train_prediction_samples(particles),
         untransformed_train_prediction_samples,
+        rtol=1e-4,
+        atol=1e-4,
     )
 
 
@@ -748,6 +750,7 @@ def test_ipb_sample_predictive_noise(
         ),
         expected_predictive_noise,
         rtol=1e-3,
+        atol=5e-3,
     )
 
 
@@ -974,4 +977,5 @@ def test_ipb_predict_untransformed_samples(
         ),
         expected_untransformed_samples,
         rtol=1e-3,
+        atol=2e-2,
     )

@@ -4,16 +4,16 @@ import gpytorch
 import pytest
 import torch
 
-from src.distributions import StudentTMarginals
-from src.projected_langevin_sampling.costs import (
+from projected_langevin_sampling.costs import (
     BernoulliCost,
     GaussianCost,
     MultiModalCost,
     PoissonCost,
 )
-from src.projected_langevin_sampling.costs.base import PLSCost
-from src.projected_langevin_sampling.costs.student_t import StudentTCost
-from src.projected_langevin_sampling.link_functions import (
+from projected_langevin_sampling.costs.base import PLSCost
+from projected_langevin_sampling.costs.student_t import StudentTCost
+from projected_langevin_sampling.distributions import StudentTMarginals
+from projected_langevin_sampling.link_functions import (
     IdentityLinkFunction,
     ProbitLinkFunction,
     SigmoidLinkFunction,

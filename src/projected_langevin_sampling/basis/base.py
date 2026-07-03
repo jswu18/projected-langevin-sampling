@@ -1,7 +1,8 @@
 from abc import ABC, abstractmethod
-from typing import Optional
 
 import torch
+
+from projected_langevin_sampling.utils import get_torch_generator
 
 
 class PLSBasis(ABC):
@@ -19,9 +20,8 @@ class PLSBasis(ABC):
 
     def __init__(
         self,
-        additional_predictive_noise_distribution: Optional[
-            torch.distributions.Distribution
-        ] = None,
+        additional_predictive_noise_distribution: torch.distributions.Distribution
+        | None = None,
     ):
         self.additional_predictive_noise_distribution = (
             additional_predictive_noise_distribution
@@ -42,6 +42,8 @@ class PLSBasis(ABC):
         seed: int | None = None,
         mean: float = 0.0,
         stdev: float = 1.0,
+        device: torch.device | None = None,
+        dtype: torch.dtype | None = None,
     ) -> torch.Tensor:
         """
         Initialises the noise for each particle with a standard normal distribution.
@@ -49,17 +51,17 @@ class PLSBasis(ABC):
         :param seed: An optional seed for reproducibility.
         :return: A tensor of size (M, J).
         """
-        generator = None
-        if seed is not None:
-            generator = torch.Generator().manual_seed(seed)
-        return torch.normal(
-            mean=mean,
-            std=stdev,
-            size=(
+        return torch.empty(
+            (
                 self.approximation_dimension,
                 number_of_particles,
             ),
-            generator=generator,
+            device=device,
+            dtype=dtype,
+        ).normal_(
+            mean=mean,
+            std=stdev,
+            generator=get_torch_generator(seed=seed, device=device),
         )  # size (M, J)
 
     @abstractmethod
@@ -96,10 +98,7 @@ class PLSBasis(ABC):
             noise_only=noise_only,
             seed=seed,
         )
-        if torch.cuda.is_available():
-            return particles.to(device="cuda")
-        else:
-            return particles
+        return particles
 
     @abstractmethod
     def calculate_untransformed_train_prediction_samples(

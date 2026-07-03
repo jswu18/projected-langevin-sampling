@@ -2,11 +2,11 @@ import pytest
 import torch
 
 from mockers.kernel import MockKernel
-from src.inducing_point_selectors import (
+from projected_langevin_sampling.inducing_point_selectors import (
     ConditionalVarianceInducingPointSelector,
     RandomInducingPointSelector,
 )
-from src.utils import set_seed
+from projected_langevin_sampling.utils import set_seed
 
 
 @pytest.mark.parametrize(

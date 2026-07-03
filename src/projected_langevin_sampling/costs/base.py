@@ -2,7 +2,8 @@ from abc import ABC, abstractmethod
 
 import torch
 
-from src.projected_langevin_sampling.link_functions import PLSLinkFunction
+from projected_langevin_sampling.link_functions import PLSLinkFunction
+from projected_langevin_sampling.utils import get_torch_generator
 
 
 class PLSCost(ABC):
@@ -76,9 +77,7 @@ class PLSCost(ABC):
         jacobian = torch.vmap(
             torch.func.jacfwd(self.calculate_cost),
             in_dims=2,
-        )(
-            untransformed_train_prediction_samples[:, None, :]
-        )
+        )(untransformed_train_prediction_samples[:, None, :])
         return jacobian.permute(2, 0, 1, 3).reshape(
             untransformed_train_prediction_samples.shape
         )
@@ -87,6 +86,8 @@ class PLSCost(ABC):
         self,
         number_of_particles: int,
         seed: int | None = None,
+        device: torch.device | None = None,
+        dtype: torch.dtype | None = None,
     ) -> torch.Tensor:
         """
         Samples observation noise for a given number of particles.
@@ -95,24 +96,24 @@ class PLSCost(ABC):
         :return: A tensor of size (J, ).
         """
         if self.observation_noise is None:
-            return (
-                torch.zeros(number_of_particles).to(device="cuda")
-                if torch.cuda.is_available()
-                else torch.zeros(number_of_particles)
+            return torch.zeros(
+                number_of_particles,
+                device=device,
+                dtype=dtype,
             )
-        generator = None
-        if seed is not None:
-            generator = torch.Generator().manual_seed(seed)
-        observation_noise = torch.normal(
-            mean=0.0,
-            std=self.observation_noise,
-            size=(number_of_particles,),
-            generator=generator,
-        ).flatten()
-        if torch.cuda.is_available():
-            return observation_noise.to(device="cuda")
-        else:
-            return observation_noise
+        return (
+            torch.empty(
+                (number_of_particles,),
+                device=device,
+                dtype=dtype,
+            )
+            .normal_(
+                mean=0.0,
+                std=self.observation_noise,
+                generator=get_torch_generator(seed=seed, device=device),
+            )
+            .flatten()
+        )
 
     def predict_samples(
         self,
@@ -128,6 +129,8 @@ class PLSCost(ABC):
         """
         if observation_noise is None:
             observation_noise = self.sample_observation_noise(
-                number_of_particles=untransformed_samples.shape[1]
+                number_of_particles=untransformed_samples.shape[1],
+                device=untransformed_samples.device,
+                dtype=untransformed_samples.dtype,
             )
         return self.link_function(untransformed_samples + observation_noise[None, :])

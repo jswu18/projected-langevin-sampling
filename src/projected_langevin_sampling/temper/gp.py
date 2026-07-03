@@ -3,9 +3,9 @@ from typing import Union
 import gpytorch
 import torch
 
-from src.gaussian_process.exact_gp import ExactGP
-from src.gaussian_process.svgp import SVGP
-from src.temper.base import TemperBase
+from projected_langevin_sampling.gaussian_process.exact_gp import ExactGP
+from projected_langevin_sampling.gaussian_process.svgp import SVGP
+from projected_langevin_sampling.temper.base import TemperBase
 
 
 class TemperGP(TemperBase):

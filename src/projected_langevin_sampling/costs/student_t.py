@@ -1,8 +1,8 @@
 import torch
 
-from src.distributions import StudentTMarginals
-from src.projected_langevin_sampling.costs.base import PLSCost
-from src.projected_langevin_sampling.link_functions import (
+from projected_langevin_sampling.costs.base import PLSCost
+from projected_langevin_sampling.distributions import StudentTMarginals
+from projected_langevin_sampling.link_functions import (
     IdentityLinkFunction,
     PLSLinkFunction,
 )
@@ -49,7 +49,8 @@ class StudentTCost(PLSCost):
         return StudentTMarginals(
             df=self.degrees_of_freedom,
             loc=self.link_function(prediction_samples).mean(dim=1),
-            scale=self.scale * torch.ones((prediction_samples.shape[0])),
+            scale=self.scale
+            * prediction_samples.new_ones((prediction_samples.shape[0],)),
         )
 
     def calculate_cost(

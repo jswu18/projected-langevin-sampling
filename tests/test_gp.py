@@ -3,7 +3,7 @@ import pytest
 import torch
 
 from mockers.kernel import MockKernel
-from src.gaussian_process import SVGP, ExactGP
+from projected_langevin_sampling.gaussian_process import SVGP, ExactGP
 
 
 @pytest.mark.parametrize(

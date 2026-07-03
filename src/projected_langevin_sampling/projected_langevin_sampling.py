@@ -1,7 +1,7 @@
 import torch
 
-from src.projected_langevin_sampling.basis.base import PLSBasis
-from src.projected_langevin_sampling.costs.base import PLSCost
+from projected_langevin_sampling.basis.base import PLSBasis
+from projected_langevin_sampling.costs.base import PLSCost
 
 
 class PLS:

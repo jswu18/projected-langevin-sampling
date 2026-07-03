@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from src.utils import set_seed
+from projected_langevin_sampling.utils import set_seed
 
 
 @pytest.mark.parametrize(
